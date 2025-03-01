@@ -40,22 +40,24 @@ const DynamicSceneComponent = ({ code }: { code: string }) => {
   
   useEffect(() => {
     try {
-      // Clean up any existing molecule
-      const existingMolecule = scene.getObjectByName('waterMolecule');
-      if (existingMolecule) {
-        scene.remove(existingMolecule);
-      }
+      // Clean up everything except lights
+      scene.children.slice().forEach(child => {
+        if (!(child instanceof THREE.Light)) {
+          scene.remove(child);
+        }
+      });
 
       // Create a function from the code string and execute it
       const createScene = new Function('THREE', 'scene', code);
       createScene(THREE, scene);
 
-      // Clean up function
+      // Clean up function for unmounting - preserve lights again
       return () => {
-        const molecule = scene.getObjectByName('waterMolecule');
-        if (molecule) {
-          scene.remove(molecule);
-        }
+        scene.children.slice().forEach(child => {
+          if (!(child instanceof THREE.Light)) {
+            scene.remove(child);
+          }
+        });
       };
     } catch (error) {
       console.error('Error executing scene code:', error);
