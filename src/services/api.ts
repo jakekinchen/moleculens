@@ -40,7 +40,7 @@ interface ComplexPromptResponse {
 }
 
 // API base URL configuration
-const useLocalServer = true; // Set to true to use localhost for development
+const useLocalServer = false; // Set to true to use localhost for development
 const API_BASE_URL = useLocalServer ? 'http://localhost:8000' : 'https://meshmo.com';
 
 /**
