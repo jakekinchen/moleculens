@@ -14,4 +14,11 @@ export interface QuizQuestion {
   question: string;
   options: string[];
   correctAnswer: string;
+}
+
+export interface Message {
+  role: 'user' | 'assistant';
+  content: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  metadata?: any; // If we need to keep this as any
 } 
