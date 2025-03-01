@@ -1,12 +1,9 @@
-interface PromptRequest {
-  prompt: string;
-}
-
+/* eslint-disable */
 interface PromptResponse {
   html: string;
 }
 
-export const submitPrompt = async (prompt: string): Promise<PromptResponse> => {
+export const submitPrompt = async (_prompt: string): Promise<PromptResponse> => {
   // const response = await fetch('http://165.232.151.162:8000/generate-geometry/', {
   //   method: 'POST',
   //   headers: {

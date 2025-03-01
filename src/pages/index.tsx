@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import type { NextPage } from 'next';
+import React, { useState } from 'react';
 import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
 import { VisualizationPanel } from '@/components/panels/VisualizationPanel';
 import { InputPanel } from '@/components/panels/InputPanel';
 
-export default function Home() {
+const Home: NextPage = () => {
   const [currentScript, setCurrentScript] = useState<string>();
 
   return (
@@ -25,4 +26,6 @@ export default function Home() {
       <Footer />
     </div>
   );
-} 
+};
+
+export default Home; 

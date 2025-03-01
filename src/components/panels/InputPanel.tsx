@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { submitPrompt } from '@/services/api';
-import { ArrowDownTrayIcon, ArrowTopRightOnSquareIcon } from '@heroicons/react/24/outline';
+import { ArrowDownTrayIcon } from '@heroicons/react/24/outline';
 
 interface InputPanelProps {
   onVisualizationUpdate: (script: string) => void;
@@ -17,7 +17,6 @@ export const InputPanel: React.FC<InputPanelProps> = ({ onVisualizationUpdate })
 
     try {
       const response = await submitPrompt(query);
-      // Store the JSX string directly
       setCurrentScript(response.html);
       onVisualizationUpdate(response.html);
     } catch (error) {
@@ -38,14 +37,6 @@ export const InputPanel: React.FC<InputPanelProps> = ({ onVisualizationUpdate })
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  };
-
-  const handleOpenNew = () => {
-    if (!currentScript) return;
-    const blob = new Blob([currentScript], { type: 'text/html' });
-    const url = URL.createObjectURL(blob);
-    window.open(url, '_blank');
     URL.revokeObjectURL(url);
   };
 
@@ -83,14 +74,6 @@ export const InputPanel: React.FC<InputPanelProps> = ({ onVisualizationUpdate })
                 <ArrowDownTrayIcon className="w-5 h-5" />
                 Download Visualization 
               </button>
-              {/* <button
-                onClick={handleOpenNew}
-                className="flex-1 flex items-center justify-center gap-2 bg-gray-700 text-gray-200 py-2 px-3 rounded-lg 
-                  hover:bg-gray-600 transition focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 focus:ring-offset-gray-800"
-              >
-                <ArrowTopRightOnSquareIcon className="w-5 h-5" />
-                New Tab
-              </button> */}
             </div>
             <button
               type="button"
