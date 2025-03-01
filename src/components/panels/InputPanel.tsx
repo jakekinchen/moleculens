@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { submitPrompt } from '@/services/api';
-import { ArrowDownTrayIcon } from '@heroicons/react/24/outline';
+import { ArrowDownTrayIcon, ArrowTopRightOnSquareIcon } from '@heroicons/react/24/outline';
 
 interface InputPanelProps {
   onVisualizationUpdate: (script: string) => void;
@@ -17,8 +17,9 @@ export const InputPanel: React.FC<InputPanelProps> = ({ onVisualizationUpdate })
 
     try {
       const response = await submitPrompt(query);
-      setCurrentScript(response.html);
-      onVisualizationUpdate(response.html);
+      setCurrentScript(response.result);
+      onVisualizationUpdate(response.result);
+      console.log('response result', response.result);
     } catch (error) {
       console.error('Failed to get visualization:', error);
       // TODO: Add error handling UI
@@ -37,6 +38,105 @@ export const InputPanel: React.FC<InputPanelProps> = ({ onVisualizationUpdate })
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleOpenInNewTab = () => {
+    if (!currentScript) return;
+    
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html lang="en">
+      <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Geometry Visualization</title>
+          <style>
+              body { margin: 0; overflow: hidden; background: #111; }
+              canvas { width: 100%; height: 100%; display: block; }
+          </style>
+          <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.128.0/three.min.js"></script>
+          <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+      </head>
+      <body>
+          <script>
+              // Wait for scripts to load
+              window.addEventListener('load', () => {
+                  // Set up scene
+                  const scene = new THREE.Scene();
+                  
+                  // Set up camera
+                  const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+                  camera.position.set(5, 4, 5);
+                  
+                  // Set up renderer
+                  const renderer = new THREE.WebGLRenderer({ antialias: true });
+                  renderer.setSize(window.innerWidth, window.innerHeight);
+                  document.body.appendChild(renderer.domElement);
+                  
+                  // Add lights
+                  const ambientLight = new THREE.AmbientLight(0x404040, 0.4);
+                  scene.add(ambientLight);
+                  
+                  const directionalLight1 = new THREE.DirectionalLight(0xffffff, 1);
+                  directionalLight1.position.set(1, 1, 1);
+                  scene.add(directionalLight1);
+                  
+                  const directionalLight2 = new THREE.DirectionalLight(0xffffff, 0.4);
+                  directionalLight2.position.set(-1, -1, -1);
+                  scene.add(directionalLight2);
+
+                  try {
+                      ${currentScript}
+                  } catch (error) {
+                      console.error('Error executing geometry code:', error);
+                  }
+
+                  // Add OrbitControls
+                  const controls = new THREE.OrbitControls(camera, renderer.domElement);
+                  controls.enableDamping = true;
+                  controls.dampingFactor = 0.05;
+                  
+                  // Animation loop
+                  function animate() {
+                      requestAnimationFrame(animate);
+                      controls.update();
+                      renderer.render(scene, camera);
+                  }
+                  
+                  // Handle window resize
+                  window.addEventListener('resize', () => {
+                      camera.aspect = window.innerWidth / window.innerHeight;
+                      camera.updateProjectionMatrix();
+                      renderer.setSize(window.innerWidth, window.innerHeight);
+                  });
+                  
+                  // Initial camera positioning based on molecule size
+                  setTimeout(() => {
+                      const molecule = scene.getObjectByName('waterMolecule');
+                      if (molecule) {
+                          const box = new THREE.Box3().setFromObject(molecule);
+                          const size = box.getSize(new THREE.Vector3());
+                          const center = box.getCenter(new THREE.Vector3());
+                          
+                          const radius = Math.max(size.x, size.y, size.z);
+                          const distance = radius * 5;
+                          camera.position.set(distance, distance * 0.8, distance);
+                          camera.lookAt(center);
+                      }
+                  }, 100);
+                  
+                  // Start animation
+                  animate();
+              });
+          </script>
+      </body>
+      </html>
+    `;
+
+    const blob = new Blob([htmlContent], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    window.open(url, '_blank');
     URL.revokeObjectURL(url);
   };
 
@@ -72,9 +172,19 @@ export const InputPanel: React.FC<InputPanelProps> = ({ onVisualizationUpdate })
                   hover:bg-gray-600 transition focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 focus:ring-offset-gray-800"
               >
                 <ArrowDownTrayIcon className="w-5 h-5" />
-                Download Visualization 
+                Download Visualization
               </button>
             </div>
+            {/* <div className="flex gap-2 mb-2">
+              <button
+                onClick={handleOpenInNewTab}
+                className="flex-1 flex items-center justify-center gap-2 bg-gray-700 text-gray-200 py-2 px-3 rounded-lg 
+                  hover:bg-gray-600 transition focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 focus:ring-offset-gray-800"
+              >
+                <ArrowTopRightOnSquareIcon className="w-5 h-5" />
+                Open in New Tab
+              </button>
+            </div> */}
             <button
               type="button"
               className="w-full bg-gray-700 text-gray-200 py-2 px-3 rounded-lg hover:bg-gray-600 
