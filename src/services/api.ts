@@ -3,10 +3,13 @@ interface PromptResponse {
   result: string;
 }
 
-export const submitPrompt = async (_prompt: string): Promise<PromptResponse> => {
-  const hi = JSON.stringify({ prompt: _prompt })
-  console.log('submitting prompt', hi);
-  const response = await fetch('https://meshmo.com/prompt/generate-geometry/', {
+export const submitPrompt = async (_prompt: string, model: string = 'llama3-70b'): Promise<PromptResponse> => {
+  console.log('submitting prompt with model:', model);
+  
+  const input = JSON.stringify({ prompt: _prompt })
+  console.log('submitting prompt', input, 'with model:', model);
+  
+  const response = await fetch(`https://meshmo.com/prompt/generate-geometry/?model=${model}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -26,6 +29,5 @@ export const submitPrompt = async (_prompt: string): Promise<PromptResponse> => 
   }
 
   console.log('successful api request');
-
   return response.json();
 }; 

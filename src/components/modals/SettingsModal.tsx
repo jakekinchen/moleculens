@@ -2,6 +2,12 @@ import React from 'react';
 import { XMarkIcon } from '@heroicons/react/24/outline';
 import { Switch } from '@headlessui/react';
 
+const MODEL_OPTIONS = [
+  { value: 'llama3-70b', label: 'Llama 3 70B' },
+  { value: 'mixtral-8x7b', label: 'Mixtral 8x7B' },
+  { value: 'gemma-7b', label: 'Gemma 7B' },
+];
+
 interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -14,18 +20,21 @@ interface SettingsModalProps {
 
 const AI_MODELS = [
   // OpenAI Models
-  { id: 'o1', name: 'OpenAI: O1' },
   { id: 'o3-mini', name: 'OpenAI: O3-Mini' },
+  { id: 'o1', name: 'OpenAI: O1' },
   { id: 'gpt-4.5-preview', name: 'OpenAI: GPT-4.5 Preview' },
+  { id: 'gpt-4', name: 'OpenAI: GPT-4' },
   { id: 'gpt-4o', name: 'OpenAI: GPT-4 Optimized' },
+  { id: 'gpt-3.5', name: 'OpenAI: GPT-3.5' },
   
   // Anthropic Models
   { id: 'claude-3-7-sonnet-latest', name: 'Anthropic: Claude 3.7 Sonnet' },
   { id: 'claude-3-5-sonnet-latest', name: 'Anthropic: Claude 3.5 Sonnet' },
   
-  // Groq Models
+  // Other Models
   { id: 'llama3-70b-8192', name: 'Groq: Llama3 70B' },
   { id: 'qwen-2.5-coder-32b', name: 'Groq: Qwen 2.5 Coder 32B' },
+  { id: 'llama-2', name: 'Meta: Llama 2' },
 ];
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({ 

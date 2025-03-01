@@ -6,15 +6,21 @@ import { SettingsModal } from '../modals/SettingsModal';
 
 interface HeaderProps {
   onOpenTimeMachine: () => void;
+  onSettingsChange: (settings: { selectedModel: string; useInteractiveMode: boolean }) => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ onOpenTimeMachine }) => {
+export const Header: React.FC<HeaderProps> = ({ onOpenTimeMachine, onSettingsChange }) => {
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [settings, setSettings] = useState({
     selectedModel: 'o3-mini',
     useInteractiveMode: false,
   });
+
+  const handleSettingsChange = (newSettings: typeof settings) => {
+    setSettings(newSettings);
+    onSettingsChange(newSettings);
+  };
 
   return (
     <header className="bg-gradient-to-r from-blue-900 to-purple-900 text-white py-2 px-4 shadow-lg">
@@ -61,7 +67,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenTimeMachine }) => {
           isOpen={isSettingsOpen}
           onClose={() => setIsSettingsOpen(false)}
           settings={settings}
-          onSettingsChange={setSettings}
+          onSettingsChange={handleSettingsChange}
         />
       </div>
     </header>

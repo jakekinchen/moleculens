@@ -8,6 +8,7 @@ interface InputPanelProps {
   currentPrompt: string;
   onPromptChange: (prompt: string) => void;
   onPromptSubmit: (prompt: string) => void;
+  selectedModel: string;
 }
 
 // Add the complete list of topics
@@ -39,7 +40,7 @@ const CHEMISTRY_TOPICS = [
   "Teach me about chiral carbon centers",
 ];
 
-export const InputPanel: React.FC<InputPanelProps> = ({ onVisualizationUpdate, onLoadingChange, currentPrompt, onPromptChange, onPromptSubmit }) => {
+export const InputPanel: React.FC<InputPanelProps> = ({ onVisualizationUpdate, onLoadingChange, currentPrompt, onPromptChange, onPromptSubmit, selectedModel }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [currentScript, setCurrentScript] = useState<string | null>(null);
 
@@ -50,7 +51,7 @@ export const InputPanel: React.FC<InputPanelProps> = ({ onVisualizationUpdate, o
     console.log('Making request for:', currentPrompt);
 
     try {
-      const response = await submitPrompt(currentPrompt);
+      const response = await submitPrompt(currentPrompt, selectedModel);
       setCurrentScript(response.result);
       onVisualizationUpdate(response.result);
       onPromptSubmit(currentPrompt);
