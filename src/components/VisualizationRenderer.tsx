@@ -24,8 +24,8 @@ export const VisualizationRenderer: React.FC<VisualizationRendererProps> = ({
 
   return (
     <div className="w-full h-full">
-      {isInteractiveMode ? (
-        <ComplexVisualization data={data} />
+      {isInteractiveMode && data.html && data.js && data.title ? (
+        <ComplexVisualization data={data as Required<typeof data>} />
       ) : (
         <Canvas>
           <SimpleVisualization geometryCode={data.result || ''} />
