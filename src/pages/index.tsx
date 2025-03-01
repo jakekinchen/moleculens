@@ -12,9 +12,8 @@ const Home: NextPage = () => {
   return (
     <div className="min-h-screen flex flex-col bg-gray-900">
       <Header />
-      
-      <main className="container mx-auto px-2 py-4 relative h-[calc(100vh-8rem)] min-h-[calc(100vh-8rem)] max-h-[calc(100vh-8rem)]">
-        <div className="grid grid-cols-12 gap-2 h-full">
+      <main className="container mx-auto px-2 py-4 flex-grow">
+        <div className="grid grid-cols-12 gap-2 h-[calc(100vh-8rem)]">
           <div className="col-span-3">
             <InputPanel 
               onVisualizationUpdate={setCurrentScript} 
@@ -29,7 +28,6 @@ const Home: NextPage = () => {
           </div>
         </div>
       </main>
-
       <Footer />
     </div>
   );
