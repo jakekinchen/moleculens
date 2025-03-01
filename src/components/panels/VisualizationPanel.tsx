@@ -11,18 +11,45 @@ const CameraController = () => {
   const { camera, scene } = useThree();
   
   useEffect(() => {
-    // Wait a frame to ensure the molecule is added
     requestAnimationFrame(() => {
-      const molecule = scene.getObjectByName('waterMolecule');
-      if (molecule) {
-        const box = new THREE.Box3().setFromObject(molecule);
+      // Get all non-light objects in the scene
+      const objects = scene.children.filter(child => !(child instanceof THREE.Light));
+      
+      if (objects.length > 0) {
+        // Create bounding box for all objects
+        const box = new THREE.Box3();
+        objects.forEach(object => box.expandByObject(object));
+        
         const size = box.getSize(new THREE.Vector3());
         const center = box.getCenter(new THREE.Vector3());
 
-        const radius = Math.max(size.x, size.y, size.z);
-        const distance = radius * 5; // Increased for better view of water molecule
-        camera.position.set(distance, distance * 0.8, distance);
+        // Calculate distance based on the diagonal of the bounding box
+        const diagonal = Math.sqrt(
+          size.x * size.x + 
+          size.y * size.y + 
+          size.z * size.z
+        );
+        const distance = diagonal * 1.2; // Adjust multiplier as needed
+
+        // Position camera using spherical coordinates for better viewing angle
+        const theta = Math.PI / 4; // 45 degrees
+        const phi = Math.PI / 6;   // 30 degrees
+        
+        camera.position.set(
+          center.x + distance * Math.sin(theta) * Math.cos(phi),
+          center.y + distance * Math.sin(phi),
+          center.z + distance * Math.cos(theta) * Math.cos(phi)
+        );
+
+        // Look at the center point
         camera.lookAt(center);
+        
+        // Update the orbit controls target
+        const controls = camera.userData.controls;
+        if (controls) {
+          controls.target.copy(center);
+        }
+
         camera.updateProjectionMatrix();
       }
     });
@@ -32,7 +59,7 @@ const CameraController = () => {
     <OrbitControls 
       makeDefault 
       autoRotate 
-      autoRotateSpeed={1.5} // Adjust speed as needed (degrees per second)
+      autoRotateSpeed={1.5}
       enableDamping
       dampingFactor={0.05}
     />
@@ -119,21 +146,22 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
         ${isExpanded ? 'fixed inset-0 z-50 m-0' : 'absolute inset-0 m-2'}`}
       >
         <div className="w-full h-full bg-black rounded-lg overflow-hidden relative">
-          {/* Replace loading overlay with LoadingFacts */}
           <LoadingFacts isVisible={isLoading || isTransitioning} />
 
-          <button
-            onClick={handleExpand}
-            className="absolute top-2 right-2 z-30 p-1.5 bg-gray-800 rounded-lg 
-              hover:bg-gray-700 transition-colors duration-200 group"
-            aria-label={isExpanded ? 'Collapse visualization' : 'Expand visualization'}
-          >
-            {isExpanded ? (
-              <ArrowsPointingInIcon className="w-5 h-5 text-gray-400 group-hover:text-white" />
-            ) : (
-              <ArrowsPointingOutIcon className="w-5 h-5 text-gray-400 group-hover:text-white" />
-            )}
-          </button>
+          {!isLoading && !isTransitioning && (
+            <button
+              onClick={handleExpand}
+              className="absolute top-2 right-2 z-30 p-1.5 bg-gray-800 rounded-lg 
+                hover:bg-gray-700 transition-colors duration-200 group"
+              aria-label={isExpanded ? 'Collapse visualization' : 'Expand visualization'}
+            >
+              {isExpanded ? (
+                <ArrowsPointingInIcon className="w-5 h-5 text-gray-400 group-hover:text-white" />
+              ) : (
+                <ArrowsPointingOutIcon className="w-5 h-5 text-gray-400 group-hover:text-white" />
+              )}
+            </button>
+          )}
 
           <div className="w-full h-full">
             {!script ? (
