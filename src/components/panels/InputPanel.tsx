@@ -40,7 +40,6 @@ const CHEMISTRY_TOPICS = [
 ];
 
 export const InputPanel: React.FC<InputPanelProps> = ({ onVisualizationUpdate, onLoadingChange, currentPrompt, onPromptChange, onPromptSubmit }) => {
-  const [query, setQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [currentScript, setCurrentScript] = useState<string | null>(null);
 
@@ -48,13 +47,13 @@ export const InputPanel: React.FC<InputPanelProps> = ({ onVisualizationUpdate, o
     e.preventDefault();
     setIsLoading(true);
     onLoadingChange(true);
-    console.log('Making request for:', query);
+    console.log('Making request for:', currentPrompt);
 
     try {
-      const response = await submitPrompt(query);
+      const response = await submitPrompt(currentPrompt);
       setCurrentScript(response.result);
       onVisualizationUpdate(response.result);
-      onPromptSubmit(query);
+      onPromptSubmit(currentPrompt);
     } catch (error) {
       console.error('Failed to get visualization:', error);
     } finally {
@@ -215,7 +214,7 @@ export const InputPanel: React.FC<InputPanelProps> = ({ onVisualizationUpdate, o
         />
         <button
           type="submit"
-          disabled={isLoading || !query.trim()}
+          disabled={isLoading || !currentPrompt.trim()}
           className="w-full bg-blue-600 text-white py-2 px-3 rounded-lg hover:bg-blue-700 
             transition focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-800
             disabled:opacity-50 disabled:cursor-not-allowed"
