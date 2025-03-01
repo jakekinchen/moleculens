@@ -6,7 +6,7 @@ interface PromptResponse {
 export const submitPrompt = async (_prompt: string): Promise<PromptResponse> => {
   const hi = JSON.stringify({ prompt: _prompt })
   console.log('submitting prompt', hi);
-  const response = await fetch('http://165.232.151.162:8000/prompt/generate-geometry/', {
+  const response = await fetch('https://meshmo.com/prompt/generate-geometry/', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
