@@ -1,10 +1,14 @@
 import React, { useState } from 'react';
 import { BeakerIcon } from '@heroicons/react/24/solid';
-import { QuestionMarkCircleIcon, Cog6ToothIcon } from '@heroicons/react/24/outline';
+import { QuestionMarkCircleIcon, Cog6ToothIcon, ClockIcon } from '@heroicons/react/24/outline';
 import { HelpModal } from '../modals/HelpModal';
 import { SettingsModal } from '../modals/SettingsModal';
 
-export const Header = () => {
+interface HeaderProps {
+  onOpenTimeMachine: () => void;
+}
+
+export const Header: React.FC<HeaderProps> = ({ onOpenTimeMachine }) => {
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [settings, setSettings] = useState({
@@ -32,6 +36,13 @@ export const Header = () => {
             aria-label="Help"
           >
             <QuestionMarkCircleIcon className="w-6 h-6" />
+          </button>
+          <button
+            onClick={onOpenTimeMachine}
+            className="p-2 text-gray-200 hover:text-white transition-colors rounded-full hover:bg-white/10"
+            aria-label="Time Machine"
+          >
+            <ClockIcon className="w-6 h-6" />
           </button>
           <button
             onClick={() => setIsSettingsOpen(true)}

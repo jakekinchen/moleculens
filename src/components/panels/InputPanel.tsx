@@ -5,6 +5,9 @@ import { ArrowDownTrayIcon } from '@heroicons/react/24/outline';
 interface InputPanelProps {
   onVisualizationUpdate: (script: string) => void;
   onLoadingChange: (isLoading: boolean) => void;
+  currentPrompt: string;
+  onPromptChange: (prompt: string) => void;
+  onPromptSubmit: (prompt: string) => void;
 }
 
 // Add the complete list of topics
@@ -36,8 +39,7 @@ const CHEMISTRY_TOPICS = [
   "Teach me about chiral carbon centers",
 ];
 
-export const InputPanel: React.FC<InputPanelProps> = ({ onVisualizationUpdate, onLoadingChange }) => {
-  const [query, setQuery] = useState('');
+export const InputPanel: React.FC<InputPanelProps> = ({ onVisualizationUpdate, onLoadingChange, currentPrompt, onPromptChange, onPromptSubmit }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [currentScript, setCurrentScript] = useState<string | null>(null);
 
@@ -45,12 +47,13 @@ export const InputPanel: React.FC<InputPanelProps> = ({ onVisualizationUpdate, o
     e.preventDefault();
     setIsLoading(true);
     onLoadingChange(true);
-    console.log('Making request for:', query);
+    console.log('Making request for:', currentPrompt);
 
     try {
-      const response = await submitPrompt(query);
+      const response = await submitPrompt(currentPrompt);
       setCurrentScript(response.result);
       onVisualizationUpdate(response.result);
+      onPromptSubmit(currentPrompt);
     } catch (error) {
       console.error('Failed to get visualization:', error);
     } finally {
@@ -195,7 +198,7 @@ export const InputPanel: React.FC<InputPanelProps> = ({ onVisualizationUpdate, o
 
   const handleSuggestTopic = () => {
     const randomTopic = CHEMISTRY_TOPICS[Math.floor(Math.random() * CHEMISTRY_TOPICS.length)];
-    setQuery(randomTopic);
+    onPromptChange(randomTopic);
   };
 
   return (
@@ -203,15 +206,15 @@ export const InputPanel: React.FC<InputPanelProps> = ({ onVisualizationUpdate, o
       <h2 className="text-lg font-semibold mb-3 text-white">Ask The Scientist</h2>
       <form onSubmit={handleSubmit} className="space-y-3 flex-grow">
         <textarea
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          value={currentPrompt}
+          onChange={(e) => onPromptChange(e.target.value)}
           className="w-full h-32 p-2 bg-gray-700 border-gray-600 rounded-lg resize-none 
             focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white placeholder-gray-400"
           placeholder="What would you like to learn about? (e.g., 'teach me about water molecules')"
         />
         <button
           type="submit"
-          disabled={isLoading || !query.trim()}
+          disabled={isLoading || !currentPrompt.trim()}
           className="w-full bg-blue-600 text-white py-2 px-3 rounded-lg hover:bg-blue-700 
             transition focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-800
             disabled:opacity-50 disabled:cursor-not-allowed"
