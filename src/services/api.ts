@@ -1,4 +1,5 @@
 /* eslint-disable */
+
 // Initial prompt submission response
 interface InitialPromptResponse {
   job_id: string;
@@ -105,11 +106,21 @@ export const pollJobStatus = async (jobId: string): Promise<JobStatusResponse> =
  * Legacy method for backward compatibility
  * @deprecated Use submitPrompt and pollJobStatus instead
  */
-export const legacySubmitPrompt = async (_prompt: string, model: string = 'llama3-70b'): Promise<PromptResponse> => {
-  const input = JSON.stringify({ prompt: _prompt })
-  console.log('submitting prompt', input, 'with model:', model);
+export const legacySubmitPrompt = async (
+  _prompt: string, 
+  modelOrInteractive: string | boolean = 'llama3-70b'
+): Promise<PromptResponse | ComplexPromptResponse> => {
+  // Handle both versions of the function signature
+  const isInteractiveMode = typeof modelOrInteractive === 'boolean' ? modelOrInteractive : false;
+  const model = typeof modelOrInteractive === 'string' ? modelOrInteractive : 'llama3-70b';
   
-  const response = await fetch(`${API_BASE_URL}/prompt/generate-geometry/?model=${model}`, {
+  const endpoint = `${API_BASE_URL}/prompt/generate-geometry/?model=${model}`;
+  
+  console.log('submitting prompt (legacy)', JSON.stringify({ prompt: _prompt }));
+  console.log('model:', model, 'isInteractiveMode:', isInteractiveMode);
+  console.log('endpoint used', endpoint);
+  
+  const response = await fetch(endpoint, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
