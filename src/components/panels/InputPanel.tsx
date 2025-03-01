@@ -5,6 +5,9 @@ import { ArrowDownTrayIcon } from '@heroicons/react/24/outline';
 interface InputPanelProps {
   onVisualizationUpdate: (script: string) => void;
   onLoadingChange: (isLoading: boolean) => void;
+  currentPrompt: string;
+  onPromptChange: (prompt: string) => void;
+  onPromptSubmit: (prompt: string) => void;
 }
 
 // Add the complete list of topics
@@ -36,7 +39,7 @@ const CHEMISTRY_TOPICS = [
   "Teach me about chiral carbon centers",
 ];
 
-export const InputPanel: React.FC<InputPanelProps> = ({ onVisualizationUpdate, onLoadingChange }) => {
+export const InputPanel: React.FC<InputPanelProps> = ({ onVisualizationUpdate, onLoadingChange, currentPrompt, onPromptChange, onPromptSubmit }) => {
   const [query, setQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [currentScript, setCurrentScript] = useState<string | null>(null);
@@ -51,6 +54,7 @@ export const InputPanel: React.FC<InputPanelProps> = ({ onVisualizationUpdate, o
       const response = await submitPrompt(query);
       setCurrentScript(response.result);
       onVisualizationUpdate(response.result);
+      onPromptSubmit(query);
     } catch (error) {
       console.error('Failed to get visualization:', error);
     } finally {
@@ -195,7 +199,7 @@ export const InputPanel: React.FC<InputPanelProps> = ({ onVisualizationUpdate, o
 
   const handleSuggestTopic = () => {
     const randomTopic = CHEMISTRY_TOPICS[Math.floor(Math.random() * CHEMISTRY_TOPICS.length)];
-    setQuery(randomTopic);
+    onPromptChange(randomTopic);
   };
 
   return (
@@ -203,8 +207,8 @@ export const InputPanel: React.FC<InputPanelProps> = ({ onVisualizationUpdate, o
       <h2 className="text-lg font-semibold mb-3 text-white">Ask The Scientist</h2>
       <form onSubmit={handleSubmit} className="space-y-3 flex-grow">
         <textarea
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          value={currentPrompt}
+          onChange={(e) => onPromptChange(e.target.value)}
           className="w-full h-32 p-2 bg-gray-700 border-gray-600 rounded-lg resize-none 
             focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white placeholder-gray-400"
           placeholder="What would you like to learn about? (e.g., 'teach me about water molecules')"
