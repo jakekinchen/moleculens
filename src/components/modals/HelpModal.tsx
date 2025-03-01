@@ -31,14 +31,14 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose }) => {
           <div className="space-y-4 text-gray-300">
             <p>
               SciVizAI helps you learn chemistry through interactive 3D visualizations. 
-              Simply describe what you want to learn about, and we'll generate a 3D model 
+              Simply describe what you want to learn about, and we&apos;ll generate a 3D model 
               that you can explore.
             </p>
 
             <h3 className="text-lg font-semibold text-white mt-6">How to use:</h3>
             <ol className="list-decimal list-inside space-y-2">
-              <li>Type what you want to learn about in the input box (or use "Suggest Topic")</li>
-              <li>Click "Learn" to generate a 3D visualization</li>
+              <li>Type what you want to learn about (or use &quot;Suggest Random Topic&quot;)</li>
+              <li>Click &quot;Learn&quot; to generate a 3D visualization</li>
               <li>Interact with the model:
                 <ul className="list-disc list-inside ml-6 mt-1 text-gray-400">
                   <li>Click and drag to rotate</li>
@@ -51,7 +51,7 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose }) => {
             </ol>
 
             <p className="mt-6">
-              Try starting with simple molecules like "water" or "methane" and work your 
+              Try starting with simple molecules like &quot;water&quot; or &quot;methane&quot; and work your 
               way up to more complex structures!
             </p>
           </div>
