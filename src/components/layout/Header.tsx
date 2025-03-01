@@ -12,7 +12,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenTimeMachine }) => {
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [settings, setSettings] = useState({
-    selectedModel: 'gpt-4',
+    selectedModel: 'o3-mini',
     useInteractiveMode: false,
   });
 
