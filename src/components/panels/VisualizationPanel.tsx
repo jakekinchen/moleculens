@@ -10,15 +10,21 @@ const CameraController = () => {
   const { camera, scene } = useThree();
   
   useEffect(() => {
-    const box = new THREE.Box3().setFromObject(scene);
-    const size = box.getSize(new THREE.Vector3());
-    const center = box.getCenter(new THREE.Vector3());
+    // Wait a frame to ensure the molecule is added
+    requestAnimationFrame(() => {
+      const molecule = scene.getObjectByName('waterMolecule');
+      if (molecule) {
+        const box = new THREE.Box3().setFromObject(molecule);
+        const size = box.getSize(new THREE.Vector3());
+        const center = box.getCenter(new THREE.Vector3());
 
-    const radius = Math.max(size.x, size.y, size.z) * 0.5;
-    const distance = radius * 2.5;
-    camera.position.set(distance, distance * 0.8, distance);
-    camera.lookAt(center);
-    camera.updateProjectionMatrix();
+        const radius = Math.max(size.x, size.y, size.z);
+        const distance = radius * 5; // Increased for better view of water molecule
+        camera.position.set(distance, distance * 0.8, distance);
+        camera.lookAt(center);
+        camera.updateProjectionMatrix();
+      }
+    });
   }, [camera, scene]);
 
   return null;
@@ -28,23 +34,38 @@ interface VisualizationPanelProps {
   script?: string;
 }
 
-// Add display name to fix react/display-name error
-const DynamicSceneComponent = () => {
-  const sunGeometry = new THREE.SphereGeometry(5, 64, 64);
-  const sunMaterial = new THREE.MeshPhongMaterial({ 
-    color: 0xffcc00, 
-    emissive: 0xffaa00, 
-    emissiveIntensity: 0.5 
-  });
+const DynamicSceneComponent = ({ code }: { code: string }) => {
+  const { scene } = useThree();
+  
+  useEffect(() => {
+    try {
+      // Clean up any existing molecule
+      const existingMolecule = scene.getObjectByName('waterMolecule');
+      if (existingMolecule) {
+        scene.remove(existingMolecule);
+      }
+
+      // Create a function from the code string and execute it
+      const createScene = new Function('THREE', 'scene', code);
+      createScene(THREE, scene);
+
+      // Clean up function
+      return () => {
+        const molecule = scene.getObjectByName('waterMolecule');
+        if (molecule) {
+          scene.remove(molecule);
+        }
+      };
+    } catch (error) {
+      console.error('Error executing scene code:', error);
+    }
+  }, [code, scene]);
 
   return (
     <>
-      {/* @ts-ignore to bypass react/no-unknown-property for Three.js props */}
       <ambientLight intensity={0.4} />
-      {/* @ts-ignore */}
       <directionalLight position={[1, 1, 1]} intensity={1} />
-      {/* @ts-ignore */}
-      <mesh geometry={sunGeometry} material={sunMaterial} />
+      <directionalLight position={[-1, -1, -1]} intensity={0.4} />
     </>
   );
 };
@@ -57,10 +78,14 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({ script }
     if (!script) return null;
     
     try {
-      const match = script.match(/\/\/ GeometryAgent LLM-generated code([\s\S]*?)(?=\n\s*\/\/|$)/);
-      if (!match || !match[1]) return null;
+      // Extract the code between the marker comments
+      const match = script.match(/\/\/ GeometryAgent LLM-generated code([\s\S]*?)(?=$)/);
+      if (!match || !match[1]) {
+        console.error('Could not find geometry code in script');
+        return null;
+      }
       
-      return DynamicSceneComponent;
+      return () => <DynamicSceneComponent code={match[1]} />;
     } catch (error) {
       console.error('Error creating scene:', error);
       return null;
@@ -109,7 +134,6 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({ script }
                 camera={{ position: [0, 0, 5], fov: 75 }}
                 style={{ width: '100%', height: '100%' }}
               >
-                {/* @ts-ignore */}
                 <color attach="background" args={['#111']} />
                 <CameraController />
                 <OrbitControls makeDefault />
