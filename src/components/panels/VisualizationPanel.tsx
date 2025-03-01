@@ -69,6 +69,7 @@ const CameraController = () => {
 interface VisualizationPanelProps {
   script?: string;
   isLoading?: boolean;
+  isInteractiveMode: boolean;
 }
 
 const DynamicSceneComponent = ({ code }: { code: string }) => {
@@ -111,7 +112,8 @@ const DynamicSceneComponent = ({ code }: { code: string }) => {
 
 export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({ 
   script,
-  isLoading = false
+  isLoading = false,
+  isInteractiveMode
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);

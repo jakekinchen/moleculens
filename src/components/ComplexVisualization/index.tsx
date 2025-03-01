@@ -1,6 +1,5 @@
 import React, { useEffect, useRef } from 'react';
 import * as THREE from 'three';
-import { OrbitControls } from '@react-three/drei';
 
 interface ComplexVisualizationProps {
   data: {
@@ -16,27 +15,26 @@ const ComplexVisualization: React.FC<ComplexVisualizationProps> = ({ data }) => 
   useEffect(() => {
     if (!containerRef.current || !data) return;
 
-    // Clear existing content
-    while (containerRef.current.firstChild) {
-      containerRef.current.removeChild(containerRef.current.firstChild);
-    }
+    const container = containerRef.current;
+    const scene = new THREE.Scene();
+    const renderer = new THREE.WebGLRenderer();
+    
+    // ... rest of setup code ...
 
-    // Create HTML container and parse content
-    const parser = new DOMParser();
-    const htmlDoc = parser.parseFromString(data.html, 'text/html');
-    const htmlContainer = document.createElement('div');
-    htmlContainer.innerHTML = htmlDoc.body.innerHTML;
-
-    // Add content to container
-    containerRef.current.appendChild(htmlContainer);
-
-    // Execute animation code
-    try {
-      const executeAnimation = new Function('THREE', data.js);
-      executeAnimation(THREE);
-    } catch (error) {
-      console.error('Failed to execute visualization:', error);
-    }
+    return () => {
+      // Use captured variables instead of ref
+      renderer.dispose();
+      scene.traverse((object: THREE.Object3D) => {
+        if (object instanceof THREE.Mesh) {
+          object.geometry.dispose();
+          if (Array.isArray(object.material)) {
+            object.material.forEach(material => material.dispose());
+          } else {
+            object.material.dispose();
+          }
+        }
+      });
+    };
   }, [data]);
 
   return <div ref={containerRef} className="w-full h-full" />;

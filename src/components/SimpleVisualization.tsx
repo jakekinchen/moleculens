@@ -1,3 +1,4 @@
+/* eslint-disable react/no-unknown-property */
 import React, { useEffect } from 'react';
 import { useThree } from '@react-three/fiber';
 import * as THREE from 'three';
@@ -37,8 +38,11 @@ const SimpleVisualization: React.FC<SimpleVisualizationProps> = ({ geometryCode 
 
   return (
     <>
+      {/* @ts-expect-error @react-three/fiber special props */}
       <ambientLight intensity={0.4} />
+      {/* @ts-expect-error @react-three/fiber special props */}
       <directionalLight position={[1, 1, 1]} intensity={1} />
+      {/* @ts-expect-error @react-three/fiber special props */}
       <directionalLight position={[-1, -1, -1]} intensity={0.4} />
     </>
   );
