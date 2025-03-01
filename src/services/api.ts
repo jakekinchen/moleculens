@@ -7,7 +7,7 @@ interface PromptResponse {
 }
 
 export const submitPrompt = async (prompt: string): Promise<PromptResponse> => {
-  // const response = await fetch('http://165.232.151.162:8000/geometry/cube/', {
+  // const response = await fetch('http://165.232.151.162:8000/generate-geometry/', {
   //   method: 'POST',
   //   headers: {
   //     'Content-Type': 'application/json',
