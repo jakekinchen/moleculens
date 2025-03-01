@@ -50,7 +50,7 @@ const API_BASE_URL = useLocalServer ? 'http://localhost:8000' : 'https://meshmo.
  * @returns A response containing the job_id for polling
  * @throws Error if prompt validation fails or request fails
  */
-export const submitPrompt = async (prompt: string, model: string = 'llama3-70b'): Promise<InitialPromptResponse> => {
+export const submitPrompt = async (prompt: string, model: string = 'o3-mini'): Promise<InitialPromptResponse> => {
   const endpoint = `${API_BASE_URL}/prompt`;
   
   console.log('Submitting prompt', { prompt, model });
