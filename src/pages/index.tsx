@@ -11,8 +11,8 @@ export default function Home() {
     <div className="min-h-screen flex flex-col bg-gray-900">
       <Header />
       
-      <main className="flex-grow container mx-auto px-2 py-4 relative">
-        <div className="grid grid-cols-12 gap-2 h-[calc(100vh-8rem)]">
+      <main className="container mx-auto px-2 py-4 relative h-[calc(100vh-8rem)] min-h-[calc(100vh-8rem)] max-h-[calc(100vh-8rem)]">
+        <div className="grid grid-cols-12 gap-2 h-full">
           <div className="col-span-3">
             <InputPanel onVisualizationUpdate={setCurrentScript} />
           </div>
