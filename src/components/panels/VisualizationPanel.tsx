@@ -4,6 +4,7 @@ import { Canvas, useThree } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import { ArrowsPointingInIcon, ArrowsPointingOutIcon } from '@heroicons/react/24/outline';
 import * as THREE from 'three';
+import { LoadingFacts } from './LoadingFacts';
 
 // Helper component to auto-fit camera to scene
 const CameraController = () => {
@@ -27,7 +28,15 @@ const CameraController = () => {
     });
   }, [camera, scene]);
 
-  return null;
+  return (
+    <OrbitControls 
+      makeDefault 
+      autoRotate 
+      autoRotateSpeed={1.5} // Adjust speed as needed (degrees per second)
+      enableDamping
+      dampingFactor={0.05}
+    />
+  );
 };
 
 interface VisualizationPanelProps {
@@ -110,12 +119,8 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
         ${isExpanded ? 'fixed inset-0 z-50 m-0' : 'absolute inset-0 m-2'}`}
       >
         <div className="w-full h-full bg-black rounded-lg overflow-hidden relative">
-          {/* Loading Overlay */}
-          <div className={`absolute inset-0 bg-black bg-opacity-75 z-20 flex items-center justify-center
-            transition-opacity duration-300 ${isLoading || isTransitioning ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
-          >
-            <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-blue-500" />
-          </div>
+          {/* Replace loading overlay with LoadingFacts */}
+          <LoadingFacts isVisible={isLoading || isTransitioning} />
 
           <button
             onClick={handleExpand}
@@ -142,7 +147,6 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
               >
                 <color attach="background" args={['#111']} />
                 <CameraController />
-                <OrbitControls makeDefault />
                 {DynamicScene && <DynamicScene />}
               </Canvas>
             )}

@@ -33,11 +33,132 @@ export const InputPanel: React.FC<InputPanelProps> = ({ onVisualizationUpdate, o
 
   const handleDownload = () => {
     if (!currentScript) return;
-    const blob = new Blob([currentScript], { type: 'text/javascript' });
+    
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html lang="en">
+      <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Geometry Visualization</title>
+          <style>
+              body { margin: 0; overflow: hidden; background: #111; }
+              canvas { width: 100%; height: 100%; display: block; }
+          </style>
+      </head>
+      <body>
+          <script>
+              // Load Three.js first
+              const loadScript = (src) => {
+                  return new Promise((resolve, reject) => {
+                      const script = document.createElement('script');
+                      script.src = src;
+                      script.onload = () => {
+                          console.log('Loaded script:', src);
+                          resolve();
+                      };
+                      script.onerror = (err) => {
+                          console.error('Failed to load script:', src, err);
+                          reject(err);
+                      };
+                      document.head.appendChild(script);
+                  });
+              };
+
+              // Load scripts in sequence and then initialize
+              async function init() {
+                  try {
+                      await loadScript('https://unpkg.com/three@0.128.0/build/three.min.js');
+                      await loadScript('https://unpkg.com/three@0.128.0/examples/js/controls/OrbitControls.js');
+                      console.log('Three.js loaded:', THREE);
+                      console.log('OrbitControls loaded:', THREE.OrbitControls);
+                      
+                      // Set up scene
+                      const scene = new THREE.Scene();
+                      console.log('Scene created');
+                      
+                      // Set up camera
+                      const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+                      camera.position.set(5, 4, 5);
+                      
+                      // Set up renderer
+                      const renderer = new THREE.WebGLRenderer({ antialias: true });
+                      renderer.setSize(window.innerWidth, window.innerHeight);
+                      document.body.appendChild(renderer.domElement);
+                      
+                      // Add lights
+                      const ambientLight = new THREE.AmbientLight(0x404040, 0.4);
+                      scene.add(ambientLight);
+                      
+                      const directionalLight1 = new THREE.DirectionalLight(0xffffff, 1);
+                      directionalLight1.position.set(1, 1, 1);
+                      scene.add(directionalLight1);
+                      
+                      const directionalLight2 = new THREE.DirectionalLight(0xffffff, 0.4);
+                      directionalLight2.position.set(-1, -1, -1);
+                      scene.add(directionalLight2);
+
+                      console.log('About to execute geometry code');
+                      // Execute the geometry code
+                      ${currentScript}
+                      console.log('Geometry code executed');
+
+                      // Add OrbitControls
+                      const controls = new THREE.OrbitControls(camera, renderer.domElement);
+                      controls.enableDamping = true;
+                      controls.dampingFactor = 0.05;
+                      controls.autoRotate = true;
+                      controls.autoRotateSpeed = 1.5;
+                      
+                      // Initial camera positioning based on molecule size
+                      const molecule = scene.getObjectByName('waterMolecule');
+                      console.log('Found molecule:', molecule);
+                      if (molecule) {
+                          const box = new THREE.Box3().setFromObject(molecule);
+                          const size = box.getSize(new THREE.Vector3());
+                          const center = box.getCenter(new THREE.Vector3());
+                          
+                          const radius = Math.max(size.x, size.y, size.z);
+                          const distance = radius * 5;
+                          camera.position.set(distance, distance * 0.8, distance);
+                          camera.lookAt(center);
+                          console.log('Camera positioned at distance:', distance);
+                      }
+                      
+                      // Animation loop
+                      function animate() {
+                          requestAnimationFrame(animate);
+                          controls.update();
+                          renderer.render(scene, camera);
+                      }
+                      
+                      // Handle window resize
+                      window.addEventListener('resize', () => {
+                          camera.aspect = window.innerWidth / window.innerHeight;
+                          camera.updateProjectionMatrix();
+                          renderer.setSize(window.innerWidth, window.innerHeight);
+                      });
+                      
+                      // Start animation
+                      console.log('Starting animation');
+                      animate();
+                  } catch (error) {
+                      console.error('Error initializing visualization:', error);
+                  }
+              }
+
+              // Start initialization
+              init().catch(console.error);
+          </script>
+      </body>
+      </html>
+    `;
+
+    const blob = new Blob([htmlContent], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'visualization.js';
+    a.download = 'visualization.html';
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
