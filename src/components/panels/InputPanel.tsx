@@ -122,14 +122,19 @@ export const InputPanel: React.FC<InputPanelProps> = ({ onVisualizationUpdate, o
     console.log('Making request for:', currentPrompt, 'with model:', selectedModel, 'interactive mode:', useInteractiveMode);
 
     try {
-      if (useInteractiveMode) {
-        // Use the non-polling direct geometry generation endpoint
+      if (!useInteractiveMode) {
+        // Use the non-polling direct geometry generation endpoint for interactive mode
+        console.log('Using interactive mode with direct geometry generation');
         const response = await legacySubmitPrompt(currentPrompt, selectedModel);
-        console.log('Legacy geometry response:', response);
+        console.log('Geometry generation response:', response);
         
-        setCurrentScript(response.result);
-        onVisualizationUpdate(response.result);
-        onPromptSubmit(currentPrompt);
+        if (response && response.result) {
+          setCurrentScript(response.result);
+          onVisualizationUpdate(response.result);
+          onPromptSubmit(currentPrompt);
+        } else {
+          setError('Received empty result from geometry generation');
+        }
         setIsLoading(false);
         onLoadingChange(false);
       } else {

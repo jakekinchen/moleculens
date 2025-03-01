@@ -40,7 +40,7 @@ interface ComplexPromptResponse {
 }
 
 // API base URL configuration
-const useLocalServer = false; // Set to true to use localhost for development
+const useLocalServer = true; // Set to true to use localhost for development
 const API_BASE_URL = useLocalServer ? 'http://localhost:8000' : 'https://meshmo.com';
 
 /**
@@ -103,36 +103,41 @@ export const pollJobStatus = async (jobId: string): Promise<JobStatusResponse> =
 };
 
 /**
- * Legacy method for backward compatibility
- * @deprecated Use submitPrompt and pollJobStatus instead
+ * Generates Three.js geometry for a scientific prompt
+ * This uses the /prompt/generate-geometry endpoint for direct, non-polling geometry generation
+ * 
+ * @param prompt Scientific prompt to visualize
+ * @param model The model to use for generation
+ * @returns PromptResponse with Three.js code as a string in the result property
  */
 export const legacySubmitPrompt = async (
-  _prompt: string, 
-  modelOrInteractive: string | boolean = 'llama3-70b'
-): Promise<PromptResponse | ComplexPromptResponse> => {
-  // Handle both versions of the function signature
-  const isInteractiveMode = typeof modelOrInteractive === 'boolean' ? modelOrInteractive : false;
-  const model = typeof modelOrInteractive === 'string' ? modelOrInteractive : 'llama3-70b';
+  prompt: string, 
+  model: string = 'o3-mini'
+): Promise<PromptResponse> => {
+  const endpoint = `${API_BASE_URL}/prompt/generate-geometry/`;
   
-  const endpoint = `${API_BASE_URL}/prompt/generate-geometry/?model=${model}`;
+  console.log('Generating geometry for prompt:', prompt, 'with model:', model);
+  console.log('Using endpoint:', endpoint);
   
-  console.log('submitting prompt (legacy)', JSON.stringify({ prompt: _prompt }));
-  console.log('model:', model, 'isInteractiveMode:', isInteractiveMode);
-  console.log('endpoint used', endpoint);
-  
-  const response = await fetch(endpoint, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ prompt: _prompt }),
-    credentials: 'include', // Include credentials for CORS with authentication
-  });
+  try {
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ prompt, model }),
+      credentials: 'include', // Include credentials for CORS with authentication
+    });
 
-  if (!response.ok) {
-    throw new Error('Failed to submit prompt');
+    if (!response.ok) {
+      throw new Error(`Server error: ${response.status} ${response.statusText}`);
+    }
+
+    const data = await response.json() as PromptResponse;
+    console.log('Successfully generated geometry');
+    return data;
+  } catch (error) {
+    console.error('Error generating geometry:', error);
+    throw error;
   }
-
-  console.log('successful api request');
-  return response.json();
 };
