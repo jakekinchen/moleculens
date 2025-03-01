@@ -61,7 +61,6 @@ export const submitPrompt = async (prompt: string, model: string = 'o3-mini'): P
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({ prompt, model }),
-    credentials: 'include', // Include credentials for CORS with authentication
   });
 
   if (!response.ok) {
@@ -92,7 +91,6 @@ export const pollJobStatus = async (jobId: string): Promise<JobStatusResponse> =
     headers: {
       'Content-Type': 'application/json',
     },
-    credentials: 'include', // Include credentials for CORS with authentication
   });
 
   if (!response.ok) {
@@ -126,7 +124,6 @@ export const legacySubmitPrompt = async (
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ prompt, model }),
-      credentials: 'include', // Include credentials for CORS with authentication
     });
 
     if (!response.ok) {
