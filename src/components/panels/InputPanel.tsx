@@ -18,8 +18,8 @@ export const InputPanel: React.FC<InputPanelProps> = ({ onVisualizationUpdate })
     try {
       const response = await submitPrompt(query);
       // Store the JSX string directly
-      setCurrentScript(response.jsx);
-      onVisualizationUpdate(response.jsx);
+      setCurrentScript(response.html);
+      onVisualizationUpdate(response.html);
     } catch (error) {
       console.error('Failed to get visualization:', error);
       // TODO: Add error handling UI
