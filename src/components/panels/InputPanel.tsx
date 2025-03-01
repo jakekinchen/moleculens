@@ -9,6 +9,7 @@ interface InputPanelProps {
   onPromptChange: (prompt: string) => void;
   onPromptSubmit: (prompt: string) => void;
   selectedModel: string;
+  useInteractiveMode: boolean;
 }
 
 // Scientific prompt example suggestions
@@ -40,7 +41,7 @@ const CHEMISTRY_TOPICS = [
   "Teach me about chiral carbon centers",
 ];
 
-export const InputPanel: React.FC<InputPanelProps> = ({ onVisualizationUpdate, onLoadingChange, currentPrompt, onPromptChange, onPromptSubmit, selectedModel }) => {
+export const InputPanel: React.FC<InputPanelProps> = ({ onVisualizationUpdate, onLoadingChange, currentPrompt, onPromptChange, onPromptSubmit, selectedModel, useInteractiveMode }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [currentScript, setCurrentScript] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -118,26 +119,38 @@ export const InputPanel: React.FC<InputPanelProps> = ({ onVisualizationUpdate, o
     setError(null);
     setIsScientificError(false);
     
-    console.log('Making request for:', currentPrompt, 'with model:', selectedModel);
+    console.log('Making request for:', currentPrompt, 'with model:', selectedModel, 'interactive mode:', useInteractiveMode);
 
     try {
-      // Use the new job-based API flow
-      const response = await submitPrompt(currentPrompt, selectedModel);
-      console.log('Initial response:', response);
-      
-      if (response.status === 'processing') {
-        setJobId(response.job_id);
-        // Start polling for updates
-        pollForUpdates(response.job_id);
-      } else {
-        // Handle legacy or immediate response
-        if ('result' in response) {
-          setCurrentScript(response.result);
-          onVisualizationUpdate(response.result);
-          onPromptSubmit(currentPrompt);
-        }
+      if (useInteractiveMode) {
+        // Use the non-polling direct geometry generation endpoint
+        const response = await legacySubmitPrompt(currentPrompt, selectedModel);
+        console.log('Legacy geometry response:', response);
+        
+        setCurrentScript(response.result);
+        onVisualizationUpdate(response.result);
+        onPromptSubmit(currentPrompt);
         setIsLoading(false);
         onLoadingChange(false);
+      } else {
+        // Use the job-based API flow with polling
+        const response = await submitPrompt(currentPrompt, selectedModel);
+        console.log('Initial response:', response);
+        
+        if (response.status === 'processing') {
+          setJobId(response.job_id);
+          // Start polling for updates
+          pollForUpdates(response.job_id);
+        } else {
+          // Handle immediate response (rare case)
+          if ('result' in response) {
+            setCurrentScript(response.result);
+            onVisualizationUpdate(response.result);
+            onPromptSubmit(currentPrompt);
+          }
+          setIsLoading(false);
+          onLoadingChange(false);
+        }
       }
     } catch (error: any) {
       console.error('Failed to get visualization:', error);

@@ -13,6 +13,7 @@ const Home: NextPage = () => {
   const [isTimeMachineOpen, setIsTimeMachineOpen] = useState(false);
   const [currentPrompt, setCurrentPrompt] = useState('');
   const [selectedModel, setSelectedModel] = useState('o3-mini');
+  const [useInteractiveMode, setUseInteractiveMode] = useState(false);
 
   const handlePromptSubmit = (prompt: string) => {
     // Add to history when a prompt is submitted
@@ -21,6 +22,7 @@ const Home: NextPage = () => {
 
   const handleSettingsChange = (settings: { selectedModel: string; useInteractiveMode: boolean }) => {
     setSelectedModel(settings.selectedModel);
+    setUseInteractiveMode(settings.useInteractiveMode);
   };
 
   return (
@@ -39,6 +41,7 @@ const Home: NextPage = () => {
               onPromptChange={setCurrentPrompt}
               onPromptSubmit={handlePromptSubmit}
               selectedModel={selectedModel}
+              useInteractiveMode={useInteractiveMode}
             />
           </div>
           <div className="col-span-9 relative">
