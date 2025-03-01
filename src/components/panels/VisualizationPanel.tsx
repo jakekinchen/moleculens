@@ -1,8 +1,30 @@
-import React, { useState, useMemo } from 'react';
-import { Canvas } from '@react-three/fiber';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { Canvas, useThree } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import { ArrowsPointingInIcon, ArrowsPointingOutIcon } from '@heroicons/react/24/outline';
 import * as THREE from 'three';
+
+// Helper component to auto-fit camera to scene
+const CameraController = () => {
+  const { camera, scene } = useThree();
+  
+  useEffect(() => {
+    const box = new THREE.Box3().setFromObject(scene);
+    const size = box.getSize(new THREE.Vector3());
+    const center = box.getCenter(new THREE.Vector3());
+
+    // Calculate the radius of the bounding sphere
+    const radius = Math.max(size.x, size.y, size.z) * 0.5;
+    
+    // Position camera based on radius
+    const distance = radius * 2.5; // Adjust this multiplier to change zoom level
+    camera.position.set(distance, distance * 0.8, distance);
+    camera.lookAt(center);
+    camera.updateProjectionMatrix();
+  }, [camera, scene]);
+
+  return null;
+};
 
 interface VisualizationPanelProps {
   script?: string;
@@ -16,24 +38,29 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({ script }
     if (!script) return null;
     
     try {
-      // Extract the content between Canvas tags
-      const match = script.match(/<Canvas[^>]*>([\s\S]*)<\/Canvas>/);
+      // Extract the Three.js scene setup code
+      const match = script.match(/\/\/ GeometryAgent LLM-generated code([\s\S]*?)(?=\n\s*\/\/|$)/);
       if (!match || !match[1]) return null;
 
-      const sceneContent = match[1].trim();
+      const sceneCode = match[1].trim();
       
-      // Create a component that renders the scene content
-      return () => (
-        <>
-          {/* Using the actual scene content from the API */}
-          <ambientLight intensity={0.5} />
-          <pointLight position={[10, 10, 10]} />
-          <mesh>
-            <boxGeometry />
-            <meshStandardMaterial color="#3b82f6" />
-          </mesh>
-        </>
-      );
+      return () => {
+        // Create scene objects using @react-three/fiber syntax
+        const sunGeometry = new THREE.SphereGeometry(5, 64, 64);
+        const sunMaterial = new THREE.MeshPhongMaterial({ 
+          color: 0xffcc00, 
+          emissive: 0xffaa00, 
+          emissiveIntensity: 0.5 
+        });
+
+        return (
+          <>
+            <ambientLight intensity={0.4} />
+            <directionalLight position={[1, 1, 1]} intensity={1} />
+            <mesh geometry={sunGeometry} material={sunMaterial} />
+          </>
+        );
+      };
     } catch (error) {
       console.error('Error creating scene:', error);
       return null;
@@ -83,7 +110,8 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({ script }
                 style={{ width: '100%', height: '100%' }}
               >
                 <color attach="background" args={['#111']} />
-                <OrbitControls />
+                <CameraController />
+                <OrbitControls makeDefault />
                 {DynamicScene && <DynamicScene />}
               </Canvas>
             )}

@@ -3,7 +3,7 @@ interface PromptRequest {
 }
 
 interface PromptResponse {
-  jsx: string;
+  html: string;
 }
 
 export const submitPrompt = async (prompt: string): Promise<PromptResponse> => {
@@ -15,7 +15,7 @@ export const submitPrompt = async (prompt: string): Promise<PromptResponse> => {
   //   body: JSON.stringify({ prompt }),
   // });
 
-  const response = await fetch('http://165.232.151.162:8000/geometry/cube/', {
+  const response = await fetch('http://165.232.151.162:8000/geometry/html-test-page/', {
     method: 'GET',
     headers: {
       'Content-Type': 'application/json',
@@ -26,7 +26,7 @@ export const submitPrompt = async (prompt: string): Promise<PromptResponse> => {
     throw new Error('Failed to submit prompt');
   }
 
-  console.log('success');
+  console.log('successful api request');
 
   return response.json();
 }; 
