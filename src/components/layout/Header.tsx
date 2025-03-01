@@ -10,7 +10,7 @@ export const Header = () => {
         </div>
         <div>
           <h1 className="text-2xl font-bold">SciVizAI</h1>
-          <p className="text-xs opacity-80">Let's make science visual</p>
+          <p className="text-xs opacity-80">Let&apos;s make science visual</p>
         </div>
       </div>
     </header>
