@@ -3,24 +3,10 @@ interface PromptResponse {
   result: string;
 }
 
-interface ComplexPromptResponse {
-  html: string;
-  js: string;
-  title: string;
-  timecode_markers: string[];
-  total_elements: number;
-}
-
-export const submitPrompt = async (_prompt: string, isInteractiveMode: boolean): Promise<PromptResponse | ComplexPromptResponse> => {
-  const endpoint = isInteractiveMode 
-    ? 'https://meshmo.com/prompt/'
-    : 'https://meshmo.com/prompt/generate-geometry/';
-
-  console.log('submitting prompt', JSON.stringify({ prompt: _prompt }));
-
-  console.log('endpoint used', endpoint);
-  
-  const response = await fetch(endpoint, {
+export const submitPrompt = async (_prompt: string): Promise<PromptResponse> => {
+  const hi = JSON.stringify({ prompt: _prompt })
+  console.log('submitting prompt', hi);
+  const response = await fetch('https://meshmo.com/prompt/generate-geometry/', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -28,10 +14,18 @@ export const submitPrompt = async (_prompt: string, isInteractiveMode: boolean):
     body: JSON.stringify({ prompt: _prompt }),
   });
 
+  // const response = await fetch('http://165.232.151.162:8000/geometry/html-test-page/', {
+  //   method: 'GET',
+  //   headers: {
+  //     'Content-Type': 'application/json',
+  //   },
+  // });
+
   if (!response.ok) {
     throw new Error('Failed to submit prompt');
   }
 
   console.log('successful api request');
+
   return response.json();
 }; 
