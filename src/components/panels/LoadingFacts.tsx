@@ -46,9 +46,10 @@ const SCIENCE_FACTS = [
 
 interface LoadingFactsProps {
   isVisible: boolean;
+  showFacts?: boolean;
 }
 
-export const LoadingFacts: React.FC<LoadingFactsProps> = ({ isVisible }) => {
+export const LoadingFacts: React.FC<LoadingFactsProps> = ({ isVisible, showFacts = true }) => {
   // Use a stable initial value (0) and then randomize after mount
   const [currentFactIndex, setCurrentFactIndex] = useState(0);
   const [isTransitioning, setIsTransitioning] = useState(false);
@@ -82,12 +83,14 @@ export const LoadingFacts: React.FC<LoadingFactsProps> = ({ isVisible }) => {
       transition-opacity duration-300 ${isVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
     >
       <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-blue-500 mb-8" />
-      <div className="max-w-md px-6">
-        <div className={`text-center transition-opacity duration-800 ${isTransitioning ? 'opacity-0' : 'opacity-100'}`}>
-          <p className="text-lg text-gray-300 font-medium">Did you know?</p>
-          <p className="mt-2 text-gray-400">{SCIENCE_FACTS[currentFactIndex]}</p>
+      {showFacts && (
+        <div className="max-w-md px-6">
+          <div className={`text-center transition-opacity duration-800 ${isTransitioning ? 'opacity-0' : 'opacity-100'}`}>
+            <p className="text-lg text-gray-300 font-medium">Did you know?</p>
+            <p className="mt-2 text-gray-400">{SCIENCE_FACTS[currentFactIndex]}</p>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }; 

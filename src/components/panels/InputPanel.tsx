@@ -298,8 +298,8 @@ export const InputPanel: React.FC<InputPanelProps> = ({ onVisualizationUpdate, o
   };
 
   return (
-    <div className="bg-gray-800 rounded-lg shadow-lg p-3 h-full border border-gray-700 flex flex-col">
-      <h2 className="text-lg font-semibold mb-3 text-white">Learn</h2>
+    <div className="h-[calc(100vh-8rem)] bg-gray-800 rounded-lg shadow-lg p-3 border border-gray-700 flex flex-col">
+      <h2 className="text-lg font-semibold mb-3 text-white">Ask The Scientist</h2>
       <form onSubmit={handleSubmit} className="space-y-3 flex-grow">
         <textarea
           value={query}
@@ -357,7 +357,7 @@ export const InputPanel: React.FC<InputPanelProps> = ({ onVisualizationUpdate, o
           className="w-full bg-gray-700 text-gray-200 py-2 px-3 rounded-lg hover:bg-gray-600 
             transition focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 focus:ring-offset-gray-800"
         >
-          Suggest Topic
+          Suggest Random Topic
         </button>
       </div>
     </div>

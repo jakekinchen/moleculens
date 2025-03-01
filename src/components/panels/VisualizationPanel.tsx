@@ -146,7 +146,11 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
         ${isExpanded ? 'fixed inset-0 z-50 m-0' : 'absolute inset-0 m-2'}`}
       >
         <div className="w-full h-full bg-black rounded-lg overflow-hidden relative">
-          <LoadingFacts isVisible={isLoading || isTransitioning} />
+          {/* Show fun facts only during Learn request loading */}
+          <LoadingFacts isVisible={isLoading && !isTransitioning} showFacts={true} />
+
+          {/* Show spinner only during transitions */}
+          <LoadingFacts isVisible={isTransitioning} showFacts={false} />
 
           {!isLoading && !isTransitioning && (
             <button
