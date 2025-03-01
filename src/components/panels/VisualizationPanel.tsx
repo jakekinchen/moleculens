@@ -32,6 +32,7 @@ const CameraController = () => {
 
 interface VisualizationPanelProps {
   script?: string;
+  isLoading?: boolean;
 }
 
 const DynamicSceneComponent = ({ code }: { code: string }) => {
@@ -70,7 +71,10 @@ const DynamicSceneComponent = ({ code }: { code: string }) => {
   );
 };
 
-export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({ script }) => {
+export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({ 
+  script,
+  isLoading = false
+}) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
 
@@ -106,7 +110,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({ script }
         <div className="w-full h-full bg-black rounded-lg overflow-hidden relative">
           {/* Loading Overlay */}
           <div className={`absolute inset-0 bg-black bg-opacity-75 z-20 flex items-center justify-center
-            transition-opacity duration-300 ${isTransitioning ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+            transition-opacity duration-300 ${isLoading || isTransitioning ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
           >
             <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-blue-500" />
           </div>

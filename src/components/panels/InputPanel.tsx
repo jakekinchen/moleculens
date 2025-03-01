@@ -4,9 +4,10 @@ import { ArrowDownTrayIcon, ArrowTopRightOnSquareIcon } from '@heroicons/react/2
 
 interface InputPanelProps {
   onVisualizationUpdate: (script: string) => void;
+  onLoadingChange: (isLoading: boolean) => void;
 }
 
-export const InputPanel: React.FC<InputPanelProps> = ({ onVisualizationUpdate }) => {
+export const InputPanel: React.FC<InputPanelProps> = ({ onVisualizationUpdate, onLoadingChange }) => {
   const [query, setQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [currentScript, setCurrentScript] = useState<string | null>(null);
@@ -14,6 +15,7 @@ export const InputPanel: React.FC<InputPanelProps> = ({ onVisualizationUpdate })
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+    onLoadingChange(true);
 
     try {
       const response = await submitPrompt(query);
@@ -25,6 +27,7 @@ export const InputPanel: React.FC<InputPanelProps> = ({ onVisualizationUpdate })
       // TODO: Add error handling UI
     } finally {
       setIsLoading(false);
+      onLoadingChange(false);
     }
   };
 
