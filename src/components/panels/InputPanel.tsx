@@ -7,6 +7,35 @@ interface InputPanelProps {
   onLoadingChange: (isLoading: boolean) => void;
 }
 
+// Add the complete list of topics
+const CHEMISTRY_TOPICS = [
+  "Teach me about water molecules and their 3D structure",
+  "Teach me about carbon hybridization and sp3 bonding",
+  "Teach me about benzene's aromatic structure",
+  "Teach me about tetrahedral carbon geometry",
+  "Teach me about cyclohexane chair conformations",
+  "Teach me about methane molecular geometry",
+  "Teach me about ethene's double bond structure",
+  "Teach me about acetylene's triple bond",
+  "Teach me about ammonia's pyramidal shape",
+  "Teach me about the 3D structure of ethanol",
+  "Teach me about butane conformations",
+  "Teach me about propene's molecular structure",
+  "Teach me about the shape of carbon dioxide",
+  "Teach me about methanol's 3D structure",
+  "Teach me about ethane rotation",
+  "Teach me about cyclopropane ring strain",
+  "Teach me about the structure of formaldehyde",
+  "Teach me about acetic acid geometry",
+  "Teach me about propane's 3D structure",
+  "Teach me about cyclobutane ring structure",
+  "Teach me about sp2 hybridization in alkenes",
+  "Teach me about the structure of ethylamine",
+  "Teach me about glucose ring conformations",
+  "Teach me about benzene pi orbital overlap",
+  "Teach me about chiral carbon centers",
+];
+
 export const InputPanel: React.FC<InputPanelProps> = ({ onVisualizationUpdate, onLoadingChange }) => {
   const [query, setQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -16,15 +45,14 @@ export const InputPanel: React.FC<InputPanelProps> = ({ onVisualizationUpdate, o
     e.preventDefault();
     setIsLoading(true);
     onLoadingChange(true);
+    console.log('Making request for:', query);
 
     try {
       const response = await submitPrompt(query);
       setCurrentScript(response.result);
       onVisualizationUpdate(response.result);
-      console.log('response result', response.result);
     } catch (error) {
       console.error('Failed to get visualization:', error);
-      // TODO: Add error handling UI
     } finally {
       setIsLoading(false);
       onLoadingChange(false);
@@ -264,6 +292,11 @@ export const InputPanel: React.FC<InputPanelProps> = ({ onVisualizationUpdate, o
     URL.revokeObjectURL(url);
   };
 
+  const handleSuggestTopic = () => {
+    const randomTopic = CHEMISTRY_TOPICS[Math.floor(Math.random() * CHEMISTRY_TOPICS.length)];
+    setQuery(randomTopic);
+  };
+
   return (
     <div className="bg-gray-800 rounded-lg shadow-lg p-3 h-full border border-gray-700 flex flex-col">
       <h2 className="text-lg font-semibold mb-3 text-white">Learn</h2>
@@ -277,7 +310,7 @@ export const InputPanel: React.FC<InputPanelProps> = ({ onVisualizationUpdate, o
         />
         <button
           type="submit"
-          disabled={isLoading}
+          disabled={isLoading || !query.trim()}
           className="w-full bg-blue-600 text-white py-2 px-3 rounded-lg hover:bg-blue-700 
             transition focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-800
             disabled:opacity-50 disabled:cursor-not-allowed"
@@ -320,6 +353,7 @@ export const InputPanel: React.FC<InputPanelProps> = ({ onVisualizationUpdate, o
         )}
         <button
           type="button"
+          onClick={handleSuggestTopic}
           className="w-full bg-gray-700 text-gray-200 py-2 px-3 rounded-lg hover:bg-gray-600 
             transition focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 focus:ring-offset-gray-800"
         >
