@@ -13,10 +13,19 @@ interface SettingsModalProps {
 }
 
 const AI_MODELS = [
-  { id: 'gpt-4', name: 'GPT-4' },
-  { id: 'gpt-3.5-turbo', name: 'GPT-3.5 Turbo' },
-  { id: 'claude-2', name: 'Claude 2' },
-  { id: 'claude-instant', name: 'Claude Instant' },
+  // OpenAI Models
+  { id: 'o1', name: 'OpenAI: O1' },
+  { id: 'o3-mini', name: 'OpenAI: O3-Mini' },
+  { id: 'gpt-4.5-preview', name: 'OpenAI: GPT-4.5 Preview' },
+  { id: 'gpt-4o', name: 'OpenAI: GPT-4 Optimized' },
+  
+  // Anthropic Models
+  { id: 'claude-3-7-sonnet-latest', name: 'Anthropic: Claude 3.7 Sonnet' },
+  { id: 'claude-3-5-sonnet-latest', name: 'Anthropic: Claude 3.5 Sonnet' },
+  
+  // Groq Models
+  { id: 'llama3-70b-8192', name: 'Groq: Llama3 70B' },
+  { id: 'qwen-2.5-coder-32b', name: 'Groq: Qwen 2.5 Coder 32B' },
 ];
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({ 
