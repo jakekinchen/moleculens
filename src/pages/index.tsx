@@ -12,6 +12,10 @@ const Home: NextPage = () => {
   const [history, setHistory] = useState<Array<{ prompt: string; timestamp: Date }>>([]);
   const [isTimeMachineOpen, setIsTimeMachineOpen] = useState(false);
   const [currentPrompt, setCurrentPrompt] = useState('');
+  const [settings, setSettings] = useState({
+    selectedModel: 'o3-mini',
+    useInteractiveMode: false,
+  });
 
   const handlePromptSubmit = (prompt: string) => {
     // Add to history when a prompt is submitted
@@ -21,7 +25,9 @@ const Home: NextPage = () => {
   return (
     <div className="min-h-screen flex flex-col bg-gray-900">
       <Header 
-        onOpenTimeMachine={() => setIsTimeMachineOpen(true)} 
+        onOpenTimeMachine={() => setIsTimeMachineOpen(true)}
+        settings={settings}
+        onSettingsChange={setSettings}
       />
       <main className="container mx-auto px-2 py-4 flex-grow">
         <div className="grid grid-cols-12 gap-2 h-[calc(100vh-8rem)]">
@@ -32,12 +38,14 @@ const Home: NextPage = () => {
               currentPrompt={currentPrompt}
               onPromptChange={setCurrentPrompt}
               onPromptSubmit={handlePromptSubmit}
+              isInteractiveMode={settings.useInteractiveMode}
             />
           </div>
           <div className="col-span-9 relative">
             <VisualizationPanel 
               script={currentScript}
               isLoading={isLoading}
+              isInteractiveMode={settings.useInteractiveMode}
             />
           </div>
         </div>

@@ -8,6 +8,7 @@ interface InputPanelProps {
   currentPrompt: string;
   onPromptChange: (prompt: string) => void;
   onPromptSubmit: (prompt: string) => void;
+  isInteractiveMode: boolean;
 }
 
 // Add the complete list of topics
@@ -39,7 +40,7 @@ const CHEMISTRY_TOPICS = [
   "Teach me about chiral carbon centers",
 ];
 
-export const InputPanel: React.FC<InputPanelProps> = ({ onVisualizationUpdate, onLoadingChange, currentPrompt, onPromptChange, onPromptSubmit }) => {
+export const InputPanel: React.FC<InputPanelProps> = ({ onVisualizationUpdate, onLoadingChange, currentPrompt, onPromptChange, onPromptSubmit, isInteractiveMode }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [currentScript, setCurrentScript] = useState<string | null>(null);
 
@@ -48,11 +49,19 @@ export const InputPanel: React.FC<InputPanelProps> = ({ onVisualizationUpdate, o
     setIsLoading(true);
     onLoadingChange(true);
     console.log('Making request for:', currentPrompt);
+    console.log('Interactive mode:', isInteractiveMode);
 
     try {
-      const response = await submitPrompt(currentPrompt);
-      setCurrentScript(response.result);
-      onVisualizationUpdate(response.result);
+      const response = await submitPrompt(currentPrompt, isInteractiveMode);
+      if ('result' in response) {
+        // Simple visualization response
+        setCurrentScript(response.result);
+        onVisualizationUpdate(response.result);
+      } else {
+        // Complex visualization response
+        setCurrentScript(response.js);
+        onVisualizationUpdate(response.js);
+      }
       onPromptSubmit(currentPrompt);
     } catch (error) {
       console.error('Failed to get visualization:', error);
