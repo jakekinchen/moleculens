@@ -1,6 +1,7 @@
 import React from 'react';
 import { XMarkIcon } from '@heroicons/react/24/outline';
 import { Switch } from '@headlessui/react';
+import { useModels } from '../../hooks/useModels';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -19,31 +20,25 @@ interface SettingsModalProps {
   }) => void;
 }
 
-const AI_MODELS = [
-  // OpenAI Models
-  { id: 'o3-mini', name: 'OpenAI: O3-Mini' },
-  { id: 'o1', name: 'OpenAI: O1' },
-  { id: 'gpt-4.5-preview', name: 'OpenAI: GPT-4.5 Preview' },
-  { id: 'gpt-4o', name: 'OpenAI: GPT-4 Optimized' },
-  
-  // Anthropic Models
-  { id: 'claude-3-7-sonnet-latest', name: 'Anthropic: Claude 3.7 Sonnet' },
-  { id: 'claude-3-5-sonnet-latest', name: 'Anthropic: Claude 3.5 Sonnet' },
-  
-  // Groq Models
-  { id: 'llama3-70b-8192', name: 'Groq: Llama3 70B' },
-  { id: 'qwen-2.5-32b', name: 'Groq: Qwen 2.5 32B' },
-  { id: 'deepseek-r1-distill-llama-70b', name: 'Groq: DeepSeek R1 Distill Llama 70B' },
-  { id: 'llama-3.3-70b-specdec', name: 'Groq: Llama 3.3 70B SpecDec' },
-];
-
 export const SettingsModal: React.FC<SettingsModalProps> = ({ 
   isOpen, 
   onClose, 
   settings,
   onSettingsChange,
 }) => {
+  const { models, loading, error } = useModels();
+  
   if (!isOpen) return null;
+
+  const renderModelOptions = () => {
+    if (loading) return <option>Loading models...</option>;
+    if (error) return <option>Error loading models: {error}</option>;
+    return models.map((model) => (
+      <option key={model.name} value={model.name}>
+        {model.display_name} ({model.provider})
+      </option>
+    ));
+  };
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto">
@@ -74,13 +69,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   selectedModel: e.target.value 
                 })}
                 className="w-full bg-gray-700 border-gray-600 rounded-lg px-3 py-2 text-white focus:ring-2 focus:ring-blue-500"
+                disabled={loading}
               >
                 <option value="">-- Select a global model --</option>
-                {AI_MODELS.map((model) => (
-                  <option key={model.id} value={model.id}>
-                    {model.name}
-                  </option>
-                ))}
+                {renderModelOptions()}
               </select>
               <p className="text-xs text-gray-400 mt-1">
                 This model will be used for all agents unless overridden below.
@@ -98,13 +90,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   geometryModel: e.target.value || undefined
                 })}
                 className="w-full bg-gray-700 border-gray-600 rounded-lg px-3 py-2 text-white focus:ring-2 focus:ring-blue-500"
+                disabled={loading}
               >
                 <option value="">-- Use global model --</option>
-                {AI_MODELS.map((model) => (
-                  <option key={model.id} value={model.id}>
-                    {model.name}
-                  </option>
-                ))}
+                {renderModelOptions()}
               </select>
               <p className="text-xs text-gray-400 mt-1">
                 Override the model used specifically for generating geometry.
@@ -122,13 +111,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   animationModel: e.target.value || undefined
                 })}
                 className="w-full bg-gray-700 border-gray-600 rounded-lg px-3 py-2 text-white focus:ring-2 focus:ring-blue-500"
+                disabled={loading}
               >
                 <option value="">-- Use global model --</option>
-                {AI_MODELS.map((model) => (
-                  <option key={model.id} value={model.id}>
-                    {model.name}
-                  </option>
-                ))}
+                {renderModelOptions()}
               </select>
               <p className="text-xs text-gray-400 mt-1">
                 Override the model used specifically for generating animations.

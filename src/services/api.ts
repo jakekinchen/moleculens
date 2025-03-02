@@ -1,4 +1,5 @@
 /* eslint-disable */
+import { ModelInfo } from '../types';
 
 // Initial prompt submission response
 interface InitialPromptResponse {
@@ -155,4 +156,27 @@ export const legacySubmitPrompt = async (
     console.error('Error generating geometry:', error);
     throw error;
   }
+};
+
+/**
+ * Fetches the list of available models from the backend
+ * @returns Array of ModelInfo objects containing model capabilities and information
+ * @throws Error if the request fails
+ */
+export const getModels = async (): Promise<ModelInfo[]> => {
+  const endpoint = `${API_BASE_URL}/prompt/models/`;
+  
+  const response = await fetch(endpoint, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    credentials: includeCredentials ? 'include' : 'same-origin',
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch models: ${response.status} ${response.statusText}`);
+  }
+
+  return response.json();
 };
