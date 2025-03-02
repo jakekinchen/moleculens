@@ -1,6 +1,12 @@
 /* eslint-disable */
 import { ModelInfo } from '../types';
 
+interface PromptRequest {
+  prompt: string;
+  model?: string;
+  preferred_model_category?: string;
+}
+
 // Initial prompt submission response
 interface InitialPromptResponse {
   job_id: string;
@@ -30,6 +36,8 @@ interface VisualizationData {
 // Legacy response types - keeping for backward compatibility
 interface PromptResponse {
   result: string;
+  is_molecular: boolean;
+  validation_message?: string;
 }
 
 interface ComplexPromptResponse {
@@ -50,15 +58,14 @@ const includeCredentials = useLocalServer;
 
 /**
  * Submits a prompt to start background processing
- * @param prompt The user's prompt text
- * @param model The model to use for generation
+ * @param request The prompt request containing prompt text and optional model settings
  * @returns A response containing the job_id for polling
  * @throws Error if prompt validation fails or request fails
  */
-export const submitPrompt = async (prompt: string, model: string = 'o3-mini'): Promise<InitialPromptResponse> => {
+export const submitPrompt = async (request: PromptRequest): Promise<InitialPromptResponse> => {
   const endpoint = `${API_BASE_URL}/prompt`;
   
-  console.log('Submitting prompt', { prompt, model });
+  console.log('Submitting prompt', request);
   
   const response = await fetch(endpoint, {
     method: 'POST',
@@ -66,7 +73,7 @@ export const submitPrompt = async (prompt: string, model: string = 'o3-mini'): P
       'Content-Type': 'application/json',
     },
     credentials: includeCredentials ? 'include' : 'same-origin',
-    body: JSON.stringify({ prompt, model }),
+    body: JSON.stringify(request),
   });
 
   if (!response.ok) {
@@ -111,48 +118,42 @@ export const pollJobStatus = async (jobId: string): Promise<JobStatusResponse> =
  * Generates Three.js geometry for a scientific prompt
  * This uses the /prompt/generate-geometry endpoint for direct, non-polling geometry generation
  * 
- * @param prompt Scientific prompt to visualize
- * @param model The model to use for generation (global override)
- * @param geometryModel Optional specific model for the geometry agent
- * @param animationModel Optional specific model for the animation agent
- * @returns PromptResponse with Three.js code as a string in the result property
+ * @param request The prompt request containing prompt text and optional model settings
+ * @returns PromptResponse with Three.js code and validation info
+ * @throws Error if the request is not molecular with a helpful message
  */
-export const legacySubmitPrompt = async (
-  prompt: string, 
-  model: string = 'o3-mini',
-  geometryModel?: string,
-  animationModel?: string
-): Promise<PromptResponse> => {
+export const legacySubmitPrompt = async (request: PromptRequest): Promise<PromptResponse> => {
   const endpoint = `${API_BASE_URL}/prompt/generate-geometry/`;
   
-  console.log('Generating geometry for prompt:', prompt);
-  console.log('Using models:', { global: model, geometry: geometryModel, animation: animationModel });
-  console.log('Using endpoint:', endpoint);
+  console.log('Generating geometry for prompt:', request);
   
   try {
-    const requestBody: any = { prompt, model };
-    
-    // Add specific agent models if provided
-    if (geometryModel) requestBody.geometry_model = geometryModel;
-    if (animationModel) requestBody.animation_model = animationModel;
-    
     const response = await fetch(endpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       credentials: includeCredentials ? 'include' : 'same-origin',
-      body: JSON.stringify(requestBody),
+      body: JSON.stringify(request),
     });
 
     if (!response.ok) {
       throw new Error(`Server error: ${response.status} ${response.statusText}`);
     }
 
-    const data = await response.json() as PromptResponse;
-    console.log('Successfully generated geometry');
-    return data;
-  } catch (error) {
+    const result = await response.json();
+
+    // Check if the response indicates non-molecular content
+    if (!result.is_molecular) {
+      throw new Error(`Non-molecular prompt: ${result.validation_message || 'Please try a molecular structure prompt'}`);
+    }
+
+    if (!result.result) {
+      throw new Error('No result received from server');
+    }
+
+    return result;
+  } catch (error: any) {
     console.error('Error generating geometry:', error);
     throw error;
   }
@@ -166,17 +167,27 @@ export const legacySubmitPrompt = async (
 export const getModels = async (): Promise<ModelInfo[]> => {
   const endpoint = `${API_BASE_URL}/prompt/models/`;
   
-  const response = await fetch(endpoint, {
-    method: 'GET',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    credentials: includeCredentials ? 'include' : 'same-origin',
-  });
+  console.log('Fetching models from:', endpoint);
+  
+  try {
+    const response = await fetch(endpoint, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      credentials: includeCredentials ? 'include' : 'same-origin',
+    });
 
-  if (!response.ok) {
-    throw new Error(`Failed to fetch models: ${response.status} ${response.statusText}`);
+    if (!response.ok) {
+      console.error(`Failed to fetch models: ${response.status} ${response.statusText}`);
+      throw new Error(`Failed to fetch models: ${response.status} ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    console.log('Successfully fetched models:', data);
+    return data;
+  } catch (error: any) {
+    console.error('Error fetching models:', error);
+    throw new Error(`Failed to fetch models: ${error.message}`);
   }
-
-  return response.json();
 };

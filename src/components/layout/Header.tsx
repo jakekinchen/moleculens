@@ -7,35 +7,25 @@ import { SettingsModal } from '../modals/SettingsModal';
 interface HeaderProps {
   onOpenTimeMachine: () => void;
   onSettingsChange: (settings: { 
-    selectedModel: string; 
-    useInteractiveMode: boolean;
-    geometryModel?: string;
-    animationModel?: string;
+    model: string | null;
+    isInteractive: boolean;
   }) => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({ onOpenTimeMachine, onSettingsChange }) => {
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [settings, setSettings] = useState({
-    selectedModel: 'o3-mini',
-    useInteractiveMode: false,
-    geometryModel: undefined as string | undefined,
-    animationModel: undefined as string | undefined,
-  });
+  const [model, setModel] = useState<string | null>(null);
+  const [isInteractive, setIsInteractive] = useState(false);
 
-  const handleSettingsChange = (newSettings: {
-    selectedModel: string;
-    useInteractiveMode: boolean;
-    geometryModel?: string;
-    animationModel?: string;
-  }) => {
-    setSettings({
-      ...newSettings,
-      geometryModel: newSettings.geometryModel,
-      animationModel: newSettings.animationModel
-    });
-    onSettingsChange(newSettings);
+  const handleModelChange = (newModel: string | null) => {
+    setModel(newModel);
+    onSettingsChange({ model: newModel, isInteractive });
+  };
+
+  const handleInteractiveChange = (newIsInteractive: boolean) => {
+    setIsInteractive(newIsInteractive);
+    onSettingsChange({ model, isInteractive: newIsInteractive });
   };
 
   return (
@@ -82,8 +72,10 @@ export const Header: React.FC<HeaderProps> = ({ onOpenTimeMachine, onSettingsCha
         <SettingsModal
           isOpen={isSettingsOpen}
           onClose={() => setIsSettingsOpen(false)}
-          settings={settings}
-          onSettingsChange={handleSettingsChange}
+          model={model}
+          setModel={handleModelChange}
+          isInteractive={isInteractive}
+          setIsInteractive={handleInteractiveChange}
         />
       </div>
     </header>

@@ -12,10 +12,8 @@ const Home: NextPage = () => {
   const [history, setHistory] = useState<Array<{ prompt: string; timestamp: Date }>>([]);
   const [isTimeMachineOpen, setIsTimeMachineOpen] = useState(false);
   const [currentPrompt, setCurrentPrompt] = useState('');
-  const [selectedModel, setSelectedModel] = useState('o3-mini');
-  const [useInteractiveMode, setUseInteractiveMode] = useState(false);
-  const [geometryModel, setGeometryModel] = useState<string | undefined>(undefined);
-  const [animationModel, setAnimationModel] = useState<string | undefined>(undefined);
+  const [model, setModel] = useState<string | null>(null);
+  const [isInteractive, setIsInteractive] = useState(false);
 
   const handlePromptSubmit = (prompt: string) => {
     // Add to history when a prompt is submitted
@@ -23,15 +21,11 @@ const Home: NextPage = () => {
   };
 
   const handleSettingsChange = (settings: { 
-    selectedModel: string; 
-    useInteractiveMode: boolean;
-    geometryModel?: string;
-    animationModel?: string;
+    model: string | null;
+    isInteractive: boolean;
   }) => {
-    setSelectedModel(settings.selectedModel);
-    setUseInteractiveMode(settings.useInteractiveMode);
-    setGeometryModel(settings.geometryModel);
-    setAnimationModel(settings.animationModel);
+    setModel(settings.model);
+    setIsInteractive(settings.isInteractive);
   };
 
   return (
@@ -49,17 +43,15 @@ const Home: NextPage = () => {
               currentPrompt={currentPrompt}
               onPromptChange={setCurrentPrompt}
               onPromptSubmit={handlePromptSubmit}
-              selectedModel={selectedModel}
-              useInteractiveMode={useInteractiveMode}
-              geometryModel={geometryModel}
-              animationModel={animationModel}
+              model={model}
+              isInteractive={isInteractive}
             />
           </div>
           <div className="col-span-9 relative">
             <VisualizationPanel 
               script={currentScript}
               isLoading={isLoading}
-              useInteractiveMode={useInteractiveMode}
+              isInteractive={isInteractive}
             />
           </div>
         </div>

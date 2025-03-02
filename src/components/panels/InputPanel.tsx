@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { submitPrompt, pollJobStatus, legacySubmitPrompt } from '@/services/api';
-import { ArrowDownTrayIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
+import { ArrowDownTrayIcon, ExclamationTriangleIcon, SparklesIcon, BeakerIcon } from '@heroicons/react/24/outline';
 
 // Import the VisualizationData interface from the API file
 interface VisualizationData {
@@ -17,10 +17,8 @@ interface InputPanelProps {
   currentPrompt: string;
   onPromptChange: (prompt: string) => void;
   onPromptSubmit: (prompt: string) => void;
-  selectedModel: string;
-  useInteractiveMode: boolean;
-  geometryModel?: string; // Optional specific model for geometry agent
-  animationModel?: string; // Optional specific model for animation agent
+  model: string | null;
+  isInteractive: boolean;
 }
 
 // Scientific prompt example suggestions
@@ -65,7 +63,15 @@ interface ExtendedJobStatusResponse {
   geometry_result?: string;
 }
 
-export const InputPanel: React.FC<InputPanelProps> = ({ onVisualizationUpdate, onLoadingChange, currentPrompt, onPromptChange, onPromptSubmit, selectedModel, useInteractiveMode, geometryModel, animationModel }) => {
+export const InputPanel: React.FC<InputPanelProps> = ({
+  onVisualizationUpdate,
+  onLoadingChange,
+  currentPrompt,
+  onPromptChange,
+  onPromptSubmit,
+  model,
+  isInteractive
+}) => {
   const [isLoading, setIsLoading] = useState(false);
   const [currentScript, setCurrentScript] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -143,68 +149,54 @@ export const InputPanel: React.FC<InputPanelProps> = ({ onVisualizationUpdate, o
     setError(null);
     setIsScientificError(false);
     
-    console.log('Making request for:', currentPrompt, 'with model:', selectedModel, 'interactive mode:', useInteractiveMode);
+    console.log('Making request for:', currentPrompt, 'with model:', model, 'interactive mode:', isInteractive);
 
     try {
-      if (useInteractiveMode) {
+      if (isInteractive) {
         // Use the job-based API flow with polling for animation
-        console.log('Using interactive mode with job-based API flow');
-        const response = await submitPrompt(currentPrompt, selectedModel);
-        console.log('Initial response:', response);
+        const response = await submitPrompt({
+          prompt: currentPrompt,
+          model: model || undefined,
+          preferred_model_category: undefined
+        });
         
-        if (response.status === 'processing') {
+        if (response.job_id) {
           setJobId(response.job_id);
-          // Start polling for updates
           pollForUpdates(response.job_id);
         } else {
-          // Handle immediate response (rare case)
-          if ('result' in response && typeof response.result === 'string') {
-            setCurrentScript(response.result);
-            onVisualizationUpdate(response.result);
-            onPromptSubmit(currentPrompt);
-          }
-          setIsLoading(false);
-          onLoadingChange(false);
+          throw new Error('No job ID received');
         }
       } else {
-        // Use the non-polling direct geometry generation endpoint for non-interactive mode
-        console.log('Using non-interactive mode with direct geometry generation');
-        const response = await legacySubmitPrompt(
-          currentPrompt, 
-          selectedModel,
-          geometryModel,
-          animationModel
-        );
-        console.log('Geometry generation response:', response);
+        // Use the legacy direct geometry generation flow
+        const response = await legacySubmitPrompt({
+          prompt: currentPrompt,
+          model: model || undefined,
+          preferred_model_category: undefined
+        });
         
-        if (response && response.result) {
+        if (response.result) {
           setCurrentScript(response.result);
           onVisualizationUpdate(response.result);
           onPromptSubmit(currentPrompt);
+          setIsLoading(false);
+          onLoadingChange(false);
         } else {
-          setError('Received empty result from geometry generation');
+          throw new Error('No result received');
         }
-        setIsLoading(false);
-        onLoadingChange(false);
       }
-    } catch (error: any) {
-      console.error('Failed to get visualization:', error);
+    } catch (err: any) {
       setIsLoading(false);
       onLoadingChange(false);
       
-      // Check for scientific validation error
-      if (error.message && error.message.includes('Scientific validation failed')) {
+      // Check if this is a scientific content validation error
+      if (err.message && err.message.includes('Non-molecular prompt')) {
         setIsScientificError(true);
-        setError(error.message.replace('Scientific validation failed: ', ''));
-        // Track this error for analytics
-        const analyticsObj = window as any;
-        if (analyticsObj.analytics) {
-          analyticsObj.analytics.track('Non-scientific prompt rejected', {
-            prompt: currentPrompt
-          });
-        }
+        // Show multiple suggestions instead of just one
+        setError(`Your prompt should be related to molecular structures. Click on the "Suggest Molecule" button to get started.`);
+        // Don't automatically change the user's input
+        // handleSuggestTopic();
       } else {
-        setError('An error occurred while processing your request.');
+        setError(err.message || 'Failed to process prompt');
       }
     }
   };
@@ -337,94 +329,123 @@ export const InputPanel: React.FC<InputPanelProps> = ({ onVisualizationUpdate, o
   };
   
   return (
-    <div className="h-[calc(100vh-8rem)] bg-gray-800 rounded-lg shadow-lg p-3 border border-gray-700 flex flex-col">
-      <h2 className="text-lg font-semibold mb-3 text-white">Ask The Scientist</h2>
-      <form onSubmit={handleSubmit} className="space-y-3 flex-grow">
-        <textarea
-          value={currentPrompt}
-          onChange={(e) => {
-            onPromptChange(e.target.value);
-            setIsScientificError(false);
-            setError(null);
-          }}
-          className="w-full h-32 p-2 bg-gray-700 border-gray-600 rounded-lg resize-none 
-            focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white placeholder-gray-400"
-          placeholder="What would you like to learn about? (e.g., 'teach me about water molecules')"
-        />
-        
-        {isScientificError && (
-          <div className="bg-amber-900/50 border border-amber-700 rounded-lg p-3 text-amber-200 mb-3">
-            <div className="flex items-start mb-2">
-              <ExclamationTriangleIcon className="w-5 h-5 mr-2 flex-shrink-0 mt-0.5" />
-              <h4 className="font-medium">Scientific Prompt Required</h4>
-            </div>
-            <p className="text-sm mb-3">{error}</p>
-            <div className="text-sm">
-              <p className="mb-2">Try one of these examples instead:</p>
-              <ul className="space-y-1 list-disc pl-5">
-                <li>Teach me about the structure of DNA</li>
-                <li>Show me how a water molecule is structured</li>
-                <li>Explain the 3D structure of methane</li>
-              </ul>
-              <button 
-                type="button"
-                onClick={handleSuggestTopic}
-                className="mt-3 text-amber-300 hover:text-amber-200 font-medium text-sm"
-              >
-                Suggest a scientific topic
-              </button>
+    <div className="flex flex-col gap-6 p-6 bg-gradient-to-b from-gray-800 to-gray-900 rounded-xl shadow-xl border border-gray-700">
+      <div className="flex flex-col gap-2">
+        <h2 className="text-xl font-semibold text-white flex items-center gap-2">
+          <SparklesIcon className="w-6 h-6 text-blue-400" />
+          Molecular Structure Visualization
+        </h2>
+        <p className="text-gray-400 text-sm">
+          Enter a prompt about molecular structures and watch as AI generates an interactive 3D visualization.
+        </p>
+      </div>
+      
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        <div className="flex flex-col gap-3">
+          <div className="relative">
+            <textarea
+              value={currentPrompt}
+              onChange={(e) => onPromptChange(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  if (!isLoading && currentPrompt.trim()) {
+                    handleSubmit(e);
+                  }
+                }
+              }}
+              placeholder="Enter your prompt about molecular structures..."
+              className="w-full h-32 p-4 text-gray-100 bg-gray-800/50 rounded-lg resize-none 
+                         border border-gray-600 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20
+                         placeholder-gray-500 transition-all duration-200 ease-in-out
+                         hover:border-gray-500"
+              disabled={isLoading}
+              maxLength={500}
+              aria-label="Molecular structure prompt input"
+            />
+            <div className="absolute bottom-2 right-2 text-xs text-gray-500">
+              {currentPrompt.length} / 500 characters
             </div>
           </div>
-        )}
-        
-        {error && !isScientificError && (
-          <div className="bg-red-900/50 border border-red-700 rounded-lg p-3 text-red-200">
-            <p>{error}</p>
-          </div>
-        )}
-        
-        <button
-          type="submit"
-          disabled={isLoading || !currentPrompt.trim()}
-          className="w-full bg-blue-600 text-white py-2 px-3 rounded-lg hover:bg-blue-700 
-            transition focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-800
-            disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {isLoading ? 'Processing...' : 'Learn'}
-        </button>
-      </form>
 
-      <div className="space-y-2 mt-3 pt-3 border-t border-gray-700">
-        {currentScript && (
-          <>
-            <div className="flex gap-2 mb-2">
-              <button
-                onClick={handleDownload}
-                className="flex-1 flex items-center justify-center gap-2 bg-gray-700 text-gray-200 py-2 px-3 rounded-lg 
-                  hover:bg-gray-600 transition focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 focus:ring-offset-gray-800"
-              >
-                <ArrowDownTrayIcon className="w-5 h-5" />
-                Download Visualization
-              </button>
+          <button
+            type="button"
+            onClick={handleSuggestTopic}
+            className="self-start flex items-center gap-2 px-4 py-2 text-sm font-medium
+                     bg-gradient-to-r from-indigo-500/10 to-blue-500/10
+                     hover:from-indigo-500/20 hover:to-blue-500/20
+                     text-blue-400 rounded-lg
+                     transition-all duration-200 ease-in-out
+                     focus:outline-none focus:ring-2 focus:ring-blue-500/50
+                     disabled:opacity-50 disabled:cursor-not-allowed"
+            aria-label="Suggest molecule"
+            disabled={isLoading}
+          >
+            <BeakerIcon className="w-4 h-4" />
+            Suggest Molecule
+          </button>
+          
+          {error && (
+            <div className={`transform transition-all duration-200 ease-in-out
+                           ${isScientificError ? 'bg-yellow-500/10' : 'bg-red-500/10'} 
+                           rounded-lg p-4`}>
+              <div className={`text-sm ${isScientificError ? 'text-yellow-400' : 'text-red-400'} 
+                             flex items-start gap-3`}>
+                <ExclamationTriangleIcon className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <p>{error}</p>
+
+                </div>
+              </div>
             </div>
+          )}
+        </div>
+
+        <div className="flex justify-between items-center gap-4">
+          <button
+            type="submit"
+            disabled={isLoading || !currentPrompt.trim()}
+            className={`flex items-center justify-center gap-2 min-w-[140px] px-6 py-2.5 rounded-lg font-medium
+                       transition-all duration-200 ease-in-out focus:outline-none focus:ring-2
+                       ${isLoading || !currentPrompt.trim()
+              ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
+              : 'bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white shadow-lg shadow-blue-500/20'
+            }`}
+            aria-label={isLoading ? 'Processing visualization' : 'Generate visualization'}
+          >
+            {isLoading ? (
+              <>
+                <svg className="animate-spin h-5 w-5 flex-shrink-0" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                </svg>
+                <span className="flex-shrink-0">Processing...</span>
+              </>
+            ) : (
+              'Generate'
+            )}
+          </button>
+          
+          {currentScript && (
             <button
               type="button"
-              className="w-full bg-gray-700 text-gray-200 py-2 px-3 rounded-lg hover:bg-gray-600 
-                transition focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 focus:ring-offset-gray-800"
+              onClick={handleDownload}
+              className="flex items-center justify-center gap-2 min-w-[140px] px-6 py-2.5 rounded-lg font-medium
+                         bg-gradient-to-r from-green-600 to-green-500 
+                         hover:from-green-500 hover:to-green-400
+                         text-white shadow-lg shadow-green-500/20
+                         transition-all duration-200 ease-in-out
+                         focus:outline-none focus:ring-2 focus:ring-green-500/50
+                         disabled:opacity-50 disabled:cursor-not-allowed"
+              aria-label="Download visualization"
+              disabled={isLoading}
             >
-              Quiz Me
+              <ArrowDownTrayIcon className="w-5 h-5 flex-shrink-0" />
+              <span className="flex-shrink-0">Download</span>
             </button>
-          </>
-        )}
-        <button
-          type="button"
-          onClick={handleSuggestTopic}
-          className="w-full bg-gray-700 text-gray-200 py-2 px-3 rounded-lg hover:bg-gray-600 
-            transition focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 focus:ring-offset-gray-800"
-        >
-          Suggest Random Topic
-        </button>
-      </div>
+          )}
+        </div>
+      </form>
     </div>
   );
 };
