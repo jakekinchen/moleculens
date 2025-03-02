@@ -6,7 +6,12 @@ import { SettingsModal } from '../modals/SettingsModal';
 
 interface HeaderProps {
   onOpenTimeMachine: () => void;
-  onSettingsChange: (settings: { selectedModel: string; useInteractiveMode: boolean }) => void;
+  onSettingsChange: (settings: { 
+    selectedModel: string; 
+    useInteractiveMode: boolean;
+    geometryModel?: string;
+    animationModel?: string;
+  }) => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({ onOpenTimeMachine, onSettingsChange }) => {
@@ -15,10 +20,21 @@ export const Header: React.FC<HeaderProps> = ({ onOpenTimeMachine, onSettingsCha
   const [settings, setSettings] = useState({
     selectedModel: 'o3-mini',
     useInteractiveMode: false,
+    geometryModel: undefined as string | undefined,
+    animationModel: undefined as string | undefined,
   });
 
-  const handleSettingsChange = (newSettings: typeof settings) => {
-    setSettings(newSettings);
+  const handleSettingsChange = (newSettings: {
+    selectedModel: string;
+    useInteractiveMode: boolean;
+    geometryModel?: string;
+    animationModel?: string;
+  }) => {
+    setSettings({
+      ...newSettings,
+      geometryModel: newSettings.geometryModel,
+      animationModel: newSettings.animationModel
+    });
     onSettingsChange(newSettings);
   };
 

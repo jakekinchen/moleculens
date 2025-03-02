@@ -14,15 +14,24 @@ const Home: NextPage = () => {
   const [currentPrompt, setCurrentPrompt] = useState('');
   const [selectedModel, setSelectedModel] = useState('o3-mini');
   const [useInteractiveMode, setUseInteractiveMode] = useState(false);
+  const [geometryModel, setGeometryModel] = useState<string | undefined>(undefined);
+  const [animationModel, setAnimationModel] = useState<string | undefined>(undefined);
 
   const handlePromptSubmit = (prompt: string) => {
     // Add to history when a prompt is submitted
     setHistory(prev => [...prev, { prompt, timestamp: new Date() }]);
   };
 
-  const handleSettingsChange = (settings: { selectedModel: string; useInteractiveMode: boolean }) => {
+  const handleSettingsChange = (settings: { 
+    selectedModel: string; 
+    useInteractiveMode: boolean;
+    geometryModel?: string;
+    animationModel?: string;
+  }) => {
     setSelectedModel(settings.selectedModel);
     setUseInteractiveMode(settings.useInteractiveMode);
+    setGeometryModel(settings.geometryModel);
+    setAnimationModel(settings.animationModel);
   };
 
   return (
@@ -42,12 +51,15 @@ const Home: NextPage = () => {
               onPromptSubmit={handlePromptSubmit}
               selectedModel={selectedModel}
               useInteractiveMode={useInteractiveMode}
+              geometryModel={geometryModel}
+              animationModel={animationModel}
             />
           </div>
           <div className="col-span-9 relative">
             <VisualizationPanel 
               script={currentScript}
               isLoading={isLoading}
+              useInteractiveMode={useInteractiveMode}
             />
           </div>
         </div>

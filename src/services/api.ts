@@ -40,8 +40,12 @@ interface ComplexPromptResponse {
 }
 
 // API base URL configuration
-const useLocalServer = false; // Set to true to use localhost for development
+const isDevelopment = process.env.NODE_ENV !== 'production';
+const useLocalServer = isDevelopment; // Use localhost in development mode
 const API_BASE_URL = useLocalServer ? 'http://localhost:8000' : 'https://meshmo.com';
+
+// Determine if we should include credentials based on the server we're using
+const includeCredentials = useLocalServer;
 
 /**
  * Submits a prompt to start background processing
@@ -60,6 +64,7 @@ export const submitPrompt = async (prompt: string, model: string = 'o3-mini'): P
     headers: {
       'Content-Type': 'application/json',
     },
+    credentials: includeCredentials ? 'include' : 'same-origin',
     body: JSON.stringify({ prompt, model }),
   });
 
@@ -91,6 +96,7 @@ export const pollJobStatus = async (jobId: string): Promise<JobStatusResponse> =
     headers: {
       'Content-Type': 'application/json',
     },
+    credentials: includeCredentials ? 'include' : 'same-origin',
   });
 
   if (!response.ok) {
@@ -105,25 +111,37 @@ export const pollJobStatus = async (jobId: string): Promise<JobStatusResponse> =
  * This uses the /prompt/generate-geometry endpoint for direct, non-polling geometry generation
  * 
  * @param prompt Scientific prompt to visualize
- * @param model The model to use for generation
+ * @param model The model to use for generation (global override)
+ * @param geometryModel Optional specific model for the geometry agent
+ * @param animationModel Optional specific model for the animation agent
  * @returns PromptResponse with Three.js code as a string in the result property
  */
 export const legacySubmitPrompt = async (
   prompt: string, 
-  model: string = 'o3-mini'
+  model: string = 'o3-mini',
+  geometryModel?: string,
+  animationModel?: string
 ): Promise<PromptResponse> => {
   const endpoint = `${API_BASE_URL}/prompt/generate-geometry/`;
   
-  console.log('Generating geometry for prompt:', prompt, 'with model:', model);
+  console.log('Generating geometry for prompt:', prompt);
+  console.log('Using models:', { global: model, geometry: geometryModel, animation: animationModel });
   console.log('Using endpoint:', endpoint);
   
   try {
+    const requestBody: any = { prompt, model };
+    
+    // Add specific agent models if provided
+    if (geometryModel) requestBody.geometry_model = geometryModel;
+    if (animationModel) requestBody.animation_model = animationModel;
+    
     const response = await fetch(endpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ prompt, model }),
+      credentials: includeCredentials ? 'include' : 'same-origin',
+      body: JSON.stringify(requestBody),
     });
 
     if (!response.ok) {

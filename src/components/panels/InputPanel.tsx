@@ -2,6 +2,15 @@ import React, { useState } from 'react';
 import { submitPrompt, pollJobStatus, legacySubmitPrompt } from '@/services/api';
 import { ArrowDownTrayIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
 
+// Import the VisualizationData interface from the API file
+interface VisualizationData {
+  html: string;
+  js: string;
+  title: string;
+  timecode_markers: string[];
+  total_elements: number;
+}
+
 interface InputPanelProps {
   onVisualizationUpdate: (script: string) => void;
   onLoadingChange: (isLoading: boolean) => void;
@@ -10,6 +19,8 @@ interface InputPanelProps {
   onPromptSubmit: (prompt: string) => void;
   selectedModel: string;
   useInteractiveMode: boolean;
+  geometryModel?: string; // Optional specific model for geometry agent
+  animationModel?: string; // Optional specific model for animation agent
 }
 
 // Scientific prompt example suggestions
@@ -41,7 +52,20 @@ const CHEMISTRY_TOPICS = [
   "Teach me about chiral carbon centers",
 ];
 
-export const InputPanel: React.FC<InputPanelProps> = ({ onVisualizationUpdate, onLoadingChange, currentPrompt, onPromptChange, onPromptSubmit, selectedModel, useInteractiveMode }) => {
+// Update the JobStatusResponse interface to include legacy fields
+interface ExtendedJobStatusResponse {
+  job_id: string;
+  status: 'processing' | 'completed' | 'failed';
+  progress?: number;
+  message?: string;
+  visualization?: VisualizationData;
+  error?: string;
+  // Legacy fields
+  result?: string;
+  geometry_result?: string;
+}
+
+export const InputPanel: React.FC<InputPanelProps> = ({ onVisualizationUpdate, onLoadingChange, currentPrompt, onPromptChange, onPromptSubmit, selectedModel, useInteractiveMode, geometryModel, animationModel }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [currentScript, setCurrentScript] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -52,7 +76,7 @@ export const InputPanel: React.FC<InputPanelProps> = ({ onVisualizationUpdate, o
   const pollForUpdates = async (id: string) => {
     try {
       const pollInterval = setInterval(async () => {
-        const result = await pollJobStatus(id);
+        const result = await pollJobStatus(id) as ExtendedJobStatusResponse;
         
         console.log('Job status update:', result);
         
@@ -122,10 +146,35 @@ export const InputPanel: React.FC<InputPanelProps> = ({ onVisualizationUpdate, o
     console.log('Making request for:', currentPrompt, 'with model:', selectedModel, 'interactive mode:', useInteractiveMode);
 
     try {
-      if (!useInteractiveMode) {
-        // Use the non-polling direct geometry generation endpoint for interactive mode
-        console.log('Using interactive mode with direct geometry generation');
-        const response = await legacySubmitPrompt(currentPrompt, selectedModel);
+      if (useInteractiveMode) {
+        // Use the job-based API flow with polling for animation
+        console.log('Using interactive mode with job-based API flow');
+        const response = await submitPrompt(currentPrompt, selectedModel);
+        console.log('Initial response:', response);
+        
+        if (response.status === 'processing') {
+          setJobId(response.job_id);
+          // Start polling for updates
+          pollForUpdates(response.job_id);
+        } else {
+          // Handle immediate response (rare case)
+          if ('result' in response && typeof response.result === 'string') {
+            setCurrentScript(response.result);
+            onVisualizationUpdate(response.result);
+            onPromptSubmit(currentPrompt);
+          }
+          setIsLoading(false);
+          onLoadingChange(false);
+        }
+      } else {
+        // Use the non-polling direct geometry generation endpoint for non-interactive mode
+        console.log('Using non-interactive mode with direct geometry generation');
+        const response = await legacySubmitPrompt(
+          currentPrompt, 
+          selectedModel,
+          geometryModel,
+          animationModel
+        );
         console.log('Geometry generation response:', response);
         
         if (response && response.result) {
@@ -137,25 +186,6 @@ export const InputPanel: React.FC<InputPanelProps> = ({ onVisualizationUpdate, o
         }
         setIsLoading(false);
         onLoadingChange(false);
-      } else {
-        // Use the job-based API flow with polling
-        const response = await submitPrompt(currentPrompt, selectedModel);
-        console.log('Initial response:', response);
-        
-        if (response.status === 'processing') {
-          setJobId(response.job_id);
-          // Start polling for updates
-          pollForUpdates(response.job_id);
-        } else {
-          // Handle immediate response (rare case)
-          if ('result' in response) {
-            setCurrentScript(response.result);
-            onVisualizationUpdate(response.result);
-            onPromptSubmit(currentPrompt);
-          }
-          setIsLoading(false);
-          onLoadingChange(false);
-        }
       }
     } catch (error: any) {
       console.error('Failed to get visualization:', error);
@@ -167,8 +197,9 @@ export const InputPanel: React.FC<InputPanelProps> = ({ onVisualizationUpdate, o
         setIsScientificError(true);
         setError(error.message.replace('Scientific validation failed: ', ''));
         // Track this error for analytics
-        if (window.analytics) {
-          window.analytics.track('Non-scientific prompt rejected', {
+        const analyticsObj = window as any;
+        if (analyticsObj.analytics) {
+          analyticsObj.analytics.track('Non-scientific prompt rejected', {
             prompt: currentPrompt
           });
         }
@@ -257,20 +288,6 @@ export const InputPanel: React.FC<InputPanelProps> = ({ onVisualizationUpdate, o
                       controls.autoRotate = true;
                       controls.autoRotateSpeed = 1.5;
                       
-                      // Initial camera positioning based on molecule size
-                      const molecule = scene.getObjectByName('waterMolecule');
-                      console.log('Found molecule:', molecule);
-                      if (molecule) {
-                          const box = new THREE.Box3().setFromObject(molecule);
-                          const size = box.getSize(new THREE.Vector3());
-                          const center = box.getCenter(new THREE.Vector3());
-                          
-                          const radius = Math.max(size.x, size.y, size.z);
-                          const distance = radius * 5;
-                          camera.position.set(distance, distance * 0.8, distance);
-                          camera.lookAt(center);
-                          console.log('Camera positioned at distance:', distance);
-                      }
                       
                       // Animation loop
                       function animate() {

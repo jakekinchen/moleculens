@@ -69,6 +69,7 @@ const CameraController = () => {
 interface VisualizationPanelProps {
   script?: string;
   isLoading?: boolean;
+  useInteractiveMode?: boolean;
 }
 
 const DynamicSceneComponent = ({ code }: { code: string }) => {
@@ -111,7 +112,8 @@ const DynamicSceneComponent = ({ code }: { code: string }) => {
 
 export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({ 
   script,
-  isLoading = false
+  isLoading = false,
+  useInteractiveMode = false
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
@@ -140,6 +142,55 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
     setTimeout(() => setIsTransitioning(false), 300);
   };
 
+  // For non-interactive mode (direct geometry rendering)
+  if (!useInteractiveMode) {
+    return (
+      <div className="absolute inset-0">
+        <div className={`transition-all duration-300 bg-gray-800 rounded-lg shadow-lg border border-gray-700
+          ${isExpanded ? 'fixed inset-0 z-50 m-0' : 'absolute inset-0 m-2'}`}
+        >
+          <div className="w-full h-full bg-black rounded-lg overflow-hidden relative">
+            <LoadingFacts isVisible={isLoading && !isTransitioning} showFacts={true} />
+  
+            {/* Only show expand button when there's a script/visualization */}
+            {!isLoading && !isTransitioning && script && (
+              <button
+                onClick={handleExpand}
+                className="absolute top-2 right-2 z-30 p-1.5 bg-gray-800 rounded-lg 
+                  hover:bg-gray-700 transition-colors duration-200 group"
+                aria-label={isExpanded ? 'Collapse visualization' : 'Expand visualization'}
+              >
+                {isExpanded ? (
+                  <ArrowsPointingInIcon className="w-5 h-5 text-gray-400 group-hover:text-white" />
+                ) : (
+                  <ArrowsPointingOutIcon className="w-5 h-5 text-gray-400 group-hover:text-white" />
+                )}
+              </button>
+            )}
+  
+            <div className="w-full h-full">
+              {!script ? (
+                <div className="flex items-center justify-center h-full text-gray-400 text-lg">
+                  Enter a prompt to see a visualization
+                </div>
+              ) : (
+                <Canvas
+                  camera={{ position: [0, 0, 5], fov: 75 }}
+                  style={{ width: '100%', height: '100%' }}
+                >
+                  <color attach="background" args={['#111']} />
+                  <CameraController />
+                  {DynamicScene && <DynamicScene />}
+                </Canvas>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  
+  // For interactive mode (animation rendering)
   return (
     <div className="absolute inset-0">
       <div className={`transition-all duration-300 bg-gray-800 rounded-lg shadow-lg border border-gray-700
@@ -170,14 +221,109 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
                 Enter a prompt to see a visualization
               </div>
             ) : (
-              <Canvas
-                camera={{ position: [0, 0, 5], fov: 75 }}
-                style={{ width: '100%', height: '100%' }}
-              >
-                <color attach="background" args={['#111']} />
-                <CameraController />
-                {DynamicScene && <DynamicScene />}
-              </Canvas>
+              // For interactive mode, we use innerHTML to inject HTML/JS from the server
+              <div 
+                id="animation-container" 
+                className="w-full h-full"
+                ref={(node) => {
+                  if (node && script) {
+                    // Inject the HTML with embedded script
+                    node.innerHTML = `
+                      <div class="w-full h-full">
+                        <canvas id="scene-canvas" class="w-full h-full"></canvas>
+                        <div class="title absolute top-5 w-full text-center text-white text-xl">Animation</div>
+                        <div class="controls absolute bottom-3 right-3 flex gap-2">
+                          <button id="rewind" class="bg-gray-800 text-white p-1 rounded">⏪</button>
+                          <button id="play-pause" class="bg-gray-800 text-white p-1 rounded">⏸</button>
+                          <button id="fast-forward" class="bg-gray-800 text-white p-1 rounded">⏩</button>
+                          <button id="reset" class="bg-gray-800 text-white p-1 rounded">↻</button>
+                        </div>
+                        <div class="timeline absolute bottom-0 left-0 w-full h-1 bg-gray-800">
+                          <div id="progress-bar" class="h-full bg-blue-500 w-0"></div>
+                        </div>
+                      </div>
+                    `;
+                    
+                    // Create script element
+                    const scriptEl = document.createElement('script');
+                    scriptEl.src = "https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js";
+                    scriptEl.onload = () => {
+                      // Load OrbitControls after Three.js
+                      const orbitControlsScript = document.createElement('script');
+                      orbitControlsScript.src = "https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js";
+                      orbitControlsScript.onload = () => {
+                        // After libraries are loaded, inject the visualization code
+                        // First, let's wrap the script in a try/catch to protect from errors
+                        const wrappedScript = `
+                          try {
+                            // Modify the setupControls function if it exists in the script
+                            window.originalSetupControls = window.setupControls || function(){};
+                            
+                            // Override the setupControls function to check for null elements
+                            window.setupControls = function() {
+                              const playPauseButton = document.getElementById('play-pause');
+                              const resetButton = document.getElementById('reset');
+                              const rewindButton = document.getElementById('rewind');
+                              const fastForwardButton = document.getElementById('fast-forward');
+                              
+                              // Only set up controls if all elements exist
+                              if (playPauseButton && resetButton && rewindButton && fastForwardButton) {
+                                let playbackSpeed = 1.0;
+                                
+                                playPauseButton.addEventListener('click', function() {
+                                  window.isPlaying = !window.isPlaying;
+                                  playPauseButton.textContent = window.isPlaying ? '⏸' : '▶';
+                                  if (window.isPlaying) {
+                                    if (window.clock) window.clock.start();
+                                  } else {
+                                    if (window.clock) window.clock.stop();
+                                  }
+                                });
+                                
+                                resetButton.addEventListener('click', function() {
+                                  if (window.clock) window.clock = new THREE.Clock();
+                                  window.timeOffset = 0;
+                                  window.isPlaying = true;
+                                  playPauseButton.textContent = '⏸';
+                                });
+                                
+                                window.timeOffset = 0;
+                                
+                                rewindButton.addEventListener('click', function() {
+                                  window.timeOffset = Math.max(window.timeOffset - 10, -120);
+                                  window.isPlaying = true;
+                                  playPauseButton.textContent = '⏸';
+                                });
+                                
+                                fastForwardButton.addEventListener('click', function() {
+                                  window.timeOffset = Math.min(window.timeOffset + 10, 120);
+                                  window.isPlaying = true;
+                                  playPauseButton.textContent = '⏸';
+                                });
+                              }
+                              
+                              // Call the original setupControls if it was defined
+                              try { window.originalSetupControls(); } catch(e) { console.log('No original setupControls function'); }
+                            };
+                            
+                            ${script}
+                          } catch(err) {
+                            console.error('Error executing visualization script:', err);
+                          }
+                        `;
+                        
+                        const vizScript = document.createElement('script');
+                        vizScript.textContent = wrappedScript;
+                        node.appendChild(vizScript);
+                      };
+                      node.appendChild(orbitControlsScript);
+                    };
+                    
+                    // Start the loading chain
+                    node.appendChild(scriptEl);
+                  }
+                }}
+              ></div>
             )}
           </div>
         </div>
