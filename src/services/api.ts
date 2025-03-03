@@ -84,8 +84,8 @@ export const submitPrompt = async (request: PromptRequest): Promise<InitialPromp
 
   // Check if the prompt was rejected due to not being scientific
   if (result.status === 'failed' && result.job_id === 'rejected') {
-    console.warn('Non-scientific prompt rejected:', result.error);
-    throw new Error(`Scientific validation failed: ${result.error}`);
+    console.warn('Non-molecular prompt rejected:', result.error);
+    throw new Error(`Molecular validation failed: ${result.error}`);
   }
 
   return result;
@@ -189,8 +189,10 @@ export const generateFromPubChem = async (request: PromptRequest): Promise<{
 
     const result = await response.json();
 
-    if (!result.result) {
-      throw new Error('No visualization received from server');
+  // Check if the prompt was rejected due to not being scientific
+    if (result.status === 'failed' && result.job_id === 'rejected') {
+      console.warn('Non-molecular prompt rejected:', result.error);
+      throw new Error(`Molecular validation failed: ${result.error}`);
     }
 
     // Ensure we have the HTML field, even if it's null

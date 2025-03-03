@@ -24,31 +24,29 @@ interface InputPanelProps {
 
 // Scientific prompt example suggestions
 const CHEMISTRY_TOPICS = [
+  // Keep some fundamental structures
   "Teach me about water molecules and their 3D structure",
   "Teach me about carbon hybridization and sp3 bonding",
   "Teach me about benzene's aromatic structure",
   "Teach me about tetrahedral carbon geometry",
   "Teach me about cyclohexane chair conformations",
-  "Teach me about methane molecular geometry",
-  "Teach me about ethene's double bond structure",
-  "Teach me about acetylene's triple bond",
-  "Teach me about ammonia's pyramidal shape",
-  "Teach me about the 3D structure of ethanol",
-  "Teach me about butane conformations",
-  "Teach me about propene's molecular structure",
-  "Teach me about the shape of carbon dioxide",
-  "Teach me about methanol's 3D structure",
-  "Teach me about ethane rotation",
-  "Teach me about cyclopropane ring strain",
-  "Teach me about the structure of formaldehyde",
-  "Teach me about acetic acid geometry",
-  "Teach me about propane's 3D structure",
-  "Teach me about cyclobutane ring structure",
-  "Teach me about sp2 hybridization in alkenes",
-  "Teach me about the structure of ethylamine",
-  "Teach me about glucose ring conformations",
-  "Teach me about benzene pi orbital overlap",
-  "Teach me about chiral carbon centers",
+  
+  // Add new advanced structures
+  "Teach me about diborane's bridging hydrogen bonds",
+  "Teach me about boranes and 3-center 2-electron bonds",
+  "Teach me about ferrocene's sandwich structure",
+  "Teach me about buckminsterfullerene (C60)",
+  "Teach me about cubane's unusual bond angles",
+  "Teach me about bullvalene's fluxional structure",
+  "Teach me about porphyrin rings and their coordination sites",
+  "Teach me about crown ethers' coordination geometry",
+  "Teach me about transition metal complexes with octahedral geometry",
+  "Teach me about metal-carbonyl complexes and back-bonding",
+  "Teach me about phosphazenes and their ring structures",
+  "Teach me about the metal sandwich complexes like bis(cyclopentadienyl) complexes",
+  "Teach me about cryptands and 3D host-guest complexation",
+  "Teach me about norbornane and its bridging structure",
+  "Teach me about cuneane and its strained cage system"
 ];
 
 // Update the JobStatusResponse interface to include legacy fields

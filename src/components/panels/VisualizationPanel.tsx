@@ -122,6 +122,9 @@ const DynamicSceneComponent = ({ code }: { code: string }) => {
           window.labelRenderer.setSize(container.clientWidth, container.clientHeight);
           window.labelRenderer.domElement.style.position = 'absolute';
           window.labelRenderer.domElement.style.top = '0px';
+          window.labelRenderer.domElement.style.left = '0px';
+          window.labelRenderer.domElement.style.width = '100%';
+          window.labelRenderer.domElement.style.height = '100%';
           window.labelRenderer.domElement.style.pointerEvents = 'none';
           container.appendChild(window.labelRenderer.domElement);
 
@@ -134,13 +137,19 @@ const DynamicSceneComponent = ({ code }: { code: string }) => {
             }
           };
 
-          // Handle resize
-          const handleResize = () => {
-            if (container && window.labelRenderer) {
-              window.labelRenderer.setSize(container.clientWidth, container.clientHeight);
+          // Handle resize with ResizeObserver for more reliable updates
+          const resizeObserver = new ResizeObserver(entries => {
+            for (const entry of entries) {
+              const { width, height } = entry.contentRect;
+              if (window.labelRenderer) {
+                window.labelRenderer.setSize(width, height);
+              }
+              if (renderer) {
+                renderer.setSize(width, height);
+              }
             }
-          };
-          window.addEventListener('resize', handleResize);
+          });
+          resizeObserver.observe(container);
         }
 
         // Attach CSS2D classes to THREE namespace using type assertions
@@ -233,8 +242,28 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
           )}
 
           {/* Three.js scene */}
-          <div id="container" className="w-full h-full relative overflow-hidden">
-            <Canvas>
+          <div 
+            id="container" 
+            className="w-full h-full relative overflow-hidden"
+            style={{
+              boxSizing: 'border-box',
+              padding: 0,
+              margin: 0,
+              transform: 'none',
+              willChange: 'transform'
+            }}
+          >
+            <Canvas 
+              style={{ 
+                position: 'absolute', 
+                top: 0, 
+                left: 0, 
+                width: '100%', 
+                height: '100%',
+                transform: 'none',
+                willChange: 'transform'
+              }}
+            >
               <CameraController />
               {DynamicScene && <DynamicScene />}
             </Canvas>
@@ -271,8 +300,28 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
         )}
 
         {/* Three.js scene */}
-        <div id="container" className="w-full h-full relative overflow-hidden">
-          <Canvas>
+        <div 
+          id="container" 
+          className="w-full h-full relative overflow-hidden"
+          style={{
+            boxSizing: 'border-box',
+            padding: 0,
+            margin: 0,
+            transform: 'none',
+            willChange: 'transform'
+          }}
+        >
+          <Canvas 
+            style={{ 
+              position: 'absolute', 
+              top: 0, 
+              left: 0, 
+              width: '100%', 
+              height: '100%',
+              transform: 'none',
+              willChange: 'transform'
+            }}
+          >
             <CameraController />
             {DynamicScene && <DynamicScene />}
           </Canvas>
