@@ -75,6 +75,7 @@ export const InputPanel: React.FC<InputPanelProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [currentScript, setCurrentScript] = useState<string | null>(null);
   const [currentHtml, setCurrentHtml] = useState<string | null>(null);
+  const [title, setTitle] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isScientificError, setIsScientificError] = useState(false);
   const [jobId, setJobId] = useState<string | null>(null);
@@ -165,6 +166,7 @@ export const InputPanel: React.FC<InputPanelProps> = ({
         
         if (response.result) {
           setCurrentScript(response.result);
+          setTitle(response.title);
           setCurrentHtml(response.result_html || null);
           onVisualizationUpdate(response.result);
           onPromptSubmit(currentPrompt);
@@ -235,7 +237,7 @@ export const InputPanel: React.FC<InputPanelProps> = ({
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'visualization.html';
+    a.download = `${title || 'visualization'}.html`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
