@@ -6,11 +6,19 @@ import { ArrowsPointingInIcon, ArrowsPointingOutIcon } from '@heroicons/react/24
 import * as THREE from 'three';
 import { LoadingFacts } from './LoadingFacts';
 
-// Extend Window interface to include PDBLoader
+// Extend Window interface to include PDBLoader and labelRenderer
 declare global {
   interface Window {
     PDBLoader?: any;
+    labelRenderer?: any;
+    labelRendererResizeListener?: boolean;
   }
+}
+
+// Extend THREE namespace with CSS2D types
+declare module 'three' {
+  export var CSS2DRenderer: any;
+  export var CSS2DObject: any;
 }
 
 // Helper component to auto-fit camera to scene
@@ -36,7 +44,10 @@ const CameraController = () => {
           size.y * size.y + 
           size.z * size.z
         );
-        const distance = diagonal * 1.2; // Adjust multiplier as needed
+        
+        // Increase the distance for larger molecules
+        const scaleFactor = Math.max(1.2, Math.log10(diagonal) * 0.8);
+        const distance = diagonal * scaleFactor;
 
         // Position camera using spherical coordinates for better viewing angle
         const theta = Math.PI / 4; // 45 degrees
@@ -57,6 +68,9 @@ const CameraController = () => {
           controls.target.copy(center);
         }
 
+        // Adjust camera's near and far planes based on molecule size
+        camera.near = distance * 0.01;
+        camera.far = distance * 10;
         camera.updateProjectionMatrix();
       }
     });
@@ -69,6 +83,8 @@ const CameraController = () => {
       autoRotateSpeed={1.5}
       enableDamping
       dampingFactor={0.05}
+      minDistance={1} // Allow closer zoom
+      maxDistance={1000} // Allow further zoom out
     />
   );
 };
@@ -80,10 +96,11 @@ interface VisualizationPanelProps {
 }
 
 const DynamicSceneComponent = ({ code }: { code: string }) => {
-  const { scene } = useThree();
+  const { scene, camera, controls, gl: renderer } = useThree();
   
   useEffect(() => {
     async function setupScene() {
+      var enableAnnotations = true;
       try {
         // Clean up everything except lights
         scene.children.slice().forEach(child => {
@@ -92,13 +109,47 @@ const DynamicSceneComponent = ({ code }: { code: string }) => {
           }
         });
 
-        // Import PDBLoader dynamically and make it globally available
+        // Import PDBLoader and CSS2D renderers dynamically
+        console.log('setupScene');
         const { PDBLoader } = await import('three/examples/jsm/loaders/PDBLoader');
+        const { CSS2DRenderer, CSS2DObject } = await import('three/addons/renderers/CSS2DRenderer.js');
         window.PDBLoader = PDBLoader;
+        
+        // Set up CSS2DRenderer for labels
+        const container = document.querySelector('#container');
+        if (container && !window.labelRenderer) {
+          window.labelRenderer = new CSS2DRenderer();
+          window.labelRenderer.setSize(container.clientWidth, container.clientHeight);
+          window.labelRenderer.domElement.style.position = 'absolute';
+          window.labelRenderer.domElement.style.top = '0px';
+          window.labelRenderer.domElement.style.pointerEvents = 'none';
+          container.appendChild(window.labelRenderer.domElement);
+
+          // Patch the renderer to include CSS2D rendering
+          const originalRender = renderer.render.bind(renderer);
+          renderer.render = function(scene: THREE.Scene, camera: THREE.Camera) {
+            originalRender(scene, camera);
+            if (window.labelRenderer) {
+              window.labelRenderer.render(scene, camera);
+            }
+          };
+
+          // Handle resize
+          const handleResize = () => {
+            if (container && window.labelRenderer) {
+              window.labelRenderer.setSize(container.clientWidth, container.clientHeight);
+            }
+          };
+          window.addEventListener('resize', handleResize);
+        }
+
+        // Attach CSS2D classes to THREE namespace using type assertions
+        (THREE as any).CSS2DRenderer = CSS2DRenderer;
+        (THREE as any).CSS2DObject = CSS2DObject;
 
         // Execute the code directly (it contains the function call)
-        const createScene = new Function('THREE', 'scene', code);
-        createScene(THREE, scene);
+        const createScene = new Function('THREE', 'scene', 'options', code);
+        createScene(THREE, scene, { camera, controls });
 
       } catch (error) {
         console.error('Error executing scene code:', error);
@@ -116,8 +167,15 @@ const DynamicSceneComponent = ({ code }: { code: string }) => {
       });
       // Clean up global PDBLoader
       delete window.PDBLoader;
+      
+      // Clean up CSS2DRenderer
+      const container = document.querySelector('#container');
+      if (container && window.labelRenderer) {
+        container.removeChild(window.labelRenderer.domElement);
+        delete window.labelRenderer;
+      }
     };
-  }, [code, scene]);
+  }, [code, scene, camera, controls, renderer]);
 
   return (
     <>
@@ -151,7 +209,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
   if (!isInteractive) {
     return (
       <div className="absolute inset-0">
-        <div className={`transition-all duration-300 bg-gray-800 rounded-lg shadow-lg border border-gray-700
+        <div className={`transition-all duration-300 bg-gray-800 rounded-lg shadow-lg border border-gray-700 overflow-hidden
           ${isExpanded ? 'fixed inset-0 z-50 m-0' : 'absolute inset-0 m-2'}`}
         >
           {/* Expand/Collapse button */}
@@ -175,7 +233,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
           )}
 
           {/* Three.js scene */}
-          <div className="w-full h-full">
+          <div id="container" className="w-full h-full relative overflow-hidden">
             <Canvas>
               <CameraController />
               {DynamicScene && <DynamicScene />}
@@ -189,7 +247,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
   // For interactive mode (animation with controls)
   return (
     <div className="absolute inset-0">
-      <div className={`transition-all duration-300 bg-gray-800 rounded-lg shadow-lg border border-gray-700
+      <div className={`transition-all duration-300 bg-gray-800 rounded-lg shadow-lg border border-gray-700 overflow-hidden
         ${isExpanded ? 'fixed inset-0 z-50 m-0' : 'absolute inset-0 m-2'}`}
       >
         {/* Expand/Collapse button */}
@@ -213,7 +271,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
         )}
 
         {/* Three.js scene */}
-        <div className="w-full h-full">
+        <div id="container" className="w-full h-full relative overflow-hidden">
           <Canvas>
             <CameraController />
             {DynamicScene && <DynamicScene />}
