@@ -9,6 +9,7 @@ interface HeaderProps {
   onSettingsChange: (settings: { 
     model: string | null;
     isInteractive: boolean;
+    usePubChem: boolean;
   }) => void;
 }
 
@@ -17,15 +18,21 @@ export const Header: React.FC<HeaderProps> = ({ onOpenTimeMachine, onSettingsCha
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [model, setModel] = useState<string | null>(null);
   const [isInteractive, setIsInteractive] = useState(false);
+  const [usePubChem, setUsePubChem] = useState(false);
 
   const handleModelChange = (newModel: string | null) => {
     setModel(newModel);
-    onSettingsChange({ model: newModel, isInteractive });
+    onSettingsChange({ model: newModel, isInteractive, usePubChem });
   };
 
   const handleInteractiveChange = (newIsInteractive: boolean) => {
     setIsInteractive(newIsInteractive);
-    onSettingsChange({ model, isInteractive: newIsInteractive });
+    onSettingsChange({ model, isInteractive: newIsInteractive, usePubChem });
+  };
+
+  const handlePubChemChange = (newUsePubChem: boolean) => {
+    setUsePubChem(newUsePubChem);
+    onSettingsChange({ model, isInteractive, usePubChem: newUsePubChem });
   };
 
   return (
@@ -76,6 +83,8 @@ export const Header: React.FC<HeaderProps> = ({ onOpenTimeMachine, onSettingsCha
           setModel={handleModelChange}
           isInteractive={isInteractive}
           setIsInteractive={handleInteractiveChange}
+          usePubChem={usePubChem}
+          setUsePubChem={handlePubChemChange}
         />
       </div>
     </header>

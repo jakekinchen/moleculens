@@ -6,6 +6,13 @@ import { ArrowsPointingInIcon, ArrowsPointingOutIcon } from '@heroicons/react/24
 import * as THREE from 'three';
 import { LoadingFacts } from './LoadingFacts';
 
+// Extend Window interface to include PDBLoader
+declare global {
+  interface Window {
+    PDBLoader?: any;
+  }
+}
+
 // Helper component to auto-fit camera to scene
 const CameraController = () => {
   const { camera, scene } = useThree();
@@ -76,29 +83,40 @@ const DynamicSceneComponent = ({ code }: { code: string }) => {
   const { scene } = useThree();
   
   useEffect(() => {
-    try {
-      // Clean up everything except lights
-      scene.children.slice().forEach(child => {
-        if (!(child instanceof THREE.Light)) {
-          scene.remove(child);
-        }
-      });
-
-      // Create a function from the code string and execute it
-      const createScene = new Function('THREE', 'scene', code);
-      createScene(THREE, scene);
-
-      // Clean up function for unmounting - preserve lights again
-      return () => {
+    async function setupScene() {
+      try {
+        // Clean up everything except lights
         scene.children.slice().forEach(child => {
           if (!(child instanceof THREE.Light)) {
             scene.remove(child);
           }
         });
-      };
-    } catch (error) {
-      console.error('Error executing scene code:', error);
+
+        // Import PDBLoader dynamically and make it globally available
+        const { PDBLoader } = await import('three/examples/jsm/loaders/PDBLoader');
+        window.PDBLoader = PDBLoader;
+
+        // Execute the code directly (it contains the function call)
+        const createScene = new Function('THREE', 'scene', code);
+        createScene(THREE, scene);
+
+      } catch (error) {
+        console.error('Error executing scene code:', error);
+      }
     }
+
+    setupScene();
+
+    // Clean up function for unmounting
+    return () => {
+      scene.children.slice().forEach(child => {
+        if (!(child instanceof THREE.Light)) {
+          scene.remove(child);
+        }
+      });
+      // Clean up global PDBLoader
+      delete window.PDBLoader;
+    };
   }, [code, scene]);
 
   return (
@@ -120,20 +138,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
 
   const DynamicScene = useMemo(() => {
     if (!script) return null;
-    
-    try {
-      // Extract the code between the marker comments
-      const match = script.match(/\/\/ GeometryAgent LLM-generated code([\s\S]*?)(?=$)/);
-      if (!match || !match[1]) {
-        console.error('Could not find geometry code in script');
-        return null;
-      }
-      
-      return () => <DynamicSceneComponent code={match[1]} />;
-    } catch (error) {
-      console.error('Error creating scene:', error);
-      return null;
-    }
+      return () => <DynamicSceneComponent code={script} />;
   }, [script]);
 
   const handleExpand = () => {

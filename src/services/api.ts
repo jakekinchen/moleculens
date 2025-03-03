@@ -160,6 +160,53 @@ export const legacySubmitPrompt = async (request: PromptRequest): Promise<Prompt
 };
 
 /**
+ * Generates a 3D visualization from PubChem data for a molecule query
+ * @param request The prompt request containing the molecule query
+ * @returns Object containing the visualization JS, HTML, and title
+ */
+export const generateFromPubChem = async (request: PromptRequest): Promise<{
+  result: string;
+  result_html: string;
+  title: string;
+}> => {
+  const endpoint = `${API_BASE_URL}/prompt/generate-from-pubchem/`;
+  
+  console.log('Generating PubChem visualization for:', request);
+  
+  try {
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      credentials: includeCredentials ? 'include' : 'same-origin',
+      body: JSON.stringify(request),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Server error: ${response.status} ${response.statusText}`);
+    }
+
+    const result = await response.json();
+
+    if (!result.result) {
+      throw new Error('No visualization received from server');
+    }
+
+    // Ensure we have the HTML field, even if it's null
+    if (result.result_html === undefined) {
+      console.warn('PubChem response missing result_html field, setting to null');
+      result.result_html = null;
+    }
+
+    return result;
+  } catch (error: any) {
+    console.error('Error generating PubChem visualization:', error);
+    throw error;
+  }
+};
+
+/**
  * Fetches the list of available models from the backend
  * @returns Array of ModelInfo objects containing model capabilities and information
  * @throws Error if the request fails

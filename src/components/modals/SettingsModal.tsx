@@ -19,6 +19,8 @@ interface SettingsModalProps {
   setModel: (model: string | null) => void;
   isInteractive: boolean;
   setIsInteractive: (isInteractive: boolean) => void;
+  usePubChem: boolean;
+  setUsePubChem: (usePubChem: boolean) => void;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -28,6 +30,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   setModel,
   isInteractive,
   setIsInteractive,
+  usePubChem,
+  setUsePubChem,
 }) => {
   const [modelOptions, setModelOptions] = useState<ModelOption[]>([]);
   const [isLoading, setIsLoading] = useState(true);

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { submitPrompt, pollJobStatus, legacySubmitPrompt } from '@/services/api';
+import { submitPrompt, pollJobStatus, legacySubmitPrompt, generateFromPubChem } from '@/services/api';
 import { ArrowDownTrayIcon, ExclamationTriangleIcon, SparklesIcon, BeakerIcon } from '@heroicons/react/24/outline';
 
 // Import the VisualizationData interface from the API file
@@ -19,6 +19,7 @@ interface InputPanelProps {
   onPromptSubmit: (prompt: string) => void;
   model: string | null;
   isInteractive: boolean;
+  usePubChem?: boolean;
 }
 
 // Scientific prompt example suggestions
@@ -70,10 +71,12 @@ export const InputPanel: React.FC<InputPanelProps> = ({
   onPromptChange,
   onPromptSubmit,
   model,
-  isInteractive
+  isInteractive,
+  usePubChem
 }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [currentScript, setCurrentScript] = useState<string | null>(null);
+  const [currentHtml, setCurrentHtml] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isScientificError, setIsScientificError] = useState(false);
   const [jobId, setJobId] = useState<string | null>(null);
@@ -97,14 +100,16 @@ export const InputPanel: React.FC<InputPanelProps> = ({
               const { js, html, title, timecode_markers, total_elements } = result.visualization;
               console.log('Visualization received:', { title, total_elements });
               
-              // Update the visualization
+              // Update the visualization and store both JS and HTML
               setCurrentScript(js);
+              setCurrentHtml(html);
               onVisualizationUpdate(js);
               onPromptSubmit(currentPrompt);
             } else {
               // Fallback for legacy response formats
               const jsCode = result.result || result.geometry_result || '';
               setCurrentScript(jsCode);
+              setCurrentHtml(null);
               onVisualizationUpdate(jsCode);
               onPromptSubmit(currentPrompt);
             }
@@ -149,10 +154,28 @@ export const InputPanel: React.FC<InputPanelProps> = ({
     setError(null);
     setIsScientificError(false);
     
-    console.log('Making request for:', currentPrompt, 'with model:', model, 'interactive mode:', isInteractive);
+    console.log('Making request for:', currentPrompt, 'with model:', model, 'interactive mode:', isInteractive, 'PubChem mode:', usePubChem);
 
     try {
-      if (isInteractive) {
+      if (usePubChem) {
+        // Use PubChem mode
+        const response = await generateFromPubChem({
+          prompt: currentPrompt,
+          model: model || undefined,
+          preferred_model_category: undefined
+        });
+        
+        if (response.result) {
+          setCurrentScript(response.result);
+          setCurrentHtml(response.result_html || null);
+          onVisualizationUpdate(response.result);
+          onPromptSubmit(currentPrompt);
+          setIsLoading(false);
+          onLoadingChange(false);
+        } else {
+          throw new Error('No result received from PubChem');
+        }
+      } else if (isInteractive) {
         // Use the job-based API flow with polling for animation
         const response = await submitPrompt({
           prompt: currentPrompt,
@@ -176,6 +199,7 @@ export const InputPanel: React.FC<InputPanelProps> = ({
         
         if (response.result) {
           setCurrentScript(response.result);
+          setCurrentHtml(null);
           onVisualizationUpdate(response.result);
           onPromptSubmit(currentPrompt);
           setIsLoading(false);
@@ -191,10 +215,7 @@ export const InputPanel: React.FC<InputPanelProps> = ({
       // Check if this is a scientific content validation error
       if (err.message && err.message.includes('Non-molecular prompt')) {
         setIsScientificError(true);
-        // Show multiple suggestions instead of just one
         setError(`Your prompt should be related to molecular structures. Click on the "Suggest Molecule" button to get started.`);
-        // Don't automatically change the user's input
-        // handleSuggestTopic();
       } else {
         setError(err.message || 'Failed to process prompt');
       }
@@ -204,111 +225,13 @@ export const InputPanel: React.FC<InputPanelProps> = ({
   const handleDownload = () => {
     if (!currentScript) return;
     
-    const htmlContent = `
-      <!DOCTYPE html>
-      <html lang="en">
-      <head>
-          <meta charset="UTF-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <title>Geometry Visualization</title>
-          <style>
-              body { margin: 0; overflow: hidden; background: #111; }
-              canvas { width: 100%; height: 100%; display: block; }
-          </style>
-      </head>
-      <body>
-          <script>
-              // Load Three.js first
-              const loadScript = (src) => {
-                  return new Promise((resolve, reject) => {
-                      const script = document.createElement('script');
-                      script.src = src;
-                      script.onload = () => {
-                          console.log('Loaded script:', src);
-                          resolve();
-                      };
-                      script.onerror = (err) => {
-                          console.error('Failed to load script:', src, err);
-                          reject(err);
-                      };
-                      document.head.appendChild(script);
-                  });
-              };
+    // Use the backend-generated HTML if available, otherwise fall back to generating our own
+    let htmlContent;
 
-              // Load scripts in sequence and then initialize
-              async function init() {
-                  try {
-                      await loadScript('https://unpkg.com/three@0.128.0/build/three.min.js');
-                      await loadScript('https://unpkg.com/three@0.128.0/examples/js/controls/OrbitControls.js');
-                      console.log('Three.js loaded:', THREE);
-                      console.log('OrbitControls loaded:', THREE.OrbitControls);
-                      
-                      // Set up scene
-                      const scene = new THREE.Scene();
-                      console.log('Scene created');
-                      
-                      // Set up camera
-                      const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-                      camera.position.set(5, 4, 5);
-                      
-                      // Set up renderer
-                      const renderer = new THREE.WebGLRenderer({ antialias: true });
-                      renderer.setSize(window.innerWidth, window.innerHeight);
-                      document.body.appendChild(renderer.domElement);
-                      
-                      // Add lights
-                      const ambientLight = new THREE.AmbientLight(0x404040, 0.4);
-                      scene.add(ambientLight);
-                      
-                      const directionalLight1 = new THREE.DirectionalLight(0xffffff, 1);
-                      directionalLight1.position.set(1, 1, 1);
-                      scene.add(directionalLight1);
-                      
-                      const directionalLight2 = new THREE.DirectionalLight(0xffffff, 0.4);
-                      directionalLight2.position.set(-1, -1, -1);
-                      scene.add(directionalLight2);
-
-                      console.log('About to execute geometry code');
-                      // Execute the geometry code
-                      ${currentScript}
-                      console.log('Geometry code executed');
-
-                      // Add OrbitControls
-                      const controls = new THREE.OrbitControls(camera, renderer.domElement);
-                      controls.enableDamping = true;
-                      controls.dampingFactor = 0.05;
-                      controls.autoRotate = true;
-                      controls.autoRotateSpeed = 1.5;
-                      
-                      
-                      // Animation loop
-                      function animate() {
-                          requestAnimationFrame(animate);
-                          controls.update();
-                          renderer.render(scene, camera);
-                      }
-                      
-                      // Handle window resize
-                      window.addEventListener('resize', () => {
-                          camera.aspect = window.innerWidth / window.innerHeight;
-                          camera.updateProjectionMatrix();
-                          renderer.setSize(window.innerWidth, window.innerHeight);
-                      });
-                      
-                      // Start animation
-                      console.log('Starting animation');
-                      animate();
-                  } catch (error) {
-                      console.error('Error initializing visualization:', error);
-                  }
-              }
-
-              // Start initialization
-              init().catch(console.error);
-          </script>
-      </body>
-      </html>
-    `;
+      // Use the backend-generated HTML which has proper PDBLoader imports
+    console.log('Using backend-generated HTML for download');
+    htmlContent = currentHtml || '';
+    
 
     const blob = new Blob([htmlContent], { type: 'text/html' });
     const url = URL.createObjectURL(blob);

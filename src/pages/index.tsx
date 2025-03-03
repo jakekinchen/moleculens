@@ -14,6 +14,7 @@ const Home: NextPage = () => {
   const [currentPrompt, setCurrentPrompt] = useState('');
   const [model, setModel] = useState<string | null>(null);
   const [isInteractive, setIsInteractive] = useState(false);
+  const [usePubChem, setUsePubChem] = useState(true);
 
   const handlePromptSubmit = (prompt: string) => {
     // Add to history when a prompt is submitted
@@ -23,9 +24,11 @@ const Home: NextPage = () => {
   const handleSettingsChange = (settings: { 
     model: string | null;
     isInteractive: boolean;
+    usePubChem: boolean;
   }) => {
     setModel(settings.model);
     setIsInteractive(settings.isInteractive);
+    setUsePubChem(settings.usePubChem);
   };
 
   return (
@@ -45,6 +48,7 @@ const Home: NextPage = () => {
               onPromptSubmit={handlePromptSubmit}
               model={model}
               isInteractive={isInteractive}
+              usePubChem={usePubChem}
             />
           </div>
           <div className="col-span-9 relative">
