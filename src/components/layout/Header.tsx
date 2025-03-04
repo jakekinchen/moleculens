@@ -43,7 +43,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenTimeMachine, onSettingsCha
             <BeakerIcon className="w-full h-full text-white" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold">SciVizAI</h1>
+            <h1 className="text-2xl font-bold">MolecuLens</h1>
             <p className="text-xs opacity-80">Let&apos;s make science visual</p>
           </div>
         </div>

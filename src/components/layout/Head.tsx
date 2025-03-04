@@ -8,7 +8,7 @@ interface HeadProps {
 }
 
 export const Head: React.FC<HeadProps> = ({
-  title = 'SciVizAI',
+  title = 'MolecuLens',
   description = 'Interactive Scientific Visualization Platform for Chemistry Learning',
 }) => {
   const faviconSvg = ReactDOMServer.renderToString(<Favicon />);
