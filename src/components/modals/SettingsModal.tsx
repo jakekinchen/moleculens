@@ -19,8 +19,8 @@ interface SettingsModalProps {
   setModel: (model: string | null) => void;
   isInteractive: boolean;
   setIsInteractive: (isInteractive: boolean) => void;
-  usePubChem: boolean;
-  setUsePubChem: (usePubChem: boolean) => void;
+  _usePubChem: boolean;
+  _setUsePubChem: (usePubChem: boolean) => void;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -30,8 +30,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   setModel,
   isInteractive,
   setIsInteractive,
-  usePubChem,
-  setUsePubChem,
+  _usePubChem: usePubChem,
+  _setUsePubChem: setUsePubChem,
 }) => {
   const [modelOptions, setModelOptions] = useState<ModelOption[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -48,7 +48,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         setError(null);
         const models = await getModels();
         setModelOptions(models);
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error('Failed to load model options:', err);
         if (retryCount < maxRetries) {
           retryCount++;

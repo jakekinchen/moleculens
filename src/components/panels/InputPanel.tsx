@@ -103,6 +103,7 @@ export const InputPanel: React.FC<InputPanelProps> = ({
   const [title, setTitle] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isScientificError, setIsScientificError] = useState(false);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [jobId, setJobId] = useState<string | null>(null);
 
   // Poll for job updates
@@ -121,6 +122,7 @@ export const InputPanel: React.FC<InputPanelProps> = ({
             
             if (result.visualization) {
               // Handle the structured visualization data
+              // eslint-disable-next-line @typescript-eslint/no-unused-vars
               const { js, html, title, timecode_markers, total_elements } = result.visualization;
               console.log('Visualization received:', { title, total_elements });
               
@@ -233,16 +235,16 @@ export const InputPanel: React.FC<InputPanelProps> = ({
           throw new Error('No result received');
         }
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       setIsLoading(false);
       onLoadingChange(false);
       
       // Check if this is a scientific content validation error
-      if (err.message && err.message.includes('Non-molecular prompt')) {
+      if (err instanceof Error && err.message.includes('Non-molecular prompt')) {
         setIsScientificError(true);
         setError(`Your prompt should be related to molecular structures. Click on the "Suggest Molecule" button to get started.`);
       } else {
-        setError(err.message || 'Failed to process prompt');
+        setError(err instanceof Error ? err.message : 'Failed to process prompt');
       }
     }
   };
@@ -251,13 +253,8 @@ export const InputPanel: React.FC<InputPanelProps> = ({
     if (!currentScript) return;
     
     // Use the backend-generated HTML if available, otherwise fall back to generating our own
-    let htmlContent;
-
-      // Use the backend-generated HTML which has proper PDBLoader imports
-    console.log('Using backend-generated HTML for download');
-    htmlContent = currentHtml || '';
+    const htmlContent = currentHtml || '';
     
-
     const blob = new Blob([htmlContent], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');

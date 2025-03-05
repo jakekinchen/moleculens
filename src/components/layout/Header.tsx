@@ -18,7 +18,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenTimeMachine, onSettingsCha
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [model, setModel] = useState<string | null>(null);
   const [isInteractive, setIsInteractive] = useState(false);
-  const [usePubChem, setUsePubChem] = useState(false);
+  const usePubChem = true;
 
   const handleModelChange = (newModel: string | null) => {
     setModel(newModel);
@@ -28,11 +28,6 @@ export const Header: React.FC<HeaderProps> = ({ onOpenTimeMachine, onSettingsCha
   const handleInteractiveChange = (newIsInteractive: boolean) => {
     setIsInteractive(newIsInteractive);
     onSettingsChange({ model, isInteractive: newIsInteractive, usePubChem });
-  };
-
-  const handlePubChemChange = (newUsePubChem: boolean) => {
-    setUsePubChem(newUsePubChem);
-    onSettingsChange({ model, isInteractive, usePubChem: newUsePubChem });
   };
 
   return (
@@ -83,8 +78,8 @@ export const Header: React.FC<HeaderProps> = ({ onOpenTimeMachine, onSettingsCha
           setModel={handleModelChange}
           isInteractive={isInteractive}
           setIsInteractive={handleInteractiveChange}
-          usePubChem={usePubChem}
-          setUsePubChem={handlePubChemChange}
+          _usePubChem={usePubChem}
+          _setUsePubChem={() => {}}
         />
       </div>
     </header>

@@ -14,7 +14,7 @@ const Home: NextPage = () => {
   const [currentPrompt, setCurrentPrompt] = useState('');
   const [model, setModel] = useState<string | null>(null);
   const [isInteractive, setIsInteractive] = useState(false);
-  const [usePubChem, setUsePubChem] = useState(true);
+  const usePubChem = true;
 
   const handlePromptSubmit = (prompt: string) => {
     // Add to history when a prompt is submitted
@@ -28,7 +28,6 @@ const Home: NextPage = () => {
   }) => {
     setModel(settings.model);
     setIsInteractive(settings.isInteractive);
-    setUsePubChem(settings.usePubChem);
   };
 
   return (
