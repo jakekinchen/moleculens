@@ -111,7 +111,7 @@ const DynamicSceneComponent = ({ code }: { code: string }) => {
 
         // Import PDBLoader and CSS2D renderers dynamically
         console.log('setupScene');
-        const { PDBLoader } = await import('three/examples/jsm/loaders/PDBLoader');
+        const { PDBLoader } = await import('three/addons/loaders/PDBLoader.js');
         const { CSS2DRenderer, CSS2DObject } = await import('three/addons/renderers/CSS2DRenderer.js');
         window.PDBLoader = PDBLoader;
         
