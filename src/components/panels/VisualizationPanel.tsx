@@ -6,12 +6,29 @@ import { ArrowsPointingInIcon, ArrowsPointingOutIcon } from '@heroicons/react/24
 import * as THREE from 'three';
 import { LoadingFacts } from './LoadingFacts';
 
+// CSS styles for atom labels
+const atomLabelStyles = `
+  .atom-label {
+    color: #ffffff;
+    font-family: Arial, sans-serif;
+    font-size: 12px;
+    padding: 2px;
+    background: rgba(0,0,0,0.6);
+    border-radius: 3px;
+    pointer-events: none;
+    text-align: center;
+    user-select: none;
+  }
+`;
+
 // Extend Window interface to include PDBLoader and labelRenderer
 declare global {
   interface Window {
     PDBLoader?: any;
     labelRenderer?: any;
     labelRendererResizeListener?: boolean;
+    CSS2DRenderer?: any;
+    CSS2DObject?: any;
   }
 }
 
@@ -92,8 +109,45 @@ interface VisualizationPanelProps {
 const DynamicSceneComponent = ({ code }: { code: string }) => {
   const { scene, camera, controls, gl: renderer } = useThree();
   
+  // Effect to ensure CSS2D renderer is properly initialized
+  useEffect(() => {
+    // This effect runs once when the component mounts
+    console.log('Component mounted, ensuring CSS2D renderer is initialized');
+    
+    // Add a small delay to ensure the container is fully rendered
+    const initTimer = setTimeout(() => {
+      const container = document.querySelector('#container');
+      if (container && !window.labelRenderer) {
+        console.log('Initializing CSS2D renderer on mount');
+        import('three/addons/renderers/CSS2DRenderer.js')
+          .then(({ CSS2DRenderer }) => {
+            window.CSS2DRenderer = CSS2DRenderer;
+            window.labelRenderer = new CSS2DRenderer();
+            window.labelRenderer.setSize(container.clientWidth, container.clientHeight);
+            window.labelRenderer.domElement.style.position = 'absolute';
+            window.labelRenderer.domElement.style.top = '0px';
+            window.labelRenderer.domElement.style.left = '0px';
+            window.labelRenderer.domElement.style.width = '100%';
+            window.labelRenderer.domElement.style.height = '100%';
+            window.labelRenderer.domElement.style.pointerEvents = 'none';
+            window.labelRenderer.domElement.style.zIndex = '10';
+            container.appendChild(window.labelRenderer.domElement);
+            console.log('CSS2D renderer initialized on mount');
+          })
+          .catch(error => {
+            console.error('Error initializing CSS2D renderer:', error);
+          });
+      }
+    }, 100);
+    
+    return () => {
+      clearTimeout(initTimer);
+    };
+  }, []);
+  
   useEffect(() => {
     async function setupScene() {
+      console.log('Setting up scene with CSS2D support');
       var enableAnnotations = true;
       try {
         // Clean up everything except lights
@@ -103,15 +157,44 @@ const DynamicSceneComponent = ({ code }: { code: string }) => {
           }
         });
 
+        // Add CSS styles for atom labels if not already present
+        if (!document.getElementById('atom-label-styles')) {
+          const styleElement = document.createElement('style');
+          styleElement.id = 'atom-label-styles';
+          styleElement.textContent = atomLabelStyles;
+          document.head.appendChild(styleElement);
+          console.log('Added atom label styles to document head');
+        }
+
         // Import PDBLoader and CSS2D renderers dynamically
-        console.log('setupScene');
+        console.log('Importing PDBLoader and CSS2DRenderer');
         const { PDBLoader } = await import('three/addons/loaders/PDBLoader.js');
         const { CSS2DRenderer, CSS2DObject } = await import('three/addons/renderers/CSS2DRenderer.js');
+        
+        // Store in window for global access
         window.PDBLoader = PDBLoader;
+        window.CSS2DRenderer = CSS2DRenderer;
+        window.CSS2DObject = CSS2DObject;
+        
+        console.log('CSS2DRenderer imported:', !!CSS2DRenderer);
+        console.log('CSS2DObject imported:', !!CSS2DObject);
         
         // Set up CSS2DRenderer for labels
         const container = document.querySelector('#container');
-        if (container && !window.labelRenderer) {
+        if (container) {
+          console.log('Container found, setting up CSS2DRenderer');
+          
+          // Clean up existing labelRenderer if it exists
+          if (window.labelRenderer) {
+            try {
+              container.removeChild(window.labelRenderer.domElement);
+            } catch (e) {
+              console.warn('Error removing existing labelRenderer:', e);
+            }
+            delete window.labelRenderer;
+          }
+          
+          // Create new CSS2DRenderer
           window.labelRenderer = new CSS2DRenderer();
           window.labelRenderer.setSize(container.clientWidth, container.clientHeight);
           window.labelRenderer.domElement.style.position = 'absolute';
@@ -120,9 +203,13 @@ const DynamicSceneComponent = ({ code }: { code: string }) => {
           window.labelRenderer.domElement.style.width = '100%';
           window.labelRenderer.domElement.style.height = '100%';
           window.labelRenderer.domElement.style.pointerEvents = 'none';
+          window.labelRenderer.domElement.style.zIndex = '10'; // Ensure it's above the WebGL canvas
+          
+          // Append to container
           container.appendChild(window.labelRenderer.domElement);
+          console.log('CSS2DRenderer attached to DOM');
 
-          // Patch the renderer to include CSS2D rendering
+          // Patch the renderer to include CSS2D rendering in the animation loop
           const originalRender = renderer.render;
           renderer.render = function(scene, camera) {
             originalRender.call(this, scene, camera);
@@ -130,11 +217,13 @@ const DynamicSceneComponent = ({ code }: { code: string }) => {
               window.labelRenderer.render(scene, camera);
             }
           };
+          console.log('Renderer patched to include CSS2D rendering');
 
           // Handle resize with ResizeObserver for more reliable updates
           const resizeObserver = new ResizeObserver(entries => {
             for (const entry of entries) {
               const { width, height } = entry.contentRect;
+              console.log('Container resized, updating renderers:', width, height);
               if (window.labelRenderer) {
                 window.labelRenderer.setSize(width, height);
               }
@@ -144,39 +233,102 @@ const DynamicSceneComponent = ({ code }: { code: string }) => {
             }
           });
           resizeObserver.observe(container);
+          console.log('ResizeObserver set up for container');
+        } else {
+          console.error('Container not found, cannot set up CSS2DRenderer');
         }
 
         // Execute the visualization code
         try {
+          console.log('Executing visualization code');
+          
           // Create a function from the code string and execute it
           const visualizationFunction = new Function('THREE', 'scene', 'camera', 'renderer', code);
           visualizationFunction(THREE, scene, camera, renderer);
+          console.log('Visualization code executed successfully');
+          
+          // Ensure CSS2D renderer is included in the animation loop
+          ensureCss2dRendering(scene, camera, renderer);
         } catch (error) {
           console.error('Error executing visualization code:', error);
         }
 
       } catch (error) {
-        console.error('Error executing scene code:', error);
+        console.error('Error setting up scene:', error);
       }
+    }
+
+    // Function to ensure CSS2D renderer is included in the animation loop
+    function ensureCss2dRendering(
+      scene: THREE.Scene, 
+      camera: THREE.Camera, 
+      renderer: THREE.WebGLRenderer & { _patchedForCss2d?: boolean }
+    ) {
+      if (!window.labelRenderer) {
+        console.warn('labelRenderer not found, cannot set up CSS2D rendering');
+        return;
+      }
+      
+      console.log('Setting up CSS2D rendering in animation loop');
+      
+      // Check if the renderer's render method has already been patched
+      if (renderer._patchedForCss2d) {
+        console.log('Renderer already patched for CSS2D');
+        return;
+      }
+      
+      // Store the original render method
+      const originalRender = renderer.render;
+      
+      // Replace the render method with our patched version
+      renderer.render = function(scene: THREE.Scene, camera: THREE.Camera) {
+        // Call the original render method
+        originalRender.call(this, scene, camera);
+        
+        // Render the CSS2D elements
+        if (window.labelRenderer) {
+          window.labelRenderer.render(scene, camera);
+        }
+      };
+      
+      // Mark the renderer as patched
+      renderer._patchedForCss2d = true;
+      
+      console.log('CSS2D rendering setup complete');
     }
 
     setupScene();
 
     // Clean up function for unmounting
     return () => {
+      console.log('Cleaning up scene');
       scene.children.slice().forEach(child => {
         if (!(child instanceof THREE.Light)) {
           scene.remove(child);
         }
       });
-      // Clean up global PDBLoader
+      
+      // Clean up global objects
       delete window.PDBLoader;
+      delete window.CSS2DRenderer;
+      delete window.CSS2DObject;
       
       // Clean up CSS2DRenderer
       const container = document.querySelector('#container');
       if (container && window.labelRenderer) {
-        container.removeChild(window.labelRenderer.domElement);
+        try {
+          container.removeChild(window.labelRenderer.domElement);
+        } catch (e) {
+          console.warn('Error removing labelRenderer:', e);
+        }
         delete window.labelRenderer;
+      }
+      
+      // Remove atom label styles
+      const styleElement = document.getElementById('atom-label-styles');
+      if (styleElement) {
+        styleElement.parentNode?.removeChild(styleElement);
+        console.log('Removed atom label styles');
       }
     };
   }, [code, scene, camera, controls, renderer]);
