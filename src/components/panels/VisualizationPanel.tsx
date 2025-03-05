@@ -15,12 +15,6 @@ declare global {
   }
 }
 
-// Extend THREE namespace with CSS2D types
-declare module 'three' {
-  export var CSS2DRenderer: any;
-  export var CSS2DObject: any;
-}
-
 // Helper component to auto-fit camera to scene
 const CameraController = () => {
   const { camera, scene } = useThree();
@@ -129,9 +123,9 @@ const DynamicSceneComponent = ({ code }: { code: string }) => {
           container.appendChild(window.labelRenderer.domElement);
 
           // Patch the renderer to include CSS2D rendering
-          const originalRender = renderer.render.bind(renderer);
-          renderer.render = function(scene: THREE.Scene, camera: THREE.Camera) {
-            originalRender(scene, camera);
+          const originalRender = renderer.render;
+          renderer.render = function(scene, camera) {
+            originalRender.call(this, scene, camera);
             if (window.labelRenderer) {
               window.labelRenderer.render(scene, camera);
             }
@@ -152,13 +146,14 @@ const DynamicSceneComponent = ({ code }: { code: string }) => {
           resizeObserver.observe(container);
         }
 
-        // Attach CSS2D classes to THREE namespace using type assertions
-        (THREE as any).CSS2DRenderer = CSS2DRenderer;
-        (THREE as any).CSS2DObject = CSS2DObject;
-
-        // Execute the code directly (it contains the function call)
-        const createScene = new Function('THREE', 'scene', 'options', code);
-        createScene(THREE, scene, { camera, controls });
+        // Execute the visualization code
+        try {
+          // Create a function from the code string and execute it
+          const visualizationFunction = new Function('THREE', 'scene', 'camera', 'renderer', code);
+          visualizationFunction(THREE, scene, camera, renderer);
+        } catch (error) {
+          console.error('Error executing visualization code:', error);
+        }
 
       } catch (error) {
         console.error('Error executing scene code:', error);
