@@ -37,8 +37,8 @@ const Home: NextPage = () => {
         onSettingsChange={handleSettingsChange}
       />
       <main className="container mx-auto px-2 py-4 flex-grow">
-        <div className="grid grid-cols-12 gap-2 h-[calc(100vh-8rem)]">
-          <div className="col-span-3">
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-2 h-[calc(100vh-8rem)]">
+          <div className="col-span-1 md:col-span-3 h-[40vh] md:h-full">
             <InputPanel 
               onVisualizationUpdate={setCurrentScript}
               onLoadingChange={setIsLoading}
@@ -50,7 +50,7 @@ const Home: NextPage = () => {
               usePubChem={usePubChem}
             />
           </div>
-          <div className="col-span-9 relative">
+          <div className="col-span-1 md:col-span-9 relative h-[60vh] md:h-full">
             <VisualizationPanel 
               script={currentScript}
               isLoading={isLoading}

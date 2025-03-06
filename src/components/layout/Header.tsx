@@ -38,8 +38,8 @@ export const Header: React.FC<HeaderProps> = ({ onOpenTimeMachine, onSettingsCha
             <BeakerIcon className="w-full h-full text-white" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold">MolecuLens</h1>
-            <p className="text-xs opacity-80">Let&apos;s make science visual</p>
+            <h1 className="text-xl sm:text-2xl font-bold">MolecuLens</h1>
+            <p className="hidden sm:block text-xs opacity-80">Let&apos;s make science visual</p>
           </div>
         </div>
 
@@ -49,7 +49,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenTimeMachine, onSettingsCha
             className="p-2 text-gray-200 hover:text-white transition-colors rounded-full hover:bg-white/10"
             aria-label="Help"
           >
-            <QuestionMarkCircleIcon className="w-6 h-6" />
+            <QuestionMarkCircleIcon className="w-5 h-5 sm:w-6 sm:h-6" />
           </button>
           <button
             onClick={onOpenTimeMachine}

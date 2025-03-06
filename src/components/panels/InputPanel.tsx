@@ -274,13 +274,13 @@ export const InputPanel: React.FC<InputPanelProps> = ({
   };
     
   return (
-    <div className="flex flex-col gap-6 p-6 bg-gradient-to-b from-gray-800 to-gray-900 rounded-xl shadow-xl border border-gray-700">
+    <div className="flex flex-col gap-4 p-4 sm:p-6 bg-gradient-to-b from-gray-800 to-gray-900 rounded-xl shadow-xl border border-gray-700 h-full overflow-y-auto">
       <div className="flex flex-col gap-2">
-        <h2 className="text-xl font-semibold text-white flex items-center gap-2">
-          <SparklesIcon className="w-6 h-6 text-blue-400" />
+        <h2 className="text-lg sm:text-xl font-semibold text-white flex items-center gap-2">
+          <SparklesIcon className="w-5 h-5 sm:w-6 sm:h-6 text-blue-400" />
           Molecular Structure Visualization
         </h2>
-        <p className="text-gray-400 text-sm">
+        <p className="text-xs sm:text-sm text-gray-400">
           Enter a prompt about molecular structures and watch as AI generates an interactive 3D visualization.
         </p>
       </div>
@@ -300,10 +300,10 @@ export const InputPanel: React.FC<InputPanelProps> = ({
                 }
               }}
               placeholder="Enter your prompt about molecular structures..."
-              className="w-full h-32 p-4 text-gray-100 bg-gray-800/50 rounded-lg resize-none 
+              className="w-full h-24 sm:h-32 p-3 sm:p-4 text-gray-100 bg-gray-800/50 rounded-lg resize-none 
                          border border-gray-600 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20
                          placeholder-gray-500 transition-all duration-200 ease-in-out
-                         hover:border-gray-500"
+                         hover:border-gray-500 text-sm sm:text-base"
               disabled={isLoading}
               maxLength={500}
               aria-label="Molecular structure prompt input"
@@ -313,22 +313,48 @@ export const InputPanel: React.FC<InputPanelProps> = ({
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={handleSuggestTopic}
-            className="self-start flex items-center gap-2 px-4 py-2 text-sm font-medium
-                     bg-gradient-to-r from-indigo-500/10 to-blue-500/10
-                     hover:from-indigo-500/20 hover:to-blue-500/20
-                     text-blue-400 rounded-lg
-                     transition-all duration-200 ease-in-out
-                     focus:outline-none focus:ring-2 focus:ring-blue-500/50
-                     disabled:opacity-50 disabled:cursor-not-allowed"
-            aria-label="Suggest molecule"
-            disabled={isLoading}
-          >
-            <BeakerIcon className="w-4 h-4" />
-            Suggest Molecule
-          </button>
+          <div className="flex items-center justify-between gap-2">
+            <button
+              type="button"
+              onClick={handleSuggestTopic}
+              className="flex items-center gap-2 px-3 py-2 text-sm font-medium
+                       bg-gradient-to-r from-indigo-500/10 to-blue-500/10
+                       hover:from-indigo-500/20 hover:to-blue-500/20
+                       text-blue-400 rounded-lg
+                       transition-all duration-200 ease-in-out
+                       focus:outline-none focus:ring-2 focus:ring-blue-500/50
+                       disabled:opacity-50 disabled:cursor-not-allowed"
+              aria-label="Suggest molecule"
+              disabled={isLoading}
+            >
+              <BeakerIcon className="w-4 h-4" />
+              <span className="sm:inline">Suggest Molecule</span>
+            </button>
+
+            <button
+              type="submit"
+              disabled={isLoading || !currentPrompt.trim()}
+              className={`flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-medium
+                         transition-all duration-200 ease-in-out focus:outline-none focus:ring-2
+                         ${isLoading || !currentPrompt.trim()
+                ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
+                : 'bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white shadow-lg shadow-blue-500/20'
+              }`}
+              aria-label={isLoading ? 'Processing visualization' : 'Generate visualization'}
+            >
+              {isLoading ? (
+                <>
+                  <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  </svg>
+                  <span className="hidden sm:inline">Processing...</span>
+                </>
+              ) : (
+                'Generate'
+              )}
+            </button>
+          </div>
           
           {error && (
             <div className={`transform transition-all duration-200 ease-in-out
@@ -347,30 +373,6 @@ export const InputPanel: React.FC<InputPanelProps> = ({
         </div>
 
         <div className="flex justify-between items-center gap-4">
-          <button
-            type="submit"
-            disabled={isLoading || !currentPrompt.trim()}
-            className={`flex items-center justify-center gap-2 min-w-[140px] px-6 py-2.5 rounded-lg font-medium
-                       transition-all duration-200 ease-in-out focus:outline-none focus:ring-2
-                       ${isLoading || !currentPrompt.trim()
-              ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
-              : 'bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white shadow-lg shadow-blue-500/20'
-            }`}
-            aria-label={isLoading ? 'Processing visualization' : 'Generate visualization'}
-          >
-            {isLoading ? (
-              <>
-                <svg className="animate-spin h-5 w-5 flex-shrink-0" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                </svg>
-                <span className="flex-shrink-0">Processing...</span>
-              </>
-            ) : (
-              'Generate'
-            )}
-          </button>
-          
           {currentScript && (
             <button
               type="button"
