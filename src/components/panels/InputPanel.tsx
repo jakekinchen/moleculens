@@ -313,7 +313,7 @@ export const InputPanel: React.FC<InputPanelProps> = ({
             </div>
           </div>
 
-          <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center justify-between gap-2 md:justify-start">
             <button
               type="button"
               onClick={handleSuggestTopic}
@@ -331,10 +331,11 @@ export const InputPanel: React.FC<InputPanelProps> = ({
               <span className="sm:inline">Suggest Molecule</span>
             </button>
 
+            {/* Generate button - only show on mobile */}
             <button
               type="submit"
               disabled={isLoading || !currentPrompt.trim()}
-              className={`flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-medium
+              className={`md:hidden flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-medium
                          transition-all duration-200 ease-in-out focus:outline-none focus:ring-2
                          ${isLoading || !currentPrompt.trim()
                 ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
@@ -372,7 +373,32 @@ export const InputPanel: React.FC<InputPanelProps> = ({
           )}
         </div>
 
-        <div className="flex justify-between items-center gap-4">
+        {/* Desktop Generate and Download buttons */}
+        <div className="hidden md:flex justify-between items-center gap-4">
+          <button
+            type="submit"
+            disabled={isLoading || !currentPrompt.trim()}
+            className={`flex items-center justify-center gap-2 min-w-[140px] px-6 py-2.5 rounded-lg font-medium
+                       transition-all duration-200 ease-in-out focus:outline-none focus:ring-2
+                       ${isLoading || !currentPrompt.trim()
+              ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
+              : 'bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white shadow-lg shadow-blue-500/20'
+            }`}
+            aria-label={isLoading ? 'Processing visualization' : 'Generate visualization'}
+          >
+            {isLoading ? (
+              <>
+                <svg className="animate-spin h-5 w-5 flex-shrink-0" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                </svg>
+                <span className="flex-shrink-0">Processing...</span>
+              </>
+            ) : (
+              'Generate'
+            )}
+          </button>
+
           {currentScript && (
             <button
               type="button"
