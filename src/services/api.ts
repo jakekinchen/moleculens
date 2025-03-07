@@ -27,7 +27,6 @@ interface JobStatusResponse {
 // Visualization data when job is completed
 interface VisualizationData {
   html: string;
-  js: string;
   title: string;
   timecode_markers: string[];
   total_elements: number;
@@ -160,12 +159,29 @@ export const legacySubmitPrompt = async (request: PromptRequest): Promise<Prompt
 };
 
 /**
+ * Request structure for /prompt/generate-from-pubchem/:
+ * {
+ *   prompt: string;           // The molecule query/name to search for
+ *   model?: string;          // Optional: specific model to use
+ *   preferred_model_category?: string;  // Optional: preferred category of model
+ * }
+ * 
+ * Response structure:
+ * {
+ *   pdb_data: string;        // The PDB data for the molecule
+ *   result_html: string;     // The HTML markup for the visualization container
+ *   title: string;           // The title/name of the molecule
+ *   status?: string;         // Optional: status of the request ('failed' if error)
+ *   job_id?: string;         // Optional: job ID if request is rejected
+ *   error?: string;          // Optional: error message if request fails
+ * }
+ * 
  * Generates a 3D visualization from PubChem data for a molecule query
  * @param request The prompt request containing the molecule query
- * @returns Object containing the visualization JS, HTML, and title
+ * @returns Object containing the PDB data, HTML, and title
  */
 export const generateFromPubChem = async (request: PromptRequest): Promise<{
-  result: string;
+  pdb_data: string;
   result_html: string;
   title: string;
 }> => {
@@ -189,7 +205,7 @@ export const generateFromPubChem = async (request: PromptRequest): Promise<{
 
     const result = await response.json();
 
-  // Check if the prompt was rejected due to not being scientific
+    // Check if the prompt was rejected due to not being scientific
     if (result.status === 'failed' && result.job_id === 'rejected') {
       console.warn('Non-molecular prompt rejected:', result.error);
       throw new Error(`Molecular validation failed: ${result.error}`);

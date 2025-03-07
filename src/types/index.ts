@@ -5,9 +5,30 @@ export interface Topic {
   content: string;
 }
 
+export interface VisualizationOutput {
+  pdb_data: string;
+  html: string;
+  title?: string;
+  timecode_markers?: string[];
+  total_elements?: number;
+}
+
 export interface VisualizationData {
   type: 'molecule' | 'reaction' | 'structure';
-  data: any; // TODO: Define specific visualization data types
+  data: {
+    pdb_data: string;
+    html: string;
+    title?: string;
+    timecode_markers?: string[];
+    total_elements?: number;
+  };
+}
+
+export interface HistoryEntry {
+  prompt: string;
+  timestamp: Date;
+  visualization?: VisualizationOutput;
+  title?: string;
 }
 
 export interface QuizQuestion {

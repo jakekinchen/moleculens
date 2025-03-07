@@ -1,78 +1,30 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { submitPrompt, pollJobStatus, legacySubmitPrompt, generateFromPubChem } from '@/services/api';
-import { ArrowDownTrayIcon, ExclamationTriangleIcon, SparklesIcon, BeakerIcon } from '@heroicons/react/24/outline';
+import { ArrowDownTrayIcon, ExclamationTriangleIcon, BeakerIcon, MicrophoneIcon } from '@heroicons/react/24/outline';
+import { VisualizationOutput } from '@/types';
+import CHEMISTRY_TOPICS from './chemistry_topics';
 
 // Import the VisualizationData interface from the API file
 interface VisualizationData {
   html: string;
-  js: string;
+  pdb_data: string;
   title: string;
   timecode_markers: string[];
   total_elements: number;
 }
 
 interface InputPanelProps {
-  onVisualizationUpdate: (script: string) => void;
+  onVisualizationUpdate: (pdbData: string, html?: string, title?: string) => void;
   onLoadingChange: (isLoading: boolean) => void;
   currentPrompt: string;
   onPromptChange: (prompt: string) => void;
-  onPromptSubmit: (prompt: string) => void;
+  onPromptSubmit: (prompt: string, visualization?: VisualizationOutput) => void;
   model: string | null;
   isInteractive: boolean;
   usePubChem?: boolean;
+  currentHtml?: string;
+  currentTitle?: string;
 }
-
-// Scientific prompt example suggestions
-const CHEMISTRY_TOPICS = [
-  // Keep some fundamental structures
-  "Teach me about water molecules and their 3D structure",
-  "Teach me about carbon hybridization and sp3 bonding",
-  "Teach me about benzene's aromatic structure",
-  "Teach me about tetrahedral carbon geometry",
-  "Teach me about cyclohexane chair conformations",
-  
-  // Add new advanced structures
-  "Teach me about diborane's bridging hydrogen bonds",
-  "Teach me about boranes and 3-center 2-electron bonds",
-  "Teach me about ferrocene's sandwich structure",
-  "Teach me about buckminsterfullerene (C60)",
-  "Teach me about cubane's unusual bond angles",
-  "Teach me about bullvalene's fluxional structure",
-  "Teach me about porphyrin rings and their coordination sites",
-  "Teach me about crown ethers' coordination geometry",
-  "Teach me about transition metal complexes with octahedral geometry",
-  "Teach me about metal-carbonyl complexes and back-bonding",
-  "Teach me about phosphazenes and their ring structures",
-  "Teach me about the metal sandwich complexes like bis(cyclopentadienyl) complexes",
-  "Teach me about cryptands and 3D host-guest complexation",
-  "Teach me about norbornane and its bridging structure",
-  "Teach me about carboranes and their polyhedral cage structures",
-"Teach me about the DNA double helix and base-pair stacking",
-"Teach me about metal-metal quadruple bonds in dimolybdenum complexes",
-"Teach me about rotaxanes and their mechanically interlocked architecture",
-"Teach me about dendrimers and their hyperbranched growth patterns",
-"Teach me about polyoxometalates and their metal-oxygen clusters",
-"Teach me about alkali-doped fullerenes and superconductivity",
-"Teach me about catenanes and how their rings interlock",
-"Teach me about helicenes and their helical chirality",
-"Teach me about metallophthalocyanines and their planar macrocycles",
-"Teach me about organosilanes and the silicon hypervalency debate",
-"Teach me about zintl clusters and their electron-rich frameworks",
-"Teach me about cryptophanes and their host-guest chemistry",
-"Teach me about double helical sulfur (S∞ chains) and polysulfur rings",
-"Teach me about the Schrock carbene complexes and metal-ligand multiple bonds",
-"Teach me about hydrogen-bonded molecular knots and trefoil structures",
-"Teach me about peptidic β-sheets and α-helices in proteins",
-"Teach me about bridging metal-carbonyl ligands in cluster compounds",
-"Teach me about diiron nonacarbonyl Fe2(CO)9 and its bridging CO groups",
-"Teach me about the Jahn-Teller distortion in octahedral Cu(II) complexes",
-"Teach me about cuneane and its strained cage system",
-"Teach me about tetraphenylporphyrin and its planar macrocycle",
-"Teach me about the Kekulé structure of benzene",
-"Teach me about the Woodward-Hoffmann rules for conrotatory and disrotatory reactions"
-
-
-];
 
 // Update the JobStatusResponse interface to include legacy fields
 interface ExtendedJobStatusResponse {
@@ -83,8 +35,8 @@ interface ExtendedJobStatusResponse {
   visualization?: VisualizationData;
   error?: string;
   // Legacy fields
-  result?: string;
-  geometry_result?: string;
+  pdb_data?: string;
+  result_html?: string;
 }
 
 export const InputPanel: React.FC<InputPanelProps> = ({
@@ -95,16 +47,52 @@ export const InputPanel: React.FC<InputPanelProps> = ({
   onPromptSubmit,
   model,
   isInteractive,
-  usePubChem
+  usePubChem,
+  currentHtml: initialHtml,
+  currentTitle: initialTitle
 }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [currentScript, setCurrentScript] = useState<string | null>(null);
-  const [currentHtml, setCurrentHtml] = useState<string | null>(null);
-  const [title, setTitle] = useState<string | null>(null);
+  const [currentHtml, setCurrentHtml] = useState<string | null>(initialHtml || null);
+  const [title, setTitle] = useState<string | null>(initialTitle || null);
   const [error, setError] = useState<string | null>(null);
   const [isScientificError, setIsScientificError] = useState(false);
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [jobId, setJobId] = useState<string | null>(null);
+  const [isSuggestHovered, setIsSuggestHovered] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  
+  // Function to properly resize textarea accounting for padding
+  const resizeTextarea = () => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+
+    // Reset height to auto to get the correct scrollHeight
+    textarea.style.height = 'auto';
+    
+    // Get the computed styles
+    const computedStyle = window.getComputedStyle(textarea);
+    const paddingBottom = parseFloat(computedStyle.paddingBottom);
+    
+    // Set the new height including padding
+    const newHeight = Math.max(
+      textarea.scrollHeight, // Content height
+      parseFloat(computedStyle.minHeight) || 0 // Min height if set
+    );
+    
+    textarea.style.height = `${newHeight}px`;
+  };
+
+  // Update textarea size when prompt changes
+  useEffect(() => {
+    resizeTextarea();
+  }, [currentPrompt]);
+
+  // Update HTML and title when they change from props
+  useEffect(() => {
+    if (initialHtml) setCurrentHtml(initialHtml);
+    if (initialTitle) setTitle(initialTitle);
+  }, [initialHtml, initialTitle]);
 
   // Poll for job updates
   const pollForUpdates = async (id: string) => {
@@ -122,22 +110,25 @@ export const InputPanel: React.FC<InputPanelProps> = ({
             
             if (result.visualization) {
               // Handle the structured visualization data
-              // eslint-disable-next-line @typescript-eslint/no-unused-vars
-              const { js, html, title, timecode_markers, total_elements } = result.visualization;
+              const { pdb_data, html, title, timecode_markers, total_elements } = result.visualization;
               console.log('Visualization received:', { title, total_elements });
               
-              // Update the visualization and store both JS and HTML
-              setCurrentScript(js);
+              // Update the visualization and store both PDB data and HTML
+              setCurrentScript(pdb_data);
               setCurrentHtml(html);
-              onVisualizationUpdate(js);
-              onPromptSubmit(currentPrompt);
-            } else {
+              setTitle(title);
+              onVisualizationUpdate(pdb_data, html, title);
+              const visualizationOutput: VisualizationOutput = { pdb_data, html, title, timecode_markers, total_elements };
+              onPromptSubmit(currentPrompt, visualizationOutput);
+            } else if (result.pdb_data) {
               // Fallback for legacy response formats
-              const jsCode = result.result || result.geometry_result || '';
-              setCurrentScript(jsCode);
-              setCurrentHtml(null);
-              onVisualizationUpdate(jsCode);
-              onPromptSubmit(currentPrompt);
+              const pdbData = result.pdb_data;
+              const html = result.result_html || '';
+              setCurrentScript(pdbData);
+              setCurrentHtml(html);
+              onVisualizationUpdate(pdbData, html);
+              const visualizationOutput: VisualizationOutput = { pdb_data: pdbData, html };
+              onPromptSubmit(currentPrompt, visualizationOutput);
             }
             break;
           
@@ -175,6 +166,9 @@ export const InputPanel: React.FC<InputPanelProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (!currentPrompt.trim() || isLoading) return;
+    
     setIsLoading(true);
     onLoadingChange(true);
     setError(null);
@@ -183,58 +177,27 @@ export const InputPanel: React.FC<InputPanelProps> = ({
     console.log('Making request for:', currentPrompt, 'with model:', model, 'interactive mode:', isInteractive, 'PubChem mode:', usePubChem);
 
     try {
-      if (usePubChem) {
-        // Use PubChem mode
         const response = await generateFromPubChem({
           prompt: currentPrompt,
           model: model || undefined,
           preferred_model_category: undefined
         });
         
-        if (response.result) {
-          setCurrentScript(response.result);
-          setTitle(response.title);
-          setCurrentHtml(response.result_html || null);
-          onVisualizationUpdate(response.result);
-          onPromptSubmit(currentPrompt);
+        if (response.pdb_data) {
+          const pdbData = response.pdb_data;
+          const html = response.result_html || '';
+          const title = response.title;
+          
+          setCurrentScript(pdbData);
+          setTitle(title);
+          setCurrentHtml(html);
+          onVisualizationUpdate(pdbData, html, title);
+          onPromptSubmit(currentPrompt, { pdb_data: pdbData, html, title });
           setIsLoading(false);
           onLoadingChange(false);
         } else {
-          throw new Error('No result received from PubChem');
+          throw new Error('No PDB data received from PubChem');
         }
-      } else if (isInteractive) {
-        // Use the job-based API flow with polling for animation
-        const response = await submitPrompt({
-          prompt: currentPrompt,
-          model: model || undefined,
-          preferred_model_category: undefined
-        });
-        
-        if (response.job_id) {
-          setJobId(response.job_id);
-          pollForUpdates(response.job_id);
-        } else {
-          throw new Error('No job ID received');
-        }
-      } else {
-        // Use the legacy direct geometry generation flow
-        const response = await legacySubmitPrompt({
-          prompt: currentPrompt,
-          model: model || undefined,
-          preferred_model_category: undefined
-        });
-        
-        if (response.result) {
-          setCurrentScript(response.result);
-          setCurrentHtml(null);
-          onVisualizationUpdate(response.result);
-          onPromptSubmit(currentPrompt);
-          setIsLoading(false);
-          onLoadingChange(false);
-        } else {
-          throw new Error('No result received');
-        }
-      }
     } catch (err: unknown) {
       setIsLoading(false);
       onLoadingChange(false);
@@ -250,9 +213,10 @@ export const InputPanel: React.FC<InputPanelProps> = ({
   };
 
   const handleDownload = () => {
-    if (!currentScript) return;
+    // If script is not in local state, use the one from props
+    if (!currentScript && !currentHtml) return;
     
-    // Use the backend-generated HTML if available, otherwise fall back to generating our own
+    // Use the backend-generated HTML if available, otherwise fall back to an empty string
     const htmlContent = currentHtml || '';
     
     const blob = new Blob([htmlContent], { type: 'text/html' });
@@ -271,17 +235,29 @@ export const InputPanel: React.FC<InputPanelProps> = ({
     onPromptChange(randomTopic);
     setIsScientificError(false);
     setError(null);
+    
+    // Focus the textarea after suggesting a topic
+    if (textareaRef.current) {
+      textareaRef.current.focus();
+      // Resize will be handled by the useEffect
+    }
+  };
+
+  const toggleRecording = () => {
+    // Simulate toggling voice recording
+    setIsRecording(!isRecording);
+    // In a real implementation, this would integrate with the Web Speech API
+    // or a similar service to handle voice input
   };
     
   return (
-    <div className="flex flex-col gap-6 p-6 bg-gradient-to-b from-gray-800 to-gray-900 rounded-xl shadow-xl border border-gray-700">
-      <div className="flex flex-col gap-2">
-        <h2 className="text-xl font-semibold text-white flex items-center gap-2">
-          <SparklesIcon className="w-6 h-6 text-blue-400" />
+    <div className="flex flex-col gap-4 p-4 sm:p-6 bg-gradient-to-b from-gray-800 to-gray-900 rounded-xl shadow-xl border border-gray-700">
+      <div className="flex flex-col gap-1 mb-1">
+        <h2 className="text-lg font-semibold text-white">
           Molecular Structure Visualization
         </h2>
-        <p className="text-gray-400 text-sm">
-          Enter a prompt about molecular structures and watch as AI generates an interactive 3D visualization.
+        <p className="text-gray-400 text-xs sm:text-sm">
+          Enter a molecular topic or structure to generate an interactive 3D visualization.
         </p>
       </div>
       
@@ -289,8 +265,12 @@ export const InputPanel: React.FC<InputPanelProps> = ({
         <div className="flex flex-col gap-3">
           <div className="relative">
             <textarea
+              ref={textareaRef}
               value={currentPrompt}
-              onChange={(e) => onPromptChange(e.target.value)}
+              onChange={(e) => {
+                onPromptChange(e.target.value);
+                // Resize will be handled by the useEffect
+              }}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault();
@@ -300,96 +280,132 @@ export const InputPanel: React.FC<InputPanelProps> = ({
                 }
               }}
               placeholder="Enter your prompt about molecular structures..."
-              className="w-full h-32 p-4 text-gray-100 bg-gray-800/50 rounded-lg resize-none 
-                         border border-gray-600 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20
+              className="w-full min-h-[7rem] py-4 px-4 pb-20 text-gray-100 bg-gray-700/50 rounded-lg
+                         border border-gray-600 focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30
                          placeholder-gray-500 transition-all duration-200 ease-in-out
-                         hover:border-gray-500"
+                         hover:border-gray-500 overflow-hidden leading-relaxed"
+              style={{ resize: 'none' }}
+              rows={1}
               disabled={isLoading}
               maxLength={500}
               aria-label="Molecular structure prompt input"
             />
-            <div className="absolute bottom-2 right-2 text-xs text-gray-500">
-              {currentPrompt.length} / 500 characters
+            
+            {/* Buttons inside the input field at the bottom*/}
+            <div className="absolute inset-x-0 bottom-0 min-h-[3.5rem] px-3 flex items-center justify-end gap-2">
+              {/* Icon Container with animation */}
+              <div className={`flex items-center gap-2 transition-transform duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)]
+                              ${currentPrompt.trim() ? '-translate-x-10' : ''}`}>
+                {/* Suggest Molecule Button with morphing animation */}
+                <div 
+                  className="relative flex items-center justify-center"
+                  onMouseEnter={() => setIsSuggestHovered(true)}
+                  onMouseLeave={() => setIsSuggestHovered(false)}
+                >
+                  <button
+                    type="button"
+                    onClick={handleSuggestTopic}
+                    className={`transition-all duration-300 ease-in-out flex items-center justify-center
+                              h-8 rounded-md bg-transparent hover:bg-gray-600/40 text-blue-400
+                              focus:outline-none focus:ring-1 focus:ring-blue-500/50
+                              ${isSuggestHovered ? 'px-3' : 'px-1.5'}`}
+                    aria-label="Suggest molecule"
+                    disabled={isLoading}
+                  >
+                    <div className="flex items-center">
+                      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 flex-shrink-0">
+                        <path d="M10 16.584V18.9996C10 20.1042 10.8954 20.9996 12 20.9996C13.1046 20.9996 14 20.1042 14 18.9996L14 16.584M12 3V4M18.3643 5.63574L17.6572 6.34285M5.63574 5.63574L6.34285 6.34285M4 12H3M21 12H20M17 12C17 14.7614 14.7614 17 12 17C9.23858 17 7 14.7614 7 12C7 9.23858 9.23858 7 12 7C14.7614 7 17 9.23858 17 12Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                      <div 
+                        className={`overflow-hidden transition-all duration-300 ease-in-out
+                                  ${isSuggestHovered ? 'w-16 opacity-100 ml-2' : 'w-0 opacity-0 ml-0'}`}
+                      >
+                        <span className="whitespace-nowrap font-medium">Suggest</span>
+                      </div>
+                    </div>
+                  </button>
+                </div>
+                
+                {/* Voice Input Button */}
+                <button
+                  type="button"
+                  onClick={toggleRecording}
+                  className={`h-8 w-8 flex items-center justify-center rounded-md transition-all duration-200
+                              ${isRecording 
+                                ? 'bg-red-500 text-white animate-pulse' 
+                                : 'bg-transparent hover:bg-gray-600/40 text-gray-400'}`}
+                  aria-label={isRecording ? "Stop recording" : "Start voice input"}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
+                    <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path>
+                    <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                    <path d="M12 19v3"></path>
+                    <path d="M8 22h8"></path>
+                  </svg>
+                </button>
+              </div>
+
+              {/* Enter Button - with fade and slide animation */}
+              <div className={`absolute right-3 transition-all duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)]
+                              ${currentPrompt.trim() && !isLoading ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-4 pointer-events-none'}`}>
+                <button
+                  type="submit"
+                  className="h-8 w-8 flex items-center justify-center rounded-md bg-blue-500 hover:bg-blue-400 
+                            text-white transition-all duration-200"
+                  aria-label="Generate visualization"
+                >
+                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M12 20V4M12 4L6 10M12 4L18 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </button>
+              </div>
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={handleSuggestTopic}
-            className="self-start flex items-center gap-2 px-4 py-2 text-sm font-medium
-                     bg-gradient-to-r from-indigo-500/10 to-blue-500/10
-                     hover:from-indigo-500/20 hover:to-blue-500/20
-                     text-blue-400 rounded-lg
-                     transition-all duration-200 ease-in-out
-                     focus:outline-none focus:ring-2 focus:ring-blue-500/50
-                     disabled:opacity-50 disabled:cursor-not-allowed"
-            aria-label="Suggest molecule"
-            disabled={isLoading}
-          >
-            <BeakerIcon className="w-4 h-4" />
-            Suggest Molecule
-          </button>
+          {/* Loading indicator */}
+          {isLoading && (
+            <div className="flex items-center justify-center gap-2 py-2 text-blue-400 text-sm">
+              <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+              </svg>
+              <span>Generating visualization...</span>
+            </div>
+          )}
           
+          {/* Error message */}
           {error && (
             <div className={`transform transition-all duration-200 ease-in-out
                            ${isScientificError ? 'bg-yellow-500/10' : 'bg-red-500/10'} 
-                           rounded-lg p-4`}>
-              <div className={`text-sm ${isScientificError ? 'text-yellow-400' : 'text-red-400'} 
-                             flex items-start gap-3`}>
-                <ExclamationTriangleIcon className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                           rounded-lg p-3`}>
+              <div className={`text-xs sm:text-sm ${isScientificError ? 'text-yellow-400' : 'text-red-400'} 
+                             flex items-start gap-2`}>
+                <ExclamationTriangleIcon className="w-4 h-4 flex-shrink-0 mt-0.5" />
                 <div className="flex-1">
-                  <p>{error}</p>
-
+                  <p className="break-words">{error}</p>
                 </div>
               </div>
             </div>
           )}
         </div>
 
-        <div className="flex justify-between items-center gap-4">
+        {/* Download button - only shows when visualization is available */}
+        {(currentScript || currentHtml) && !isLoading && (
           <button
-            type="submit"
-            disabled={isLoading || !currentPrompt.trim()}
-            className={`flex items-center justify-center gap-2 min-w-[140px] px-6 py-2.5 rounded-lg font-medium
-                       transition-all duration-200 ease-in-out focus:outline-none focus:ring-2
-                       ${isLoading || !currentPrompt.trim()
-              ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
-              : 'bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white shadow-lg shadow-blue-500/20'
-            }`}
-            aria-label={isLoading ? 'Processing visualization' : 'Generate visualization'}
+            type="button"
+            onClick={handleDownload}
+            className="self-end flex items-center justify-center gap-2 px-4 py-2 rounded-lg
+                      bg-gradient-to-r from-green-600 to-green-500 
+                      hover:from-green-500 hover:to-green-400
+                      text-white text-sm font-medium shadow-md shadow-green-500/20
+                      transition-all duration-200 ease-in-out
+                      focus:outline-none focus:ring-2 focus:ring-green-500/50"
+            aria-label="Download visualization"
           >
-            {isLoading ? (
-              <>
-                <svg className="animate-spin h-5 w-5 flex-shrink-0" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                </svg>
-                <span className="flex-shrink-0">Processing...</span>
-              </>
-            ) : (
-              'Generate'
-            )}
+            <ArrowDownTrayIcon className="w-4 h-4" />
+            <span>Download</span>
           </button>
-          
-          {currentScript && (
-            <button
-              type="button"
-              onClick={handleDownload}
-              className="flex items-center justify-center gap-2 min-w-[140px] px-6 py-2.5 rounded-lg font-medium
-                         bg-gradient-to-r from-green-600 to-green-500 
-                         hover:from-green-500 hover:to-green-400
-                         text-white shadow-lg shadow-green-500/20
-                         transition-all duration-200 ease-in-out
-                         focus:outline-none focus:ring-2 focus:ring-green-500/50
-                         disabled:opacity-50 disabled:cursor-not-allowed"
-              aria-label="Download visualization"
-              disabled={isLoading}
-            >
-              <ArrowDownTrayIcon className="w-5 h-5 flex-shrink-0" />
-              <span className="flex-shrink-0">Download</span>
-            </button>
-          )}
-        </div>
+        )}
       </form>
     </div>
   );

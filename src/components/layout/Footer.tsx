@@ -1,11 +1,18 @@
 import React from 'react';
+import { LayoutWrapper } from './LayoutWrapper';
 
-export const Footer = () => {
+interface FooterProps {
+  useConstraints?: boolean;
+}
+
+export const Footer: React.FC<FooterProps> = ({ useConstraints = true }) => {
   return (
     <footer className="bg-gray-900 text-gray-400 py-2 px-4 border-t border-gray-800">
-      <div className="container mx-auto text-center text-xs">
-        <p>© {new Date().getFullYear()} SciVizAI - Scientific Visualization Platform</p>
-      </div>
+      <LayoutWrapper useConstraints={useConstraints}>
+        <div className="container mx-auto text-center text-xs">
+          <p>© {new Date().getFullYear()} Moleculens - Molecule Visualization Platform</p>
+        </div>
+      </LayoutWrapper>
     </footer>
   );
 }; 
