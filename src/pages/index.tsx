@@ -70,11 +70,11 @@ const Home: NextPage = () => {
     const newEntry: HistoryEntry = {
       prompt,
       timestamp: new Date(),
-      visualization: visualization || (currentPdbData && {
+      visualization: visualization || (currentPdbData && currentHtml ? {
         pdb_data: currentPdbData,
-        html: currentHtml || '',
+        html: currentHtml,
         title: currentTitle
-      }),
+      } : undefined),
       title: visualization?.title || currentTitle
     };
     
@@ -86,7 +86,7 @@ const Home: NextPage = () => {
     if (entry.visualization) {
       setCurrentPdbData(entry.visualization.pdb_data);
       setCurrentHtml(entry.visualization.html);
-      setCurrentTitle(entry.visualization.title);
+      setCurrentTitle(entry.visualization.title || 'Propane (C3H8)'); // Default title if none provided
     }
   };
 
