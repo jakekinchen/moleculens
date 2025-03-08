@@ -21,13 +21,12 @@ const CHEMISTRY_TOPICS = [
     "Teach me about cryptands and 3D host-guest complexation",
     "Teach me about norbornane and its bridging structure",
     "Teach me about carboranes and their polyhedral cage structures",
-    "Teach me about the DNA double helix and base-pair stacking",
     "Teach me about metal-metal quadruple bonds in dimolybdenum complexes",
     "Teach me about rotaxanes and their mechanically interlocked architecture",
-    "Teach me about dendrimers and their hyperbranched growth patterns",
+    "Teach me about PAMAM dendrimers and their hyperbranched growth patterns",
     "Teach me about polyoxometalates and their metal-oxygen clusters",
     "Teach me about alkali-doped fullerenes and superconductivity",
-    "Teach me about catenanes and how their rings interlock",
+    
     "Teach me about helicenes and their helical chirality",
     "Teach me about metallophthalocyanines and their planar macrocycles",
     "Teach me about organosilanes and the silicon hypervalency debate",
@@ -48,7 +47,8 @@ const CHEMISTRY_TOPICS_THAT_RETURN_NOTHING = [
     "Teach me about double helical sulfur (S∞ chains) and polysulfur rings",
     "Teach me about the Schrock carbene complexes and metal-ligand multiple bonds",
     "Teach me about hydrogen-bonded molecular knots and trefoil structures",
-    "Teach me about buckminsterfullerene (C60)"
+    "Teach me about buckminsterfullerene (C60)",
+    "Teach me about catenanes and how their rings interlock",
 ];
 
 export default CHEMISTRY_TOPICS;
