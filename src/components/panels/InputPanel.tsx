@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { submitPrompt, pollJobStatus, legacySubmitPrompt, generateFromPubChem } from '@/services/api';
+import { pollJobStatus, generateFromPubChem } from '@/services/api';
 import { ArrowDownTrayIcon, ExclamationTriangleIcon, BeakerIcon, MicrophoneIcon } from '@heroicons/react/24/outline';
 import { VisualizationOutput } from '@/types';
 import CHEMISTRY_TOPICS from './chemistry_topics';

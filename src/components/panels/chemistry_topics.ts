@@ -41,6 +41,7 @@ const CHEMISTRY_TOPICS = [
     "Teach me about circulene and its unique ring structure",
 ];
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const CHEMISTRY_TOPICS_THAT_RETURN_NOTHING = [
   "Teach me about diiron nonacarbonyl Fe2(CO)9 and its bridging CO groups",
     "Teach me about cryptophanes and their host-guest chemistry",

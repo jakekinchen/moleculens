@@ -30,8 +30,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   setModel,
   isInteractive,
   setIsInteractive,
-  _usePubChem: usePubChem,
-  _setUsePubChem: setUsePubChem,
+  _usePubChem,
+  _setUsePubChem,
 }) => {
   const [modelOptions, setModelOptions] = useState<ModelOption[]>([]);
   const [isLoading, setIsLoading] = useState(true);

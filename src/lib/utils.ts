@@ -1,5 +1,6 @@
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { HistoryEntry, VisualizationOutput } from "@/types"
 
 export function cn(...inputs: ClassValue[]) {

@@ -4,6 +4,8 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 import { PDBLoader } from 'three/examples/jsm/loaders/PDBLoader';
 import { CSS2DRenderer, CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer';
 import { LoadingFacts } from './LoadingFacts';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { BeakerIcon } from '@heroicons/react/24/outline';
 
 interface MoleculeViewerProps {
   isLoading?: boolean;
@@ -18,6 +20,14 @@ export default function MoleculeViewer({ isLoading = false, pdbData, title }: Mo
   const [isFullscreen, setIsFullscreen] = useState(false);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const labelRendererRef = useRef<CSS2DRenderer | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [jobId, setJobId] = useState<string | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [isRecording, setIsRecording] = useState(false);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [audioAnalyser, setAudioAnalyser] = useState<AnalyserNode | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const paddingBottom = isFullscreen ? '0px' : '56.25%';
 
   useEffect(() => {
     if (isLoading) return; // Don't initialize Three.js when loading
