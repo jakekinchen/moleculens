@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { pollJobStatus, generateFromPubChem } from '@/services/api';
-import { ArrowDownTrayIcon, ExclamationTriangleIcon, BeakerIcon, MicrophoneIcon } from '@heroicons/react/24/outline';
+import { ArrowDownTrayIcon, ExclamationTriangleIcon, MicrophoneIcon } from '@heroicons/react/24/outline';
 import { VisualizationOutput } from '@/types';
 import CHEMISTRY_TOPICS from './chemistry_topics';
 
@@ -100,7 +100,6 @@ export const InputPanel: React.FC<InputPanelProps> = ({
     
     // Get the computed styles
     const computedStyle = window.getComputedStyle(textarea);
-    const paddingBottom = parseFloat(computedStyle.paddingBottom);
     
     // Set the new height including padding
     const newHeight = Math.max(
@@ -600,7 +599,7 @@ export const InputPanel: React.FC<InputPanelProps> = ({
       onLoadingChange(false);
       setError('Failed to check processing status');
     }
-  };
+  }; // eslint-disable-next-line @typescript-eslint/no-unused-vars
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

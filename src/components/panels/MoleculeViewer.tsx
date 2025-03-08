@@ -4,8 +4,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 import { PDBLoader } from 'three/examples/jsm/loaders/PDBLoader';
 import { CSS2DRenderer, CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer';
 import { LoadingFacts } from './LoadingFacts';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { BeakerIcon } from '@heroicons/react/24/outline';
+
 
 interface MoleculeViewerProps {
   isLoading?: boolean;
@@ -20,14 +19,12 @@ export default function MoleculeViewer({ isLoading = false, pdbData, title }: Mo
   const [isFullscreen, setIsFullscreen] = useState(false);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const labelRendererRef = useRef<CSS2DRenderer | null>(null);
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [jobId, setJobId] = useState<string | null>(null);
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [isRecording, setIsRecording] = useState(false);
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [audioAnalyser, setAudioAnalyser] = useState<AnalyserNode | null>(null);
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const paddingBottom = isFullscreen ? '0px' : '56.25%';
+  
+  const [jobId, setJobId] = useState<string | null>(null); // eslint-disable-line @typescript-eslint/no-unused-vars
+  const [isRecording, setIsRecording] = useState(false); // eslint-disable-line @typescript-eslint/no-unused-vars
+  const [audioAnalyser, setAudioAnalyser] = useState<AnalyserNode | null>(null); // eslint-disable-line @typescript-eslint/no-unused-vars
+  const paddingBottom = isFullscreen ? '0px' : '56.25%'; // eslint-disable-line @typescript-eslint/no-unused-vars
+
 
   useEffect(() => {
     if (isLoading) return; // Don't initialize Three.js when loading
@@ -130,7 +127,7 @@ export default function MoleculeViewer({ isLoading = false, pdbData, title }: Mo
       controls.dampingFactor = 0.05;
 
       // Setup resize observer
-      resizeObserver = new ResizeObserver((entries) => {
+      resizeObserver = new ResizeObserver((entries) => { // eslint-disable-line @typescript-eslint/no-unused-vars
         // Use RAF to avoid multiple resize calls
         requestAnimationFrame(() => {
           onResize();
@@ -143,6 +140,10 @@ export default function MoleculeViewer({ isLoading = false, pdbData, title }: Mo
 
       // Load molecule (Propane)
       loadMolecule();
+      
+      // Store references for cleanup
+      rendererRef.current = renderer;
+      labelRendererRef.current = labelRenderer;
     };
 
     // PDB loader
@@ -151,7 +152,7 @@ export default function MoleculeViewer({ isLoading = false, pdbData, title }: Mo
       const pdbUrl = URL.createObjectURL(pdbBlob);
 
       const loader = new PDBLoader();
-      loader.load(pdbUrl, (pdb: any) => {
+      loader.load(pdbUrl, (pdb: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
         const { geometryAtoms, geometryBonds, json } = pdb;
         const boxGeometry = new THREE.BoxGeometry(1, 1, 1);
         const sphereGeometry = new THREE.IcosahedronGeometry(1, 3);
@@ -299,10 +300,6 @@ export default function MoleculeViewer({ isLoading = false, pdbData, title }: Mo
     init();
     animate();
 
-    // Store references for cleanup
-    rendererRef.current = renderer; // eslint-disable-line @typescript-eslint/no-unused-vars
-    labelRendererRef.current = labelRenderer;
-    
     // Listen for requests to get the fitCameraToMolecule function
     const handleRequestFitCameraFunction = (event: Event) => {
       const customEvent = event as CustomEvent;
@@ -320,12 +317,18 @@ export default function MoleculeViewer({ isLoading = false, pdbData, title }: Mo
         resizeObserver.disconnect();
       }
 
+      // Store ref values at the start of cleanup
+      const currentContainerRef = containerRef.current;
+      const currentRendererRef = rendererRef.current;
+      const currentLabelContainerRef = labelContainerRef.current;
+      const currentLabelRendererRef = labelRendererRef.current;
+
       // Safely remove renderer elements
-      if (rendererRef.current?.domElement && containerRef.current?.contains(rendererRef.current.domElement)) {
-        containerRef.current.removeChild(rendererRef.current.domElement);
+      if (currentRendererRef?.domElement && currentContainerRef?.contains(currentRendererRef.domElement)) {
+        currentContainerRef.removeChild(currentRendererRef.domElement);
       }
-      if (labelRendererRef.current?.domElement && labelContainerRef.current?.contains(labelRendererRef.current.domElement)) {
-        labelContainerRef.current.removeChild(labelRendererRef.current.domElement);
+      if (currentLabelRendererRef?.domElement && currentLabelContainerRef?.contains(currentLabelRendererRef.domElement)) {
+        currentLabelContainerRef.removeChild(currentLabelRendererRef.domElement);
       }
 
       if (renderer) {
@@ -344,7 +347,7 @@ export default function MoleculeViewer({ isLoading = false, pdbData, title }: Mo
       // Clear refs
       rendererRef.current = null;
       labelRendererRef.current = null;
-    };
+    }; // eslint-disable-line react-hooks/exhaustive-deps
   }, [isLoading, pdbData]); // Add pdbData to dependencies
 
   const toggleFullscreen = async () => {
@@ -363,70 +366,21 @@ export default function MoleculeViewer({ isLoading = false, pdbData, title }: Mo
     }
   };
   
-  // Function to trigger fitCameraToMolecule from outside the useEffect
-  const handleFitCamera = () => {
-    // We need to access the Three.js objects inside the useEffect closure
-    // So we'll dispatch a custom event that the useEffect can listen for
-    const event = new CustomEvent('fit-camera-to-molecule');
-    window.dispatchEvent(event);
-  };
 
   useEffect(() => {
     const handleFullscreenChange = () => {
       setIsFullscreen(!!document.fullscreenElement);
     };
     
-    // Add event listener for the custom fit camera event
-    const handleFitCameraEvent = () => {
-      // This will be handled inside the main useEffect
-      // We're just using this event to bridge between the component and the Three.js setup
-    };
+
 
     document.addEventListener('fullscreenchange', handleFullscreenChange);
-    window.addEventListener('fit-camera-to-molecule', handleFitCameraEvent);
     
     return () => {
       document.removeEventListener('fullscreenchange', handleFullscreenChange);
-      window.removeEventListener('fit-camera-to-molecule', handleFitCameraEvent);
     };
   }, []);
-  
-  // Add a second useEffect to handle the fit camera event
-  useEffect(() => {
-    if (isLoading) return;
-    
-    // Create a reference to store the fitCameraToMolecule function
-    let fitCameraFunction: (() => void) | null = null;
-    
-    // Setup the event listener for the fit camera event
-    const handleFitCameraEvent = () => {
-      // Call the stored function if it exists
-      if (fitCameraFunction) {
-        fitCameraFunction();
-      }
-    };
-    
-    // Store the function reference when the main Three.js setup is done
-    const storeFitCameraFunction = (fn: () => void) => {
-      fitCameraFunction = fn;
-    };
-    
-    // Create a custom event to get the function from the main useEffect
-    const requestFunctionEvent = new CustomEvent('request-fit-camera-function', {
-      detail: { callback: storeFitCameraFunction }
-    });
-    
-    // Listen for the fit camera event
-    window.addEventListener('fit-camera-to-molecule', handleFitCameraEvent);
-    
-    // Request the function from the main useEffect
-    window.dispatchEvent(requestFunctionEvent);
-    
-    return () => {
-      window.removeEventListener('fit-camera-to-molecule', handleFitCameraEvent);
-      fitCameraFunction = null;
-    };
-  }, [isLoading]);
+
 
   // The outer wrapper helps position the label absolutely
   return (

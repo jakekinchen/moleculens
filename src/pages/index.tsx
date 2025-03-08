@@ -3,7 +3,6 @@ import React, { useState, useEffect } from 'react';
 import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
 import { LayoutWrapper } from '@/components/layout/LayoutWrapper';
-import { VisualizationPanel } from '@/components/panels/VisualizationPanel';
 import MoleculeViewer from '@/components/panels/MoleculeViewer';
 import { InputPanel } from '@/components/panels/InputPanel';
 import { TimeMachinePanel } from '@/components/panels/TimeMachinePanel';
@@ -29,7 +28,6 @@ CONECT    3    9   10   11
 END`;
 
 const Home: NextPage = () => {
-  const [currentScript, setCurrentScript] = useState<string>();
   const [currentHtml, setCurrentHtml] = useState<string>();
   const [isLoading, setIsLoading] = useState(false);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
@@ -39,7 +37,7 @@ const Home: NextPage = () => {
   const [isInteractive, setIsInteractive] = useState(false);
   const [currentTitle, setCurrentTitle] = useState<string>('Propane (C3H8)');
   const [currentPdbData, setCurrentPdbData] = useState<string>(DEFAULT_PDB_DATA);
-  const [useLayoutConstraints, setUseLayoutConstraints] = useState(true);
+  const [useLayoutConstraints, setUseLayoutConstraints] = useState(true); // eslint-disable-line @typescript-eslint/no-unused-vars
   const usePubChem = true;
 
   // Load history from session storage on mount
@@ -281,7 +279,7 @@ const styles = `
 const HomeWithStyles: NextPage = () => {
   return (
     <>
-      <style jsx global>{styles}</style>
+      <style >{styles}</style>
       <Home />
     </>
   );
