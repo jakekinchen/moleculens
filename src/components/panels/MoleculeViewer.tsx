@@ -1,7 +1,10 @@
 import React, { useRef, useEffect, useState } from 'react';
 import * as THREE from 'three';
+// @ts-ignore
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
+// @ts-ignore
 import { PDBLoader } from 'three/examples/jsm/loaders/PDBLoader';
+// @ts-ignore
 import { CSS2DRenderer, CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer';
 import { LoadingFacts } from './LoadingFacts';
 
