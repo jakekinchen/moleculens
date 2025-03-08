@@ -50,7 +50,7 @@ interface ComplexPromptResponse {
 // API base URL configuration
 const isDevelopment = process.env.NODE_ENV !== 'production';
 const useLocalServer = isDevelopment; // Use localhost in development mode
-const API_BASE_URL = useLocalServer ? 'http://localhost:8000' : '/api';
+const API_BASE_URL = useLocalServer ? 'http://localhost:8000' : 'https://meshmo.com';
 
 // Determine if we should include credentials based on the server we're using
 const includeCredentials = useLocalServer;
