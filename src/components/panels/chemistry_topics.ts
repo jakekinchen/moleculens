@@ -22,18 +22,18 @@ const CHEMISTRY_TOPICS = [
     "Teach me about norbornane and its bridging structure",
     "Teach me about carboranes and their polyhedral cage structures",
     "Teach me about metal-metal quadruple bonds in dimolybdenum complexes",
-    "Teach me about rotaxanes and their mechanically interlocked architecture",
+
     "Teach me about PAMAM dendrimers and their hyperbranched growth patterns",
     "Teach me about polyoxometalates and their metal-oxygen clusters",
-    "Teach me about alkali-doped fullerenes and superconductivity",
+
     
     "Teach me about helicenes and their helical chirality",
     "Teach me about metallophthalocyanines and their planar macrocycles",
     "Teach me about organosilanes and the silicon hypervalency debate",
-    "Teach me about zintl clusters and their electron-rich frameworks",
+
     "Teach me about peptidic β-sheets and α-helices in proteins",
     "Teach me about bridging metal-carbonyl ligands in cluster compounds",
-    "Teach me about the Jahn-Teller distortion in octahedral Cu(II) complexes",
+
     "Teach me about cuneane and its strained cage system",
     "Teach me about tetraphenylporphyrin and its planar macrocycle",
     "Teach me about the Kekulé structure of benzene",
@@ -50,6 +50,10 @@ const CHEMISTRY_TOPICS_THAT_RETURN_NOTHING = [
     "Teach me about hydrogen-bonded molecular knots and trefoil structures",
     "Teach me about buckminsterfullerene (C60)",
     "Teach me about catenanes and how their rings interlock",
+    "Teach me about zintl clusters and their electron-rich frameworks",
+    "Teach me about rotaxanes and their mechanically interlocked architecture",
+    "Teach me about alkali-doped fullerenes and superconductivity",
+    "Teach me about the Jahn-Teller distortion in octahedral Cu(II) complexes",
 ];
 
 export default CHEMISTRY_TOPICS;
