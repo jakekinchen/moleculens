@@ -20,8 +20,10 @@ export default function MoleculeViewer({ isLoading = false, pdbData, title }: Mo
   const labelContainerRef = useRef<HTMLDivElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const labelRendererRef = useRef<CSS2DRenderer | null>(null);
+  const rotationRef = useRef<number>(0);
   
   const [jobId, setJobId] = useState<string | null>(null); // eslint-disable-line @typescript-eslint/no-unused-vars
   const [isRecording, setIsRecording] = useState(false); // eslint-disable-line @typescript-eslint/no-unused-vars
@@ -294,7 +296,19 @@ export default function MoleculeViewer({ isLoading = false, pdbData, title }: Mo
     // Animation loop
     const animate = () => {
       animationId = requestAnimationFrame(animate);
-      if (root) root.rotation.y += rotationSpeed;
+      
+      if (root) {
+        if (!isPaused) {
+          // Only update rotation when not paused
+          rotationRef.current = (rotationRef.current + rotationSpeed) % (2 * Math.PI);
+          root.rotation.y = rotationRef.current;
+        } else {
+          // When paused, maintain the current rotation
+          root.rotation.y = rotationRef.current;
+        }
+      }
+      
+      // Always update controls and render the scene
       controls.update();
       renderer.render(scene, camera);
       labelRenderer.render(scene, camera);
@@ -351,7 +365,7 @@ export default function MoleculeViewer({ isLoading = false, pdbData, title }: Mo
       rendererRef.current = null;
       labelRendererRef.current = null;
     }; // eslint-disable-line react-hooks/exhaustive-deps
-  }, [isLoading, pdbData]); // Add pdbData to dependencies
+  }, [isLoading, pdbData, isPaused]); // Add isPaused to dependencies
 
   const toggleFullscreen = async () => {
     if (!wrapperRef.current) return;
@@ -369,6 +383,9 @@ export default function MoleculeViewer({ isLoading = false, pdbData, title }: Mo
     }
   };
   
+  const togglePause = () => {
+    setIsPaused(!isPaused);
+  };
 
   useEffect(() => {
     const handleFullscreenChange = () => {
@@ -415,6 +432,23 @@ export default function MoleculeViewer({ isLoading = false, pdbData, title }: Mo
           </div>
           {/* Control buttons */}
           <div className="absolute top-4 right-4 z-20 flex space-x-2">
+            {/* Pause/Play button */}
+            <button
+              onClick={togglePause}
+              className="p-2 rounded-lg text-white hover:text-gray-300
+                        transition-colors duration-200"
+              title={isPaused ? "Play Animation" : "Pause Animation"}
+            >
+              {isPaused ? (
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
+                </svg>
+              ) : (
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 8a1 1 0 012 0v4a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                </svg>
+              )}
+            </button>
             {/* Fullscreen button */}
             <button
               onClick={toggleFullscreen}
@@ -424,7 +458,7 @@ export default function MoleculeViewer({ isLoading = false, pdbData, title }: Mo
             >
               {isFullscreen ? (
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M5 9V7a2 2 0 012-2h2V3H7a4 4 0 00-4 4v2h2zm10 0V7a2 2 0 00-2-2h-2V3h2a4 4 0 014 4v2h-2zm-10 2H3v2a4 4 0 004 4h2v-2H7a2 2 0 01-2-2v-2zm10 0h2v2a4 4 0 01-4 4h-2v-2h2a2 2 0 002-2v-2z" clipRule="evenodd" />
+                  <path fillRule="evenodd" d="M5 9V7a2 2 0 012-2h2V3H7a4 4 0 00-4 4v2h2zm10 0V7a2 2 0 00-2-2h-2V3h2a4 4 0 014 4v2h-2zm-10 2H3v2a4 4 0 004 4h2v-2H7a2 2 0 01-2-2v-2zm10 0h2v2a4 4 0 01-4 4h-2v-2z" clipRule="evenodd" />
                 </svg>
               ) : (
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
