@@ -9,7 +9,7 @@ import { CSS2DRenderer, CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRe
 import { LoadingFacts } from './LoadingFacts';
 
 // Constants for animation
-const ROTATION_SPEED = 0.5; // Rotations per second
+const ROTATION_SPEED = 0.1; // Rotations per second
 const ROTATION_SMOOTHING = 0.1; // Lower = smoother transitions
 const PAUSE_SMOOTHING = 0.15; // Smoothing factor for pause/play transitions
 
@@ -313,20 +313,11 @@ export default function MoleculeViewer({ isLoading = false, pdbData, title }: Mo
         targetRotationSpeedRef.current = isPaused ? 0 : ROTATION_SPEED;
         currentRotationSpeedRef.current += (targetRotationSpeedRef.current - currentRotationSpeedRef.current) * PAUSE_SMOOTHING;
         
-        // Apply smoothed rotation
+        // Advance rotationRef by smoothed speed, then directly assign
         rotationRef.current = (rotationRef.current + currentRotationSpeedRef.current * delta) % (2 * Math.PI);
         
-        // Smooth interpolation for the actual rotation
-        const currentRotation = root.rotation.y;
-        const targetRotation = rotationRef.current;
-        
-        // Calculate the shortest path to the target rotation
-        let rotationDiff = targetRotation - currentRotation;
-        if (rotationDiff > Math.PI) rotationDiff -= 2 * Math.PI;
-        if (rotationDiff < -Math.PI) rotationDiff += 2 * Math.PI;
-        
-        // Apply smoothed rotation
-        root.rotation.y += rotationDiff * ROTATION_SMOOTHING;
+        // Directly set the root rotation to rotationRef
+        root.rotation.y = rotationRef.current;
       }
       
       // Always update controls and render the scene
