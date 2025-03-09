@@ -80,6 +80,81 @@ export const pollJobStatus = async (jobId: string): Promise<JobStatusResponse> =
 
 
 /**
+ * Fetch only the PDB and minimal data for a given molecule query (Step A).
+ * Calls /fetch-molecule-data/ on the backend.
+ *
+ * @param query The molecule name or query
+ * @returns An object containing { pdb_data, name, cid, formula, sdf, etc. }
+ */
+export const fetchMoleculeData = async (query: string): Promise<{
+  pdb_data: string;
+  name: string;
+  cid: number;
+  formula: string;
+  sdf: string;
+}> => {
+  const endpoint = `${API_BASE_URL}/prompt/fetch-molecule-data/`;
+  try {
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      credentials: includeCredentials ? 'include' : 'same-origin',
+      body: JSON.stringify({ query })
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch molecule data: ${response.status} ${response.statusText}`);
+    }
+    const result = await response.json();
+    
+    // If there's an error message, throw
+    if (result.detail) {
+      throw new Error(result.detail);
+    }
+    
+    return result;
+  } catch (error: any) {
+    console.error('Error fetching molecule data:', error);
+    throw error;
+  }
+};
+
+/**
+ * Generate the HTML from previously fetched molecule data (Step B).
+ * Calls /generate-molecule-html/ on the backend.
+ *
+ * @param moleculeData The object with { pdb_data, name, cid, sdf, formula, etc. }
+ * @returns { html: string }
+ */
+export const generateMoleculeHTML = async (moleculeData: Record<string, any>): Promise<{ html: string }> => {
+  const endpoint = `${API_BASE_URL}/prompt/generate-molecule-html/`;
+  try {
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      credentials: includeCredentials ? 'include' : 'same-origin',
+      body: JSON.stringify({ molecule_data: moleculeData })
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to generate HTML: ${response.status} ${response.statusText}`);
+    }
+    const result = await response.json();
+    if (!result.html) {
+      throw new Error('No HTML returned from backend');
+    }
+    return result;
+  } catch (error: any) {
+    console.error('Error generating HTML:', error);
+    throw error;
+  }
+};
+
+/**
  * Request structure for /prompt/generate-from-pubchem/:
  * {
  *   prompt: string;           // The molecule query/name to search for

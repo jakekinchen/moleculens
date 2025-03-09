@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { pollJobStatus, generateFromPubChem } from '@/services/api';
+import { pollJobStatus, fetchMoleculeData, generateMoleculeHTML } from '@/services/api';
 import { ArrowDownTrayIcon, ExclamationTriangleIcon, MicrophoneIcon } from '@heroicons/react/24/outline';
 import { VisualizationOutput } from '@/types';
 import CHEMISTRY_TOPICS from './chemistry_topics';
@@ -614,27 +614,25 @@ export const InputPanel: React.FC<InputPanelProps> = ({
     console.log('Making request for:', currentPrompt, 'with model:', model, 'interactive mode:', isInteractive, 'PubChem mode:', usePubChem);
 
     try {
-        const response = await generateFromPubChem({
-          prompt: currentPrompt,
-          model: model || undefined,
-          preferred_model_category: undefined
-        });
-        
-        if (response.pdb_data) {
-          const pdbData = response.pdb_data;
-          const html = response.result_html || '';
-          const title = response.title;
-          
-          setCurrentScript(pdbData);
-          setTitle(title);
-          setCurrentHtml(html);
-          onVisualizationUpdate(pdbData, html, title);
-          onPromptSubmit(currentPrompt, { pdb_data: pdbData, html, title });
-          setIsLoading(false);
-          onLoadingChange(false);
-        } else {
-          throw new Error('No PDB data received from PubChem');
-        }
+      // Step A: Fetch molecule data only
+      const moleculeData = await fetchMoleculeData(currentPrompt);
+      const pdbData = moleculeData.pdb_data;
+      const name = moleculeData.name;
+
+      if (!pdbData) {
+        throw new Error('No PDB data returned from fetchMoleculeData');
+      }
+
+      setCurrentScript(pdbData);
+      setTitle(name);
+      setCurrentHtml(null); // No HTML generated yet
+
+      // Pass partial data upward if needed
+      onVisualizationUpdate(pdbData, undefined, name);
+      onPromptSubmit(currentPrompt, { pdb_data: pdbData, html: '', title: name });
+
+      setIsLoading(false);
+      onLoadingChange(false);
     } catch (err: unknown) {
       setIsLoading(false);
       onLoadingChange(false);
@@ -737,7 +735,7 @@ export const InputPanel: React.FC<InputPanelProps> = ({
               {/* Container for all interactive elements with proper positioning */}
               <div className="relative flex items-center gap-2 min-h-[3.5rem] w-full">
                 
-                {/* Audio recording visualization - squircle with waveform - positioned properly */}
+                {/* Audio recording visualization */}
                 {audioState.isRecording && (
                   <div className="absolute right-0 flex items-center h-8 
                                bg-blue-500/20 border border-blue-500/30 rounded-full px-6 audio-recording
@@ -785,19 +783,11 @@ export const InputPanel: React.FC<InputPanelProps> = ({
                           console.log('Checkmark button clicked');
                           if (mediaRecorderRef.current && audioState.isRecording) {
                             console.log('Stopping recording and flagging for transcription');
-                            
-                            // Set the pending transcription flag
-                            setAudioState(prev => {
-                              console.log('Setting pending transcription flag');
-                              return { 
-                                ...prev, 
-                                pendingTranscription: true 
-                              };
-                            });
-                            
-                            // Stop the recording after state is updated
+                            setAudioState(prev => ({
+                              ...prev,
+                              pendingTranscription: true
+                            }));
                             setTimeout(() => {
-                              console.log('Stopping recording after state update');
                               mediaRecorderRef.current?.stop();
                             }, 0);
                           }
@@ -936,22 +926,74 @@ export const InputPanel: React.FC<InputPanelProps> = ({
         </div>
 
         {/* Download button - only shows when visualization is available */}
-        {(currentScript || currentHtml) && !isLoading && (
-          <button
-            type="button"
-            onClick={handleDownload}
-            className="self-end flex items-center justify-center gap-2 px-4 py-2 rounded-lg
-                      bg-gradient-to-r from-green-600 to-green-500 
-                      hover:from-green-500 hover:to-green-400
-                      text-white text-sm font-medium shadow-md shadow-green-500/20
-                      transition-all duration-200 ease-in-out
-                      focus:outline-none focus:ring-2 focus:ring-green-500/50"
-            aria-label="Download visualization"
-          >
-            <ArrowDownTrayIcon className="w-4 h-4" />
-            <span>Download</span>
-          </button>
-        )}
+        {(currentScript || currentHtml) && !isLoading && (() => {
+          const isMobile = typeof navigator !== 'undefined'
+            && /android|iphone|ipad|mobile/i.test(navigator.userAgent.toLowerCase());
+
+          if (isMobile) return null;
+
+          if (currentScript && !currentHtml) {
+            return (
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    if (!currentScript || !title) {
+                      throw new Error('No molecule data to generate HTML');
+                    }
+                    setIsLoading(true);
+                    onLoadingChange(true);
+
+                    const moleculeData = {
+                      pdb_data: currentScript,
+                      name: title
+                    };
+                    const resp = await generateMoleculeHTML(moleculeData);
+                    const html = resp.html;
+
+                    setCurrentHtml(html);
+                    onVisualizationUpdate(currentScript, html, title);
+                    setIsLoading(false);
+                    onLoadingChange(false);
+                  } catch (err: any) {
+                    setIsLoading(false);
+                    onLoadingChange(false);
+                    setError(err.message || 'Failed to generate presentation');
+                  }
+                }}
+                className="self-end flex items-center justify-center gap-2 px-4 py-2 rounded-lg
+                           bg-gradient-to-r from-blue-600 to-blue-500
+                           hover:from-blue-500 hover:to-blue-400
+                           text-white text-sm font-medium shadow-md shadow-blue-500/20
+                           transition-all duration-200 ease-in-out
+                           focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+              >
+                Generate Presentation
+              </button>
+            );
+          }
+
+          if (currentHtml) {
+            return (
+              <button
+                type="button"
+                onClick={handleDownload}
+                className="self-end flex items-center justify-center gap-2 px-4 py-2 rounded-lg
+                           bg-gradient-to-r from-green-600 to-green-500
+                           hover:from-green-500 hover:to-green-400
+                           text-white text-sm font-medium shadow-md shadow-green-500/20
+                           transition-all duration-200 ease-in-out
+                           focus:outline-none focus:ring-2 focus:ring-green-500/50"
+                aria-label="Download visualization"
+              >
+                <ArrowDownTrayIcon className="w-4 h-4" />
+                <span>Download</span>
+              </button>
+            );
+          }
+
+          return null;
+        })()}
 
         {/* Processing indicator */}
         {audioState.isProcessing && (
