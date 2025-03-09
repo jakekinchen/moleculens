@@ -8,6 +8,10 @@ import { PDBLoader } from 'three/examples/jsm/loaders/PDBLoader';
 import { CSS2DRenderer, CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer';
 import { LoadingFacts } from './LoadingFacts';
 
+// Constants for animation
+const ROTATION_SPEED = 0.5; // Rotations per second
+const ROTATION_SMOOTHING = 0.1; // Lower = smoother transitions
+const PAUSE_SMOOTHING = 0.15; // Smoothing factor for pause/play transitions
 
 interface MoleculeViewerProps {
   isLoading?: boolean;
@@ -24,6 +28,9 @@ export default function MoleculeViewer({ isLoading = false, pdbData, title }: Mo
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const labelRendererRef = useRef<CSS2DRenderer | null>(null);
   const rotationRef = useRef<number>(0);
+  const clockRef = useRef<THREE.Clock | null>(null);
+  const targetRotationSpeedRef = useRef<number>(0);
+  const currentRotationSpeedRef = useRef<number>(0);
   
   const [jobId, setJobId] = useState<string | null>(null); // eslint-disable-line @typescript-eslint/no-unused-vars
   const [isRecording, setIsRecording] = useState(false); // eslint-disable-line @typescript-eslint/no-unused-vars
@@ -45,7 +52,6 @@ export default function MoleculeViewer({ isLoading = false, pdbData, title }: Mo
     let resizeObserver: ResizeObserver;
 
     const config = { enableAnnotations: true };
-    const rotationSpeed = 0.0025;
 
     // Handle resize
     const onResize = () => {
@@ -75,6 +81,9 @@ export default function MoleculeViewer({ isLoading = false, pdbData, title }: Mo
     // Initialization
     const init = () => {
       if (!containerRef.current || !labelContainerRef.current || !wrapperRef.current) return;
+
+      // Initialize clock
+      clockRef.current = new THREE.Clock();
 
       // Scene
       scene = new THREE.Scene();
@@ -297,15 +306,27 @@ export default function MoleculeViewer({ isLoading = false, pdbData, title }: Mo
     const animate = () => {
       animationId = requestAnimationFrame(animate);
       
-      if (root) {
-        if (!isPaused) {
-          // Only update rotation when not paused
-          rotationRef.current = (rotationRef.current + rotationSpeed) % (2 * Math.PI);
-          root.rotation.y = rotationRef.current;
-        } else {
-          // When paused, maintain the current rotation
-          root.rotation.y = rotationRef.current;
-        }
+      if (root && clockRef.current) {
+        const delta = clockRef.current.getDelta();
+        
+        // Update rotation speed with smooth interpolation
+        targetRotationSpeedRef.current = isPaused ? 0 : ROTATION_SPEED;
+        currentRotationSpeedRef.current += (targetRotationSpeedRef.current - currentRotationSpeedRef.current) * PAUSE_SMOOTHING;
+        
+        // Apply smoothed rotation
+        rotationRef.current = (rotationRef.current + currentRotationSpeedRef.current * delta) % (2 * Math.PI);
+        
+        // Smooth interpolation for the actual rotation
+        const currentRotation = root.rotation.y;
+        const targetRotation = rotationRef.current;
+        
+        // Calculate the shortest path to the target rotation
+        let rotationDiff = targetRotation - currentRotation;
+        if (rotationDiff > Math.PI) rotationDiff -= 2 * Math.PI;
+        if (rotationDiff < -Math.PI) rotationDiff += 2 * Math.PI;
+        
+        // Apply smoothed rotation
+        root.rotation.y += rotationDiff * ROTATION_SMOOTHING;
       }
       
       // Always update controls and render the scene
