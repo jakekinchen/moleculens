@@ -1,5 +1,5 @@
 /* eslint-disable */
-import { ModelInfo } from '../types';
+import { ModelInfo, DiagramPromptRequest, DiagramResponse } from '../types';
 
 interface PromptRequest {
   prompt: string;
@@ -51,8 +51,7 @@ interface ComplexPromptResponse {
 // Priority:
 // 1) Use NEXT_PUBLIC_API_BASE_URL if provided (allows pointing dev build to production backend)
 // 2) Fallback to production URL
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL ?? 'https://api.moleculens.com';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'https://api.moleculens.com';
 
 // Only include credentials (cookies) when we are talking to a same-origin localhost backend
 const includeCredentials = API_BASE_URL.startsWith('http://localhost');
@@ -64,7 +63,7 @@ const includeCredentials = API_BASE_URL.startsWith('http://localhost');
  */
 export const pollJobStatus = async (jobId: string): Promise<JobStatusResponse> => {
   const endpoint = `${API_BASE_URL}/prompt/process/${jobId}`;
-  
+
   const response = await fetch(endpoint, {
     method: 'GET',
     headers: {
@@ -80,7 +79,6 @@ export const pollJobStatus = async (jobId: string): Promise<JobStatusResponse> =
   return response.json();
 };
 
-
 /**
  * Fetch only the PDB and minimal data for a given molecule query (Step A).
  * Calls /fetch-molecule-data/ on the backend.
@@ -88,7 +86,9 @@ export const pollJobStatus = async (jobId: string): Promise<JobStatusResponse> =
  * @param query The molecule name or query
  * @returns An object containing { pdb_data, name, cid, formula, sdf, etc. }
  */
-export const fetchMoleculeData = async (query: string): Promise<{
+export const fetchMoleculeData = async (
+  query: string
+): Promise<{
   pdb_data: string;
   name: string;
   cid: number;
@@ -103,19 +103,19 @@ export const fetchMoleculeData = async (query: string): Promise<{
         'Content-Type': 'application/json',
       },
       credentials: includeCredentials ? 'include' : 'same-origin',
-      body: JSON.stringify({ query })
+      body: JSON.stringify({ query }),
     });
 
     if (!response.ok) {
       throw new Error(`Failed to fetch molecule data: ${response.status} ${response.statusText}`);
     }
     const result = await response.json();
-    
+
     // If there's an error message, throw
     if (result.detail) {
       throw new Error(result.detail);
     }
-    
+
     return result;
   } catch (error: any) {
     console.error('Error fetching molecule data:', error);
@@ -130,7 +130,9 @@ export const fetchMoleculeData = async (query: string): Promise<{
  * @param moleculeData The object with { pdb_data, name, cid, sdf, formula, etc. }
  * @returns { html: string }
  */
-export const generateMoleculeHTML = async (moleculeData: Record<string, any>): Promise<{ html: string }> => {
+export const generateMoleculeHTML = async (
+  moleculeData: Record<string, any>
+): Promise<{ html: string }> => {
   const endpoint = `${API_BASE_URL}/prompt/generate-molecule-html/`;
   try {
     const response = await fetch(endpoint, {
@@ -139,7 +141,7 @@ export const generateMoleculeHTML = async (moleculeData: Record<string, any>): P
         'Content-Type': 'application/json',
       },
       credentials: includeCredentials ? 'include' : 'same-origin',
-      body: JSON.stringify({ molecule_data: moleculeData })
+      body: JSON.stringify({ molecule_data: moleculeData }),
     });
 
     if (!response.ok) {
@@ -163,7 +165,7 @@ export const generateMoleculeHTML = async (moleculeData: Record<string, any>): P
  *   model?: string;          // Optional: specific model to use
  *   preferred_model_category?: string;  // Optional: preferred category of model
  * }
- * 
+ *
  * Response structure:
  * {
  *   pdb_data: string;        // The PDB data for the molecule
@@ -173,20 +175,22 @@ export const generateMoleculeHTML = async (moleculeData: Record<string, any>): P
  *   job_id?: string;         // Optional: job ID if request is rejected
  *   error?: string;          // Optional: error message if request fails
  * }
- * 
+ *
  * Generates a 3D visualization from PubChem data for a molecule query
  * @param request The prompt request containing the molecule query
  * @returns Object containing the PDB data, HTML, and title
  */
-export const generateFromPubChem = async (request: PromptRequest): Promise<{
+export const generateFromPubChem = async (
+  request: PromptRequest
+): Promise<{
   pdb_data: string;
   result_html: string;
   title: string;
 }> => {
   const endpoint = `${API_BASE_URL}/prompt/generate-from-pubchem/`;
-  
+
   console.log('Generating PubChem visualization for:', request);
-  
+
   try {
     const response = await fetch(endpoint, {
       method: 'POST',
@@ -229,9 +233,9 @@ export const generateFromPubChem = async (request: PromptRequest): Promise<{
  */
 export const getModels = async (): Promise<ModelInfo[]> => {
   const endpoint = `${API_BASE_URL}/prompt/models/`;
-  
+
   console.log('Fetching models from:', endpoint);
-  
+
   try {
     const response = await fetch(endpoint, {
       method: 'GET',
@@ -253,4 +257,26 @@ export const getModels = async (): Promise<ModelInfo[]> => {
     console.error('Error fetching models:', error);
     throw new Error(`Failed to fetch models: ${error.message}`);
   }
+};
+
+export const generateMoleculeDiagram = async (
+  request: DiagramPromptRequest
+): Promise<DiagramResponse> => {
+  const endpoint = `${API_BASE_URL}/prompt/generate-molecule-diagram/`;
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    credentials: includeCredentials ? 'include' : 'same-origin',
+    body: JSON.stringify(request),
+  });
+
+  if (!response.ok) {
+    throw new Error(
+      `Failed to generate molecule diagram: ${response.status} ${response.statusText}`
+    );
+  }
+
+  return response.json();
 };

@@ -57,4 +57,45 @@ export interface ModelInfo {
   categories: string[];
   context_length: number;
   is_default: boolean;
-} 
+}
+
+export interface MoleculePlacement {
+  molecule: string;
+  x: number;
+  y: number;
+  width?: number;
+  height?: number;
+  label?: string;
+  label_position?: 'above' | 'below' | 'left' | 'right';
+}
+
+export interface Arrow {
+  start: number[];
+  end: number[];
+  style: 'straight' | 'curved';
+  text?: string;
+}
+
+export interface DiagramPromptRequest {
+  prompt: string;
+  canvas_width?: number;
+  canvas_height?: number;
+  model?: string;
+  preferred_model_category?: string;
+}
+
+export interface DiagramPlan {
+  plan: string;
+  molecule_list: MoleculePlacement[];
+  arrows?: Arrow[];
+  canvas_width?: number;
+  canvas_height?: number;
+}
+
+export interface DiagramResponse {
+  diagram_image: string;
+  diagram_plan: DiagramPlan;
+  status: 'completed' | 'failed' | 'processing';
+  job_id?: string;
+  error?: string;
+}
