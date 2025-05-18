@@ -7,6 +7,7 @@ import { PDBLoader } from 'three/examples/jsm/loaders/PDBLoader';
 // @ts-expect-error - Three.js examples module not properly typed but works correctly
 import { CSS2DRenderer, CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer';
 import { LoadingFacts } from './LoadingFacts';
+import ScrollingText from './ScrollingText';
 
 // Constants for animation
 const ROTATION_SPEED = 0.1; // Rotations per second
@@ -433,14 +434,17 @@ export default function MoleculeViewer({ isLoading = false, pdbData, title }: Mo
             ref={labelContainerRef} 
             className="absolute inset-0 pointer-events-none" 
           />
-          {/* Molecule label */}
+          {/* Molecule label - Updated to use ScrollingText */}
           <div
             className="absolute bottom-5 left-1/2 transform -translate-x-1/2 
                        text-white px-5 py-2.5 rounded-lg z-20 
                        pointer-events-none text-center max-w-[80%] 
-                       truncate text-base md:text-lg"
+                       text-base md:text-lg"
+            // Removed truncate, overflow will be handled by ScrollingText
+            // Ensure this div provides a clear width for ScrollingText to measure against.
+            // Text-align might need to be left if ScrollingText doesn't center its content naturally.
           >
-            {title}
+            <ScrollingText text={title} />
           </div>
           {/* Control buttons */}
           <div className="absolute top-4 right-4 z-20 flex space-x-2">

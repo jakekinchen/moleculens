@@ -48,12 +48,14 @@ interface ComplexPromptResponse {
 }
 
 // API base URL configuration
-const isDevelopment = process.env.NODE_ENV !== 'production';
-const useLocalServer = isDevelopment; // Use localhost in development mode
-const API_BASE_URL = useLocalServer ? 'http://localhost:8000' : 'https://api.moleculens.com';
+// Priority:
+// 1) Use NEXT_PUBLIC_API_BASE_URL if provided (allows pointing dev build to production backend)
+// 2) Fallback to production URL
+const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_BASE_URL ?? 'https://api.moleculens.com';
 
-// Determine if we should include credentials based on the server we're using
-const includeCredentials = useLocalServer;
+// Only include credentials (cookies) when we are talking to a same-origin localhost backend
+const includeCredentials = API_BASE_URL.startsWith('http://localhost');
 
 /**
  * Polls the status of a job
