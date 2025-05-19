@@ -50,8 +50,8 @@ interface ComplexPromptResponse {
 // API base URL configuration
 // Priority:
 // 1) Use NEXT_PUBLIC_API_BASE_URL if provided (allows pointing dev build to production backend)
-// 2) Fallback to production URL
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'https://api.moleculens.com';
+// 2) Fallback to using Next.js route handlers under `/api`
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || '/api';
 
 // Only include credentials (cookies) when we are talking to a same-origin localhost backend
 const includeCredentials = API_BASE_URL.startsWith('http://localhost');
