@@ -8,9 +8,13 @@ export interface MoleculeData {
   sdf: string;
 }
 
-// Common name to IUPAC name mappings
+// Common name to IUPAC or representative molecule mappings
 const COMMON_NAME_MAPPINGS: Record<string, string> = {
-  'bullvalene': 'tricyclo[3.3.2.02,8]deca-3,6,9-triene',
+  bullvalene: 'tricyclo[3.3.2.02,8]deca-3,6,9-triene',
+  // "crown ethers" is a class of compounds. Choose a common example so
+  // PubChem search succeeds.
+  'crown ethers': '18-crown-6',
+  'crown ether': '18-crown-6',
   // Add more mappings as needed
 };
 
@@ -27,7 +31,9 @@ async function fetchCID(query: string): Promise<number> {
   }
 
   // If both attempts fail, throw a more descriptive error
-  throw new Error(`Compound "${query}" not found in PubChem. Try using the IUPAC name or a different common name.`);
+  throw new Error(
+    `Compound "${query}" not found in PubChem. Try using the IUPAC name or a different common name.`
+  );
 }
 
 async function tryFetchCID(query: string): Promise<number | null> {
@@ -41,14 +47,14 @@ async function tryFetchCID(query: string): Promise<number | null> {
   } catch (err) {
     throw new Error('Network error fetching CID');
   }
-  
+
   if (!resp.ok) {
     if (resp.status === 404) {
       return null;
     }
     throw new Error(`PubChem CID request failed: ${resp.status}`);
   }
-  
+
   const data = (await resp.json()) as any;
   if (!data.IdentifierList?.CID?.length) {
     return null;
@@ -58,6 +64,21 @@ async function tryFetchCID(query: string): Promise<number | null> {
 
 export async function fetchMoleculeData(query: string): Promise<MoleculeData> {
   const cid = await fetchCID(query);
+
+  // Fetch PDB data directly so the frontend viewer can parse it without
+  // additional conversion from SDF.
+  let pdbResp: Response;
+  try {
+    pdbResp = await fetch(
+      `https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/${cid}/record/PDB?record_type=3d`
+    );
+  } catch (err) {
+    throw new Error('Network error fetching PDB');
+  }
+  if (!pdbResp.ok) {
+    throw new Error(`PubChem PDB request failed: ${pdbResp.status}`);
+  }
+  const pdbData = await pdbResp.text();
 
   let sdfResp: Response;
   try {
@@ -84,9 +105,9 @@ export async function fetchMoleculeData(query: string): Promise<MoleculeData> {
     throw new Error(`PubChem formula request failed: ${formulaResp.status}`);
   }
   const formulaData = (await formulaResp.json()) as any;
-  
+
   const moleculeResult: MoleculeData = {
-    pdb_data: sdf,
+    pdb_data: pdbData,
     name: query,
     cid,
     formula: formulaData.PropertyTable?.Properties?.[0]?.MolecularFormula ?? '',
@@ -97,11 +118,13 @@ export async function fetchMoleculeData(query: string): Promise<MoleculeData> {
   console.log('[lib/pubchem] fetchMoleculeData result for query:', query, 'CID:', cid);
   console.log('[lib/pubchem] Formula:', moleculeResult.formula);
   console.log('[lib/pubchem] SDF data (first 100 chars):', moleculeResult.sdf.substring(0, 100));
-  // Since pdb_data is currently just sdf, we can log its length or a snippet too.
-  // If there was a conversion step from SDF to PDB, we'd log the result of that.
-  console.log('[lib/pubchem] pdb_data (first 100 chars, currently same as SDF):', moleculeResult.pdb_data.substring(0, 100));
+  // Log a snippet of the returned PDB data to verify it was retrieved
+  console.log(
+    '[lib/pubchem] PDB data (first 100 chars):',
+    moleculeResult.pdb_data.substring(0, 100)
+  );
   if (!moleculeResult.pdb_data || moleculeResult.pdb_data.trim() === '') {
-    console.warn('[lib/pubchem] WARNING: pdb_data (SDF) is empty or whitespace for CID:', cid);
+    console.warn('[lib/pubchem] WARNING: PDB data is empty or whitespace for CID:', cid);
   }
 
   return moleculeResult;
