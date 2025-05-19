@@ -10,6 +10,13 @@ export async function POST(req: NextRequest) {
     const data = await fetchMoleculeData(query);
     return NextResponse.json(data);
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    if (message === 'Compound not found') {
+      return NextResponse.json({ error: message }, { status: 404 });
+    }
+    if (message.startsWith('Network error')) {
+      return NextResponse.json({ error: message }, { status: 503 });
+    }
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

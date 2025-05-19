@@ -9,11 +9,19 @@ export interface MoleculeData {
 }
 
 async function fetchCID(query: string): Promise<number> {
-  const resp = await fetch(
-    `https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/${encodeURIComponent(
-      query
-    )}/cids/JSON`
-  );
+  let resp: Response;
+  try {
+    resp = await fetch(
+      `https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/${encodeURIComponent(
+        query
+      )}/cids/JSON`
+    );
+  } catch (err) {
+    throw new Error('Network error fetching CID');
+  }
+  if (!resp.ok) {
+    throw new Error(`PubChem CID request failed: ${resp.status}`);
+  }
   const data = (await resp.json()) as any;
   if (!data.IdentifierList?.CID?.length) {
     throw new Error('Compound not found');
@@ -23,13 +31,31 @@ async function fetchCID(query: string): Promise<number> {
 
 export async function fetchMoleculeData(query: string): Promise<MoleculeData> {
   const cid = await fetchCID(query);
-  const sdfResp = await fetch(
-    `https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/${cid}/SDF?record_type=3d`
-  );
+
+  let sdfResp: Response;
+  try {
+    sdfResp = await fetch(
+      `https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/${cid}/SDF?record_type=3d`
+    );
+  } catch (err) {
+    throw new Error('Network error fetching SDF');
+  }
+  if (!sdfResp.ok) {
+    throw new Error(`PubChem SDF request failed: ${sdfResp.status}`);
+  }
   const sdf = await sdfResp.text();
-  const formulaResp = await fetch(
-    `https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/${cid}/property/MolecularFormula/JSON`
-  );
+
+  let formulaResp: Response;
+  try {
+    formulaResp = await fetch(
+      `https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/${cid}/property/MolecularFormula/JSON`
+    );
+  } catch (err) {
+    throw new Error('Network error fetching formula');
+  }
+  if (!formulaResp.ok) {
+    throw new Error(`PubChem formula request failed: ${formulaResp.status}`);
+  }
   const formulaData = (await formulaResp.json()) as any;
   return {
     pdb_data: sdf,
