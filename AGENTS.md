@@ -1,10 +1,28 @@
+# Codex Agent Guide
+
+This repository is a Next.js TypeScript project. The backend is being migrated from Python FastAPI to Next.js route handlers.
+
+## Agent Setup
+- Run `scripts/setup-agent.sh` before making changes. It installs Node dependencies with `npm ci`.
+- Network access is disabled after setup so install everything you need in that script.
+
+## Development Workflow
+1. Format and lint the code with `npm run format` and `npm run lint`.
+2. Build the project with `npm run build` if needed.
+
+### Pull Request Guidelines
+- Title format: `[moleculens] <Title>`
+- Keep changes small and focused.
+- Ensure `npm run lint` passes before opening a PR.
+
+---
+
 # Next.js Backend Migration Plan
 
 ## Goal
 Consolidate the existing Python FastAPI backend into a TypeScript based backend using Next.js (App Router). All APIs that the frontend currently depends on should be reimplemented as Next.js route handlers. Logic shared across routes will live under a `/lib` directory. Only the endpoints referenced from `api.ts` need to be ported initially.
 
 ## Target Folder Layout
-
 ```
 / (project root)
 ├─ app/
@@ -28,7 +46,6 @@ Consolidate the existing Python FastAPI backend into a TypeScript based backend 
 
 ### app/api
 Next.js route handlers inside `app/api` expose HTTP endpoints. Each file should define the HTTP method handlers (e.g. `GET`, `POST`) needed by the frontend.
-
 - **process/[jobId]/route.ts** – `GET` handler used by `pollJobStatus`. Reads job status from `jobStore`.
 - **fetch-molecule-data/route.ts** – `POST` handler. Uses `pubchem.ts` helper to retrieve minimal molecule data.
 - **generate-molecule-html/route.ts** – `POST` handler. Accepts cached molecule data and returns HTML generated through the helpers in `pubchem.ts`.
@@ -38,7 +55,6 @@ Next.js route handlers inside `app/api` expose HTTP endpoints. Each file should 
 
 ### lib utilities
 Reusable logic extracted from the Python code will be translated to TypeScript modules under `lib/`.
-
 - **jobStore.ts** – Minimal in‑memory store for background job information (`status`, `progress`, `result`). Exposes helper functions `createJob`, `updateJob`, `getJob`.
 - **pubchem.ts** – Functions to interact with PubChem APIs and to build molecule HTML. Ports the logic from `PubChemAgent`.
 - **llm.ts** – Wrapper around whatever LLM provider is used. Contains validation helpers like `isMolecularPrompt()` plus generic request function `callLLM()`.
@@ -52,5 +68,3 @@ Reusable logic extracted from the Python code will be translated to TypeScript m
 4. **Server Components** – Any server‑side React components that need access to these APIs can import helpers directly from `/lib` or call the route handlers via `fetch`.
 5. **Testing** – Unit test helpers under `/lib` with Jest. Route handlers can be tested with Next.js’ built‑in test utilities or supertest.
 6. **Future Expansion** – As more Python routes are required, follow the same pattern: create a matching file in `app/api/.../route.ts` and factor shared logic into `lib/`.
-
-
