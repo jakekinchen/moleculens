@@ -105,13 +105,18 @@ export const fetchMoleculeData = async (
       credentials: includeCredentials ? 'include' : 'same-origin',
       body: JSON.stringify({ query }),
     });
+    let result: any = {};
+    try {
+      result = await response.json();
+    } catch {
+      // ignore parse errors
+    }
 
     if (!response.ok) {
-      throw new Error(`Failed to fetch molecule data: ${response.status} ${response.statusText}`);
+      const message = result?.error ? result.error : `${response.status} ${response.statusText}`;
+      throw new Error(`Failed to fetch molecule data: ${message}`);
     }
-    const result = await response.json();
 
-    // If there's an error message, throw
     if (result.detail) {
       throw new Error(result.detail);
     }
