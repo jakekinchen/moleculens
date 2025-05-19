@@ -3,8 +3,7 @@
 This repository is a Next.js TypeScript project. The backend is being migrated from Python FastAPI to Next.js route handlers.
 
 ## Agent Setup
-- Run `scripts/setup-agent.sh` before making changes. It installs Node dependencies with `npm ci`.
-- Network access is disabled after setup so install everything you need in that script.
+-`scripts/setup-agent.sh` is already run before the container is built but just keep in mind that script was previously executed in the current environment.
 
 ## Development Workflow
 1. Format and lint the code with `npm run format` and `npm run lint`.
@@ -64,7 +63,7 @@ Reusable logic extracted from the Python code will be translated to TypeScript m
 ## Implementation Notes
 1. **Keep Types Strict** – Create TypeScript interfaces mirroring the request/response models currently returned by the Python routes so the frontend API layer stays unchanged.
 2. **Background Jobs** – For the `process` endpoint the heavy pipeline work should run in a background task (e.g. using `queueMicrotask` or a lightweight job queue). Store intermediate results in `jobStore`.
-3. **Environment Variables** – Expose API keys (e.g. OpenAI) via Next.js runtime config (`process.env`).
+3. **Environment Variables** – Env variables are already exposed in the container. Use `process.env` to access them in the route handlers. For example, `process.env.PUBCHEM_API_KEY`.
 4. **Server Components** – Any server‑side React components that need access to these APIs can import helpers directly from `/lib` or call the route handlers via `fetch`.
 5. **Testing** – Unit test helpers under `/lib` with Jest. Route handlers can be tested with Next.js’ built‑in test utilities or supertest.
 6. **Future Expansion** – As more Python routes are required, follow the same pattern: create a matching file in `app/api/.../route.ts` and factor shared logic into `lib/`.
