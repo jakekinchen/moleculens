@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { moleculeHTML } from '../../../../lib/pubchem';
+import { moleculeHTML } from '@/lib/pubchem';
 
 export async function POST(req: NextRequest) {
   const { molecule_data } = await req.json();

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { fetchMoleculeData, moleculeHTML } from '../../../../lib/pubchem';
-import { classifyPrompt, interpretQueryToMoleculeName } from '../../../../lib/llm';
+import { fetchMoleculeData } from '@/lib/pubchem';
+import { classifyPrompt, interpretQueryToMoleculeName } from '@/lib/llm';
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
@@ -19,27 +19,11 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    if (classification.type === 'macromolecule') {
-      const response = await fetch('https://meshmo.com/prompt/generate-from-rcsb/', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ prompt: classification.name ?? query }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`RCSB API responded with status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      return NextResponse.json(data);
-    }
-
     const moleculeQuery = classification.name ?? (await interpretQueryToMoleculeName(query));
-    const data = await fetchMoleculeData(moleculeQuery);
-    const html = moleculeHTML(data);
-    return NextResponse.json({ sdf: data.sdf, result_html: html, title: data.name });
+    const data = await fetchMoleculeData(moleculeQuery, classification.type);
+    return NextResponse.json({ sdf: data.sdf, title: data.name });
+
+    throw new Error(`Unknown classification type: ${classification.type}`);
   } catch (err: any) {
     return NextResponse.json({ status: 'failed', error: err.message }, { status: 500 });
   }

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { generateDiagram } from '../../../../lib/diagram';
+import { generateDiagram } from '@/lib/diagram';
 
 export async function POST(req: NextRequest) {
   const body = await req.json();

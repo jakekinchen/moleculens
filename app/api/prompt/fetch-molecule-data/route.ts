@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { fetchMoleculeData } from '../../../../lib/pubchem';
-import { interpretQueryToMoleculeName } from '../../../../lib/llm';
+import { fetchMoleculeData } from '@/lib/pubchem';
+import { interpretQueryToMoleculeName } from '@/lib/llm';
 
 export async function POST(req: NextRequest) {
   let originalQuery;
@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
     const moleculeName = await interpretQueryToMoleculeName(originalQuery);
     // If interpretQueryToMoleculeName throws an error because it couldn't identify a molecule (e.g. returned N/A),
     // it will be caught by the catch block below.
-    const data = await fetchMoleculeData(moleculeName);
+    const data = await fetchMoleculeData(moleculeName, 'small molecule');
     return NextResponse.json(data);
   } catch (err: any) {
     const message = err instanceof Error ? err.message : 'Unknown error';
