@@ -5,13 +5,14 @@ import {
   generateFromRCSB,
   classifyMolecule,
   generateMoleculeHTML,
-} from '../../services/api';
+  fetchMoleculeData,
+} from '@/services/api';
 import {
   ArrowDownTrayIcon,
   ExclamationTriangleIcon,
   MicrophoneIcon,
 } from '@heroicons/react/24/outline';
-import { VisualizationOutput } from '../../types';
+import { VisualizationOutput } from '@/types';
 import CHEMISTRY_TOPICS from './chemistry_topics';
 
 // Import the VisualizationData interface from the API file
@@ -564,7 +565,7 @@ export const InputPanel: React.FC<InputPanelProps> = ({
               setCurrentScript(pdb_data);
               setCurrentHtml(html);
               setTitle(title);
-              onVisualizationUpdate(pdb_data, html, title);
+              onVisualizationUpdate(pdb_data, html ?? undefined, title ?? undefined);
               const visualizationOutput: VisualizationOutput = {
                 pdb_data,
                 html,
@@ -579,7 +580,7 @@ export const InputPanel: React.FC<InputPanelProps> = ({
               const html = result.result_html || '';
               setCurrentScript(pdbData);
               setCurrentHtml(html);
-              onVisualizationUpdate(pdbData, html);
+              onVisualizationUpdate(pdbData, html ?? undefined, title ?? undefined);
               const visualizationOutput: VisualizationOutput = { pdb_data: pdbData, html };
               onPromptSubmit(currentPrompt, visualizationOutput);
             }
@@ -639,31 +640,20 @@ export const InputPanel: React.FC<InputPanelProps> = ({
     );
 
     try {
-      const classification = await classifyMolecule(currentPrompt);
-      const useRcsb = classification.type === 'macromolecule';
 
-      const response = useRcsb
-        ? await generateFromRCSB({
-            prompt: currentPrompt,
-            model: model || undefined,
-            preferred_model_category: undefined,
-          })
-        : await generateFromPubChem({
-            prompt: currentPrompt,
-            model: model || undefined,
-            preferred_model_category: undefined,
-          });
+      const response = await fetchMoleculeData(currentPrompt);
 
       if (response.pdb_data) {
         const pdbData = response.pdb_data;
-        const html = response.result_html || '';
-        const title = response.title;
+        const name = response.name;
+        const cid = response.cid;
+        const formula = response.formula;
 
         setCurrentScript(pdbData);
-        setTitle(title);
-        setCurrentHtml(html);
-        onVisualizationUpdate(pdbData, html, title);
-        onPromptSubmit(currentPrompt, { pdb_data: pdbData, html, title });
+        setTitle(name);
+        //setCurrentHtml(html);
+        onVisualizationUpdate(pdbData, undefined, name ?? undefined);
+        onPromptSubmit(currentPrompt, { pdb_data: pdbData, html: '', title: name });
         setIsLoading(false);
         onLoadingChange(false);
       } else {
@@ -1071,7 +1061,7 @@ export const InputPanel: React.FC<InputPanelProps> = ({
                     const html = resp.html;
 
                     setCurrentHtml(html);
-                    onVisualizationUpdate(currentScript, html, title);
+                    onVisualizationUpdate(currentScript, html ?? undefined, title ?? undefined);
                     setIsLoading(false);
                     onLoadingChange(false);
                   } catch (err: any) {

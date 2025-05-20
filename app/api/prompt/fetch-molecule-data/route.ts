@@ -1,45 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchMoleculeData } from '@/lib/pubchem';
-import { interpretQueryToMoleculeName } from '@/lib/llm';
+import { classifyPrompt, interpretQueryToMoleculeName } from '@/lib/llm';
 
 export async function POST(req: NextRequest) {
-  let originalQuery;
+  const body = await req.json();
+  const query = body.prompt as string;
+  if (!query) {
+    return NextResponse.json({ error: 'Missing prompt', status: 'failed' }, { status: 400 });
+  }
+
   try {
-    // Clone the request to read its body as text for logging, without consuming it for req.json()
-    const reqClone = req.clone();
-    const rawBody = await reqClone.text();
-    console.log('[fetch-molecule-data] Raw request body:', rawBody);
-
-    const jsonData = await req.json(); // Use original req for parsing
-    originalQuery = jsonData.query;
-
-    if (!originalQuery) {
-      return NextResponse.json({ error: 'Missing query in JSON body' }, { status: 400 });
+    const classification = await classifyPrompt(query);
+    if (classification.type === 'unknown') {
+      return NextResponse.json({
+        status: 'failed',
+        job_id: 'rejected',
+        error: 'Prompt not about molecules',
+      });
     }
 
-    const moleculeName = await interpretQueryToMoleculeName(originalQuery);
-    // If interpretQueryToMoleculeName throws an error because it couldn't identify a molecule (e.g. returned N/A),
-    // it will be caught by the catch block below.
-    const data = await fetchMoleculeData(moleculeName, 'small molecule');
-    return NextResponse.json(data);
+    const moleculeQuery = classification.name ?? (await interpretQueryToMoleculeName(query));
+    const data = await fetchMoleculeData(moleculeQuery, classification.type);
+    return NextResponse.json({ sdf: data.sdf, title: data.name });
+
+    throw new Error(`Unknown classification type: ${classification.type}`);
   } catch (err: any) {
-    const message = err instanceof Error ? err.message : 'Unknown error';
-    console.error(`[fetch-molecule-data] Error processing query. Original query: "${originalQuery || '[Query not parsed]'}". Error: ${message}`);
-
-    // Check for the specific error from interpretQueryToMoleculeName
-    if (message.startsWith('Could not identify a specific molecule')) {
-      return NextResponse.json({ error: message }, { status: 400 }); // Bad request, as query was not interpretable
-    }
-    if (message.includes('Compound not found') || message.includes('PubChem CID request failed: 404') || message.includes('No PubChem compound matches')) {
-      return NextResponse.json({ error: message }, { status: 404 });
-    }
-    if (message.startsWith('Network error')) {
-      return NextResponse.json({ error: message }, { status: 503 });
-    }
-    if (err instanceof SyntaxError) { // Specifically catch JSON parsing errors
-        return NextResponse.json({ error: `Invalid JSON in request body: ${message}`}, {status: 400 });
-    }
-    
-    return NextResponse.json({ error: `Internal server error: ${message}` }, { status: 500 });
+    return NextResponse.json({ status: 'failed', error: err.message }, { status: 500 });
   }
 }
