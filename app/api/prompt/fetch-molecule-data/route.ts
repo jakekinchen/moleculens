@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
     if (message.startsWith('Could not identify a specific molecule')) {
       return NextResponse.json({ error: message }, { status: 400 }); // Bad request, as query was not interpretable
     }
-    if (message.includes('Compound not found') || message.includes('PubChem CID request failed: 404')) {
+    if (message.includes('Compound not found') || message.includes('PubChem CID request failed: 404') || message.includes('No PubChem compound matches')) {
       return NextResponse.json({ error: message }, { status: 404 });
     }
     if (message.startsWith('Network error')) {

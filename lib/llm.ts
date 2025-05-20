@@ -26,40 +26,42 @@ export async function interpretQueryToMoleculeName(userInput: string): Promise<s
       return userInput;
     }
     // If it's a complex query and LLM is not available, we can't do much.
-    // Throw an error or return a default. For now, let's assume it might be a direct name.
-    // Or, we could throw: throw new Error('LLM not configured to interpret complex query.');
     console.warn("LLM not configured. Attempting to use query directly for PubChem lookup.");
-    return userInput; // Or a specific "unknown" / error indicator
+    return userInput;
   }
 
-  const prompt = `Given the user input related to molecular structures or chemistry, identify the primary molecule name or chemical identifier that the user is interested in.
-Only respond with the most relevant molecule name or identifier. If no specific molecule can be clearly identified, or if the query is too general or not about a specific molecule, respond with 'N/A'.
+  const prompt = `Your task is to identify a single, specific, and common chemical compound name or identifier from the user's input. This name will be used for a PubChem database search.
 
-Important guidelines:
-1. Prefer simple, well-known examples if the query is about a class of compounds (e.g., for "carboranes", a common example like "o-carborane" or "1,2-dicarba-closo-dodecaborane" would be good).
-2. For complex structures or topics, choose a representative simple example.
-3. Use common names if appropriate, but ensure they are searchable in PubChem. IUPAC names are also good.
-4. Avoid returning conversational parts of the query.
-5. For queries like "Tell me about X", extract "X".
-6. If the query is a question like "What is the structure of Y?", extract "Y".
+CRITICAL INSTRUCTIONS:
+1.  **SINGLE SPECIFIC COMPOUND**: You MUST return the name of ONE specific molecule.
+2.  **CLASSES OF COMPOUNDS**: If the user asks about a general class of compounds (e.g., "aldehydes", "alkynes", "organosilanes"), you MUST provide a common, simple, and representative EXAMPLE from that class. Do NOT return the class name itself. For instance:
+    *   "aldehydes" -> "acetaldehyde" OR "formaldehyde"
+    *   "alkynes" -> "acetylene"
+    *   "organosilanes" -> "trimethylsilane" OR "tetramethylsilane"
+    *   "carboranes" -> "o-carborane" OR "1,2-dicarba-closo-dodecaborane"
+    *   "crown ethers" -> "18-crown-6"
+3.  **PRIORITIZE COMMON NAMES/EXAMPLES**: Prefer well-known, simple examples.
+4.  **SEARCHABILITY**: The name must be something searchable in PubChem. Common names or IUPAC names are good.
+5.  **NO CONVERSATION**: Extract only the chemical name. Do not include any conversational parts of the query.
+6.  **DIRECT QUESTIONS**: For "Tell me about X" or "What is Y?", extract "X" or "Y" (applying instruction #2 if X or Y is a class).
+7.  **N/A FOR NON-MOLECULES**: If no specific molecule (or a specific example from a class) can be clearly identified, or if the query is too general, not about a specific molecule/class, or unresolvable to a specific example, respond with 'N/A'.
 
 Examples:
 - User input: "Tell me about bullvalene's fluxional structure" -> Output: "bullvalene"
-- User input: "What are crown ethers?" -> Output: "18-crown-6" (as a representative example)
+- User input: "What are crown ethers?" -> Output: "18-crown-6"
 - User input: "Information on Fe(CO)5" -> Output: "Fe(CO)5"
 - User input: "glucose" -> Output: "glucose"
-- User input: "Teach me about carboranes and their polyhedral cage structures" -> Output: "o-carborane" (or another specific carborane)
+- User input: "Teach me about carboranes and their polyhedral cage structures" -> Output: "o-carborane"
 - User input: "What is water?" -> Output: "water"
-- User input: "Explain photosynthesis" -> Output: "N/A" (too general, not a specific molecule for direct lookup)
+- User input: "Explain photosynthesis" -> Output: "N/A"
+- User input: "Tell me about organosilanes" -> Output: "trimethylsilane" (or another common, specific organosilane)
+- User input: "General properties of alcohols" -> Output: "ethanol" (or "methanol")
 
 User input: "${userInput}"
 Output:`;
 
   const moleculeName = await callLLM(prompt);
   if (moleculeName.trim().toUpperCase() === 'N/A' || moleculeName.trim() === '') {
-    // If LLM says N/A, it means it couldn't find a specific molecule.
-    // We might then throw an error or let PubChem search try the original (less ideal for long queries).
-    // For now, let's throw a specific error that can be caught by the route handler.
     throw new Error(`Could not identify a specific molecule from the query: "${userInput}"`);
   }
   return moleculeName.trim();

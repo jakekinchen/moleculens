@@ -604,30 +604,40 @@ export const InputPanel: React.FC<InputPanelProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!currentPrompt.trim() || isLoading) return;
+    console.log('[InputPanel] handleSubmit triggered. Initial currentPrompt.trim():', currentPrompt.trim());
+
+    if (!currentPrompt.trim() || isLoading) {
+      console.warn('[InputPanel] handleSubmit blocked. currentPrompt.trim() empty or isLoading. Query:', currentPrompt, 'isLoading:', isLoading);
+      return;
+    }
     
     setIsLoading(true);
     onLoadingChange(true);
     setError(null);
     setIsScientificError(false);
     
-    console.log('Making request for:', currentPrompt, 'with model:', model, 'interactive mode:', isInteractive, 'PubChem mode:', usePubChem);
+    const queryToSend = currentPrompt;
+    console.log('[InputPanel] Making API request. currentPrompt value being sent as query:', queryToSend);
+    console.log('[InputPanel] Model:', model, 'Interactive mode:', isInteractive, 'PubChem mode:', usePubChem);
+    const requestBody = JSON.stringify({ query: queryToSend });
+    console.log('[InputPanel] Constructed request body for API:', requestBody);
 
     try {
-      // Step A: Fetch molecule data only
-      const moleculeData = await fetchMoleculeData(currentPrompt);
-      const pdbData = moleculeData.pdb_data;
+      // Step A: Fetch molecule data (expecting pdb_data directly from backend now)
+      const moleculeData = await fetchMoleculeData(queryToSend); // fetchMoleculeData is from @/services/api
+      const pdbData = moleculeData.pdb_data; // Expect pdb_data from API
       const name = moleculeData.name;
+      // const sdfData = moleculeData.sdf; // SDF is also available if needed
 
       if (!pdbData) {
-        throw new Error('No PDB data returned from fetchMoleculeData');
+        // This error might occur if backend fails to convert or provide PDB
+        throw new Error('No PDB data returned from server');
       }
 
       setCurrentScript(pdbData);
       setTitle(name);
-      setCurrentHtml(null); // No HTML generated yet
+      setCurrentHtml(null); 
 
-      // Pass partial data upward if needed
       onVisualizationUpdate(pdbData, undefined, name);
       onPromptSubmit(currentPrompt, { pdb_data: pdbData, html: '', title: name });
 
@@ -637,7 +647,6 @@ export const InputPanel: React.FC<InputPanelProps> = ({
       setIsLoading(false);
       onLoadingChange(false);
       
-      // Check if this is a scientific content validation error
       if (err instanceof Error && err.message.includes('Non-molecular prompt')) {
         setIsScientificError(true);
         setError(`Your prompt should be related to molecular structures. Click on the "Suggest Molecule" button to get started.`);
