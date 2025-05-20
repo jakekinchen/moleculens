@@ -97,7 +97,7 @@ export const InputPanel: React.FC<InputPanelProps> = ({
   // We're keeping these references for future use with real audio
   const [audioAnalyser, setAudioAnalyser] = useState<AnalyserNode | null>(null);
   const [audioData, setAudioData] = useState<Uint8Array | null>(null);
-  const animationFrameRef = useRef<number>();
+  const animationFrameRef = useRef<number | undefined>(undefined);
   // Ref for smooth audio visualization
   const prevAudioValuesRef = useRef<number[]>([]);
 
