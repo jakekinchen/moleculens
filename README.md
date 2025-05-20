@@ -22,6 +22,20 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## Macromolecule Support
+
+MolecuLens can now visualize not only small molecules from **PubChem** but also
+proteins and other macromolecules from the **RCSB PDB**. When you submit a query,
+the application uses an LLM-based classifier to determine whether the target is
+a small molecule or a macromolecule and automatically searches the appropriate
+database.
+
+## Local API Routes
+
+Several endpoints under `/api` are implemented using Next.js Route Handlers.
+Classification happens locally at `/api/classify`, which decides whether the
+query should be sent to **PubChem** or **RCSB**.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:
