@@ -3,13 +3,16 @@
 This repository is a Next.js TypeScript project. The backend is being migrated from Python FastAPI to Next.js route handlers.
 
 ## Agent Setup
+
 -`scripts/setup-agent.sh` is already run before the container is built but just keep in mind that script was previously executed in the current environment.
 
 ## Development Workflow
+
 1. Format and lint the code with `npm run format` and `npm run lint`.
 2. Build the project with `npm run build` if needed.
 
 ### Pull Request Guidelines
+
 - Title format: `[moleculens] <Title>`
 - Keep changes small and focused.
 - Ensure `npm run lint` passes before opening a PR.
@@ -19,9 +22,11 @@ This repository is a Next.js TypeScript project. The backend is being migrated f
 # Next.js Backend Migration Plan
 
 ## Goal
+
 Consolidate the existing Python FastAPI backend into a TypeScript based backend using Next.js (App Router). All APIs that the frontend currently depends on should be reimplemented as Next.js route handlers. Logic shared across routes will live under a `/lib` directory. Only the endpoints referenced from `api.ts` need to be ported initially.
 
 ## Target Folder Layout
+
 ```
 / (project root)
 ├─ app/
@@ -44,7 +49,9 @@ Consolidate the existing Python FastAPI backend into a TypeScript based backend 
 ```
 
 ### app/api
+
 Next.js route handlers inside `app/api` expose HTTP endpoints. Each file should define the HTTP method handlers (e.g. `GET`, `POST`) needed by the frontend.
+
 - **process/[jobId]/route.ts** – `GET` handler used by `pollJobStatus`. Reads job status from `jobStore`.
 - **fetch-molecule-data/route.ts** – `POST` handler. Uses `pubchem.ts` helper to retrieve minimal molecule data.
 - **generate-molecule-html/route.ts** – `POST` handler. Accepts cached molecule data and returns HTML generated through the helpers in `pubchem.ts`.
@@ -53,14 +60,17 @@ Next.js route handlers inside `app/api` expose HTTP endpoints. Each file should 
 - **generate-molecule-diagram/route.ts** – `POST` handler for the diagram feature. Uses `diagram.ts` utilities and `llm.ts` to produce an SVG string.
 
 ### lib utilities
+
 Reusable logic extracted from the Python code will be translated to TypeScript modules under `lib/`.
+
 - **jobStore.ts** – Minimal in‑memory store for background job information (`status`, `progress`, `result`). Exposes helper functions `createJob`, `updateJob`, `getJob`.
 - **pubchem.ts** – Functions to interact with PubChem APIs and to build molecule HTML. Ports the logic from `PubChemAgent`.
-- **llm.ts** – Wrapper around whatever LLM provider is used. Contains validation helpers like `isMolecularPrompt()` plus generic request function `callLLM()`.
+- **llm.ts** – Wrapper around the configured LLM. Provides utilities such as `classifyPrompt()` and the generic request function `callLLM()`.
 - **models.ts** – Defines the TypeScript interface for `ModelInfo` and a registry of available models. Mirrors the Python `ModelRegistry`.
 - **diagram.ts** – Utilities to generate 2‑D diagrams: planning with the LLM and rendering SVG using 2‑D coordinates. Should export `generateDiagram()` used by the route handler.
 
 ## Implementation Notes
+
 1. **Keep Types Strict** – Create TypeScript interfaces mirroring the request/response models currently returned by the Python routes so the frontend API layer stays unchanged.
 2. **Background Jobs** – For the `process` endpoint the heavy pipeline work should run in a background task (e.g. using `queueMicrotask` or a lightweight job queue). Store intermediate results in `jobStore`.
 3. **Environment Variables** – Env variables are already exposed in the container. Use `process.env` to access them in the route handlers. For example, `process.env.PUBCHEM_API_KEY`.

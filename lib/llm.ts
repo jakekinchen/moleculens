@@ -12,11 +12,44 @@ export async function callLLM(prompt: string): Promise<string> {
   return completion.choices[0]?.message?.content ?? '';
 }
 
-export async function isMolecularPrompt(prompt: string): Promise<boolean> {
-  if (!openai) return true;
-  const question = `Is the following prompt about a molecule or chemistry topic? "${prompt}" Answer yes or no.`;
+export interface PromptClassification {
+  type: 'molecule' | 'macromolecule' | 'unknown';
+  name: string | null;
+}
+
+/**
+ * Classify a user prompt and optionally extract a molecule name.
+ * If the underlying LLM is not configured this will default to
+ * treating the prompt as a small molecule and echoing the input
+ * as the name so development can proceed without the API key.
+ */
+export async function classifyPrompt(prompt: string): Promise<PromptClassification> {
+  if (!openai) {
+    return { type: 'molecule', name: prompt };
+  }
+
+  const question = `You are a chemical assistant. Classify the following user input as a 'molecule', 'macromolecule', or 'unknown'. If a specific molecule or macromolecule can be identified, provide its common name. Respond ONLY with JSON in the form {"type":"molecule|macromolecule|unknown","name":"<name>"}.
+
+User input: "${prompt}"`;
+
   const result = await callLLM(question);
-  return /^yes/i.test(result.trim());
+  try {
+    const parsed = JSON.parse(result);
+    let type: 'molecule' | 'macromolecule' | 'unknown' = 'unknown';
+    if (parsed.type === 'molecule' || parsed.type === 'macromolecule') {
+      type = parsed.type;
+    } else if (parsed.type === 'unknown') {
+      type = 'unknown';
+    }
+    const name =
+      typeof parsed.name === 'string' && parsed.name.trim() !== '' ? parsed.name.trim() : null;
+    return { type, name };
+  } catch (err) {
+    const lower = result.toLowerCase();
+    if (lower.includes('macromolecule')) return { type: 'macromolecule', name: null };
+    if (lower.includes('molecule')) return { type: 'molecule', name: null };
+    return { type: 'unknown', name: null };
+  }
 }
 
 export async function interpretQueryToMoleculeName(userInput: string): Promise<string> {
@@ -26,7 +59,7 @@ export async function interpretQueryToMoleculeName(userInput: string): Promise<s
       return userInput;
     }
     // If it's a complex query and LLM is not available, we can't do much.
-    console.warn("LLM not configured. Attempting to use query directly for PubChem lookup.");
+    console.warn('LLM not configured. Attempting to use query directly for PubChem lookup.');
     return userInput;
   }
 

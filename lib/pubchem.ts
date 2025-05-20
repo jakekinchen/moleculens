@@ -22,7 +22,7 @@ const MOLECULENS_API = 'https://api.moleculens.com/prompt';
 const COMMON_NAME_MAPPINGS: Record<string, string> = {
   bullvalene: 'tricyclo[3.3.2.0²,⁸]deca-3,6,9-triene',
   'crown ether': '18-crown-6',
-  'crown ethers': '18-crown-6'
+  'crown ethers': '18-crown-6',
   // …
 };
 
@@ -48,7 +48,7 @@ function candidateStrings(input: string): string[] {
   let s = raw.replace(/["'""]/g, '');
 
   // 2. strip possessive 's  (ferrocene's -> ferrocene)
-  s = s.replace(/\b([A-Za-z0-9\-]+)'s\b/gi, '$1');
+  s = s.replace(/\b([A-Za-z0-9-]+)'s\b/gi, '$1');
   if (s !== raw) set.add(s);
 
   // 3. remove simple punctuation , . ; : ? ! ( )
@@ -56,11 +56,14 @@ function candidateStrings(input: string): string[] {
   if (punctFree !== s) set.add(punctFree);
 
   // 4. single‑word tokens (≥3 chars) and bigrams
-  const words = punctFree.split(/\s+/)
-    .map(w => w.replace(/[^A-Za-z0-9+\-\[\]]/g, ''))
+  const words = punctFree
+    .split(/\s+/)
+    .map(w => w.replace(/[^A-Za-z0-9+\-[\]]/g, ''))
     .filter(Boolean);
 
-  words.forEach(w => { if (w.length >= 3) set.add(w); });
+  words.forEach(w => {
+    if (w.length >= 3) set.add(w);
+  });
 
   for (let i = 0; i < words.length - 1; i++) {
     const bigram = `${words[i]} ${words[i + 1]}`.trim();
@@ -104,29 +107,29 @@ export async function fetchMoleculeData(query: string): Promise<MoleculeData> {
   console.log(`[PubChemService] Resolved CID: ${cid} for query: "${query}"`);
 
   // 2. Get SDF data
-  const sdfResp = await fetch(
-    `${PUBCHEM}/compound/cid/${cid}/SDF`
-  );
+  const sdfResp = await fetch(`${PUBCHEM}/compound/cid/${cid}/SDF`);
   if (!sdfResp.ok) {
     const errorText = await sdfResp.text();
     console.error(`[PubChemService] PubChem SDF request failed: ${sdfResp.status} - ${errorText}`);
     throw new Error(`PubChem SDF request failed: ${sdfResp.status} - ${errorText}`);
   }
   const sdf = await sdfResp.text();
-  console.log(`[PubChemService] Successfully fetched SDF data (length: ${sdf.length}) for CID: ${cid}`);
+  console.log(
+    `[PubChemService] Successfully fetched SDF data (length: ${sdf.length}) for CID: ${cid}`
+  );
 
   // 3. Get formula
-  const formulaResp = await fetch(
-    `${PUBCHEM}/compound/cid/${cid}/property/MolecularFormula/JSON`
-  );
+  const formulaResp = await fetch(`${PUBCHEM}/compound/cid/${cid}/property/MolecularFormula/JSON`);
   if (!formulaResp.ok) {
     const errorText = await formulaResp.text();
-    console.error(`[PubChemService] PubChem formula request failed: ${formulaResp.status} - ${errorText}`);
+    console.error(
+      `[PubChemService] PubChem formula request failed: ${formulaResp.status} - ${errorText}`
+    );
     // Not throwing here, as formula is non-critical, but will log and return empty
   }
   let formula = '';
   if (formulaResp.ok) {
-    const formulaData = await formulaResp.json() as any; // Type assertion for safety
+    const formulaData = (await formulaResp.json()) as any; // Type assertion for safety
     formula = formulaData.PropertyTable?.Properties?.[0]?.MolecularFormula ?? '';
     console.log(`[PubChemService] Successfully fetched formula: ${formula} for CID: ${cid}`);
   }
@@ -136,9 +139,14 @@ export async function fetchMoleculeData(query: string): Promise<MoleculeData> {
   let pdb_data = '';
   try {
     pdb_data = await convertSDFToPDB(sdf);
-    console.log(`[PubChemService] Successfully converted SDF to PDB (length: ${pdb_data.length}) for CID: ${cid}`);
+    console.log(
+      `[PubChemService] Successfully converted SDF to PDB (length: ${pdb_data.length}) for CID: ${cid}`
+    );
   } catch (conversionError) {
-    console.error(`[PubChemService] SDF to PDB conversion failed for CID: ${cid}:`, conversionError);
+    console.error(
+      `[PubChemService] SDF to PDB conversion failed for CID: ${cid}:`,
+      conversionError
+    );
     // If conversion fails, we might still want to return other data, but PDB will be empty
   }
 
@@ -151,40 +159,41 @@ export async function fetchMoleculeData(query: string): Promise<MoleculeData> {
   };
 }
 
+export function moleculeHTML(moleculeData: MoleculeData): string {
+  return `<div class="molecule" data-cid="${moleculeData.cid}"></div>`;
+}
+
 /* ----------  helpers  ---------- */
 
 async function cidByExact(term: string): Promise<number | null> {
-  const r = await fetch(
-    `${PUBCHEM}/compound/name/${encodeURIComponent(term)}/cids/JSON`
-  );
+  const r = await fetch(`${PUBCHEM}/compound/name/${encodeURIComponent(term)}/cids/JSON`);
   if (!r.ok) return null;
-  const data = await r.json() as any;
+  const data = (await r.json()) as any;
   return data?.IdentifierList?.CID?.[0] ?? null;
 }
 
 // B. autocomplete → reuse A.
 async function cidByAutocomplete(term: string): Promise<number | null> {
-  const r = await fetch(
-    `${PUBCHEM}/autocomplete/${encodeURIComponent(term)}/JSON?limit=20`
-  );                       
+  const r = await fetch(`${PUBCHEM}/autocomplete/${encodeURIComponent(term)}/JSON?limit=20`);
   if (!r.ok) return null;
-  const best = (await r.json() as any)?.dictionary_terms?.compound?.[0];
+  const best = ((await r.json()) as any)?.dictionary_terms?.compound?.[0];
   return best ? cidByExact(best) : null;
 }
 
 // C. Entrez class search
 async function cidByClassSearch(term: string): Promise<number | null> {
-  const xml = await fetch(
-    `${PUBCHEM}/compound/name/${encodeURIComponent(term)}/cids/XML`
-  ).then(res => res.text());          
+  const xml = await fetch(`${PUBCHEM}/compound/name/${encodeURIComponent(term)}/cids/XML`).then(
+    res => res.text()
+  );
   const cids = [...xml.matchAll(/<Id>(\d+)<\/Id>/g)].map(m => m[1]);
   if (!cids.length) return null;
 
   const prop = await fetch(
     `${PUBCHEM}/compound/cid/${cids.join(',')}/property/SubstanceCount/JSON`
   ).then(res => res.json() as any);
-  const best = prop.PropertyTable?.Properties
-      ?.sort((a: any, b: any) => b.SubstanceCount - a.SubstanceCount)[0];
+  const best = prop.PropertyTable?.Properties?.sort(
+    (a: any, b: any) => b.SubstanceCount - a.SubstanceCount
+  )[0];
 
   return best?.CID ?? null;
 }
@@ -198,7 +207,7 @@ async function convertSDFToPDB(sdfData: string): Promise<string> {
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ sdf: sdfData })
+      body: JSON.stringify({ sdf: sdfData }),
     });
 
     if (!response.ok) {
@@ -206,7 +215,7 @@ async function convertSDFToPDB(sdfData: string): Promise<string> {
       throw new Error(`SDF to PDB conversion failed: ${response.status} - ${errorText}`);
     }
 
-    const data = await response.json() as SDFToPDBResponse;
+    const data = (await response.json()) as SDFToPDBResponse;
     console.log('[PubChemService] Successfully converted SDF to PDB using Moleculens API');
     return data.pdb_data;
   } catch (error) {
