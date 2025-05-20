@@ -47,6 +47,12 @@ interface ComplexPromptResponse {
   total_elements: number;
 }
 
+// Response from the classification endpoint
+export interface MoleculeClassificationResponse {
+  type: 'small' | 'macromolecule' | 'unknown';
+  name?: string;
+}
+
 // API base URL configuration
 // Priority:
 // 1) Use NEXT_PUBLIC_API_BASE_URL if provided (allows pointing dev build to production backend)
@@ -264,10 +270,88 @@ export const getModels = async (): Promise<ModelInfo[]> => {
   }
 };
 
+/**
+ * Generates a visualization from RCSB PDB data for macromolecules
+ */
+export const generateFromRCSB = async (
+  request: PromptRequest
+): Promise<{
+  pdb_data: string;
+  result_html: string;
+  title: string;
+}> => {
+  const endpoint = `${API_BASE_URL}/prompt/generate-from-rcsb/`;
+
+  console.log('Generating RCSB visualization for:', request);
+
+  try {
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      credentials: includeCredentials ? 'include' : 'same-origin',
+      body: JSON.stringify(request),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Server error: ${response.status} ${response.statusText}`);
+    }
+
+    const result = await response.json();
+
+    if (result.status === 'failed' && result.job_id === 'rejected') {
+      console.warn('Non-molecular prompt rejected:', result.error);
+      throw new Error(`Molecular validation failed: ${result.error}`);
+    }
+
+    if (result.result_html === undefined) {
+      console.warn('RCSB response missing result_html field, setting to null');
+      result.result_html = null;
+    }
+
+    return result;
+  } catch (error: any) {
+    console.error('Error generating RCSB visualization:', error);
+    throw error;
+  }
+};
+
+/**
+ * Classifies a molecule query as small molecule or macromolecule
+ * @param prompt The user prompt describing the molecule
+ */
+export const classifyMolecule = async (
+  prompt: string
+): Promise<MoleculeClassificationResponse> => {
+  // Classification is handled by a local Next.js route
+  const endpoint = `/api/classify`;
+
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    credentials: includeCredentials ? 'include' : 'same-origin',
+    body: JSON.stringify({ prompt }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to classify molecule: ${response.status} ${response.statusText}`);
+  }
+
+  return response.json();
+};
+
+// ---------------------------------------------
+// Molecule diagram (2D) generation endpoint
+// ---------------------------------------------
+
 export const generateMoleculeDiagram = async (
   request: DiagramPromptRequest
 ): Promise<DiagramResponse> => {
   const endpoint = `${API_BASE_URL}/prompt/generate-molecule-diagram/`;
+
   const response = await fetch(endpoint, {
     method: 'POST',
     headers: {
