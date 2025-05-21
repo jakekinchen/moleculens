@@ -1,4 +1,5 @@
-import type { NextPage } from 'next';
+'use client';
+
 import React, { useState } from 'react';
 import { Header } from './components/layout/Header';
 import { Footer } from './components/layout/Footer';
@@ -7,7 +8,7 @@ import DiagramInputPanel from './components/panels/DiagramInputPanel';
 import DiagramViewer from './components/panels/DiagramViewer';
 import { DiagramPlan } from './types';
 
-const MoleculeDiagramPage: NextPage = () => {
+export default function MoleculeDiagram() {
   const [diagramImage, setDiagramImage] = useState<string | null>(null);
   const [diagramPlan, setDiagramPlan] = useState<DiagramPlan | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -42,6 +43,4 @@ const MoleculeDiagramPage: NextPage = () => {
       <Footer />
     </div>
   );
-};
-
-export default MoleculeDiagramPage;
+}
