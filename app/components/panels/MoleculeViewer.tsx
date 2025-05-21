@@ -7,7 +7,6 @@ import { PDBLoader } from 'three/examples/jsm/loaders/PDBLoader';
 // @ts-expect-error - Three.js examples module not properly typed but works correctly
 import { CSS2DRenderer, CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer';
 import { LoadingFacts } from './LoadingFacts';
-import ScrollingText from './ScrollingText';
 
 // Constants for animation
 const ROTATION_SPEED = 0.1; // Rotations per second
@@ -27,6 +26,7 @@ interface MoleculeViewerProps {
 
 export default function MoleculeViewer({ isLoading = false, pdbData, title, showAnnotations = true }: MoleculeViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const captionRef = useRef<HTMLDivElement | null>(null);
   const labelContainerRef = useRef<HTMLDivElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -131,6 +131,12 @@ export default function MoleculeViewer({ isLoading = false, pdbData, title, show
         containerRef.current.clientHeight
       );
       containerRef.current.appendChild(renderer.domElement);
+
+      // Hide fallback caption if present
+      if (wrapperRef.current) {
+        const fallback = wrapperRef.current.querySelector<HTMLDivElement>('.molecule');
+        if (fallback) fallback.style.display = 'none';
+      }
 
       // CSS2D renderer
       if (showAnnotations) {
@@ -542,11 +548,27 @@ export default function MoleculeViewer({ isLoading = false, pdbData, title, show
 
 
     document.addEventListener('fullscreenchange', handleFullscreenChange);
+
     
     return () => {
       document.removeEventListener('fullscreenchange', handleFullscreenChange);
     };
   }, []);
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const container = containerRef.current;
+    container.querySelectorAll(".molecule").forEach(el => {
+      (el as HTMLElement).style.display = "none";
+    });
+    if (!captionRef.current) {
+      const c = document.createElement("div");
+      c.className = "molecule-title";
+      container.appendChild(c);
+      captionRef.current = c;
+    }
+    captionRef.current!.textContent = title;
+  }, [title]);
+
 
 
   // The outer wrapper helps position the label absolutely
@@ -568,18 +590,6 @@ export default function MoleculeViewer({ isLoading = false, pdbData, title, show
             ref={labelContainerRef} 
             className="absolute inset-0 pointer-events-none" 
           />
-          {/* Molecule label - Updated to use ScrollingText */}
-          <div
-            className="absolute bottom-5 left-1/2 transform -translate-x-1/2 
-                       text-white px-5 py-2.5 rounded-lg z-20 
-                       pointer-events-none text-center max-w-[80%] 
-                       text-base md:text-lg"
-            // Removed truncate, overflow will be handled by ScrollingText
-            // Ensure this div provides a clear width for ScrollingText to measure against.
-            // Text-align might need to be left if ScrollingText doesn't center its content naturally.
-          >
-            <ScrollingText text={title} />
-          </div>
           {/* Control buttons */}
           <div className="absolute top-4 right-4 z-20 flex space-x-2">
             {/* Pause/Play button */}
