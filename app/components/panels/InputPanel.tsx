@@ -32,6 +32,7 @@ interface InputPanelProps {
   usePubChem?: boolean;
   currentHtml?: string;
   currentTitle?: string;
+  onInfoUpdate?: (info: any) => void;
 }
 
 // Update the JobStatusResponse interface to include legacy fields
@@ -68,6 +69,7 @@ export const InputPanel: React.FC<InputPanelProps> = ({
   usePubChem,
   currentHtml: initialHtml,
   currentTitle: initialTitle,
+  onInfoUpdate,
 }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [currentScript, setCurrentScript] = useState<string | null>(null);
@@ -645,11 +647,13 @@ export const InputPanel: React.FC<InputPanelProps> = ({
         const name = response.name;
         const cid = response.cid;
         const formula = response.formula;
+        const info = response.info;
 
         setCurrentScript(pdbData);
         setTitle(name);
         //setCurrentHtml(html);
         onVisualizationUpdate(pdbData, undefined, name ?? undefined);
+        if (onInfoUpdate) onInfoUpdate(info);
         onPromptSubmit(currentPrompt, { pdb_data: pdbData, html: '', title: name });
         setIsLoading(false);
         onLoadingChange(false);
