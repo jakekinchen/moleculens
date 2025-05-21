@@ -132,6 +132,12 @@ export default function MoleculeViewer({ isLoading = false, pdbData, title, show
       );
       containerRef.current.appendChild(renderer.domElement);
 
+      // Hide fallback caption if present
+      if (wrapperRef.current) {
+        const fallback = wrapperRef.current.querySelector<HTMLDivElement>('.molecule');
+        if (fallback) fallback.style.display = 'none';
+      }
+
       // CSS2D renderer
       if (showAnnotations) {
         labelRenderer = new CSS2DRenderer();
@@ -573,7 +579,7 @@ export default function MoleculeViewer({ isLoading = false, pdbData, title, show
             className="absolute bottom-5 left-1/2 transform -translate-x-1/2 
                        text-white px-5 py-2.5 rounded-lg z-20 
                        pointer-events-none text-center max-w-[80%] 
-                       text-base md:text-lg"
+                       text-base md:text-lg whitespace-nowrap overflow-hidden"
             // Removed truncate, overflow will be handled by ScrollingText
             // Ensure this div provides a clear width for ScrollingText to measure against.
             // Text-align might need to be left if ScrollingText doesn't center its content naturally.
