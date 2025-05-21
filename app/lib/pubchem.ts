@@ -54,19 +54,21 @@ const RCSB_DATA  = 'https://data.rcsb.org/rest/v1/core/entry';
 const RCSB_AC    = 'https://search.rcsb.org/rcsbsearch/v1/keyboard_autocomplete';
 const RCSB_FT    = 'https://search.rcsb.org/rcsbsearch/v2/query';
 
-// ① quick regex test
-const PDB_ID_RE = /^[A-Za-z0-9]{4,6}$/;
+// ① quick regex test – classic PDB entries are 4-character codes.  Some search
+// services may return longer identifiers (e.g. AlphaFold IDs) that don't have
+// a downloadable .pdb.  Restrict to 4 chars so we only fetch valid files.
+const PDB_ID_RE = /^[A-Za-z0-9]{4}$/;
 
 // Add common protein fallback and JSON Accept header utility
 const JSON_HEADERS = { 'Content-Type': 'application/json', Accept: 'application/json' } as const;
 
-// A few ubiquitous proteins that users ask about – provide a representative PDB ID if
-// the network searches fail (or are offline).
+// Development-only convenience map.  It is ignored in production builds so the
+// search algorithm must succeed generically.
 const COMMON_PROTEIN_IDS: Record<string, string> = {
-  hemoglobin: '4HHB', // human oxy-hemoglobin
-  myoglobin: '1MBN',  // sperm-whale myoglobin
-  insulin: '4INS',    // human insulin (T-state)
-  lysozyme: '1LYZ',   // hen egg-white lysozyme
+  hemoglobin: '4HHB',
+  myoglobin: '1MBN',
+  insulin: '4INS',
+  lysozyme: '1LYZ',
 };
 
 // ---------- resolvePdbId ---------- //
@@ -77,11 +79,11 @@ export async function resolvePdbId(q: string): Promise<string> {
   const log = (...args: any[]) =>
     process.env.NODE_ENV === 'development' && console.log('[resolvePdbId]', ...args);
 
-  // 0. static map
-  if (COMMON_PROTEIN_IDS[termLower]) {
-    log('common-map', term, '→', COMMON_PROTEIN_IDS[termLower]);
-    return COMMON_PROTEIN_IDS[termLower];
-  }
+  // 0. static map only in development
+  // if (process.env.NODE_ENV === 'development' && COMMON_PROTEIN_IDS[termLower]) {
+  //   log('common-map(dev)', term, '→', COMMON_PROTEIN_IDS[termLower]);
+  //   return COMMON_PROTEIN_IDS[termLower];
+  // }
 
   // A. exact ID
   if (PDB_ID_RE.test(term)) {
@@ -109,7 +111,7 @@ export async function resolvePdbId(q: string): Promise<string> {
       query: { type: 'terminal', service: 'full_text', parameters: { value: term } },
       return_type: 'entry',
       request_options: {
-        pager: { start: 0, rows: 20 },
+        paginate: { start: 0, rows: 20 },
         sort: [{ sort_by: 'score', direction: 'desc' }],
       },
     };
@@ -138,12 +140,17 @@ export async function resolvePdbId(q: string): Promise<string> {
       },
       return_type: 'entry',
       request_options: {
-        pager: { start: 0, rows: 20 },
+        paginate: { start: 0, rows: 20 },
         sort: [{ sort_by: 'score', direction: 'desc' }],
       },
     });
 
-    const searchAttrs = ['struct.title', 'rcsb_entry_container_identifiers.entry_id'];
+    const searchAttrs = [
+      'struct.title',
+      'rcsb_entry_container_identifiers.entry_id',
+      'rcsb_polymer_entity.pdbx_description',
+      'rcsb_uniprot_protein.name.value',
+    ];
     for (const attr of searchAttrs) {
       const rs = await fetch(RCSB_FT, {
         method: 'POST',
@@ -162,9 +169,22 @@ export async function resolvePdbId(q: string): Promise<string> {
     log('robust_text-error', e);
   }
 
-  // final fallback – common protein map if network searches failed
-  if (COMMON_PROTEIN_IDS[termLower]) {
-    log('fallback-common-map', term, '→', COMMON_PROTEIN_IDS[termLower]);
+  // E. use /search/suggest endpoint similar to website autosuggest
+  try {
+    const suggestURL = `https://www.rcsb.org/search/suggest/false/${encodeURIComponent(term)}`;
+    const text = await fetch(suggestURL, { headers: { Accept: 'application/json' } }).then(r => r.text());
+    const idMatch = text.match(/[A-Za-z0-9]{4,6}/);
+    if (idMatch && PDB_ID_RE.test(idMatch[0])) {
+      log('suggest', idMatch[0]);
+      return idMatch[0].toUpperCase();
+    }
+  } catch (e) {
+    log('suggest-error', e);
+  }
+
+  // final fallback (development only)
+  if (process.env.NODE_ENV === 'development' && COMMON_PROTEIN_IDS[termLower]) {
+    log('fallback-common-map(dev)', term, '→', COMMON_PROTEIN_IDS[termLower]);
     return COMMON_PROTEIN_IDS[termLower];
   }
 
