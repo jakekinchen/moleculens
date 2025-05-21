@@ -294,10 +294,29 @@ async function cidByExact(term: string): Promise<number | null> {
 
 // B. autocomplete → reuse A.
 async function cidByAutocomplete(term: string): Promise<number | null> {
-  const r = await fetch(`${PUBCHEM}/autocomplete/${encodeURIComponent(term)}/JSON?limit=20`);
-  if (!r.ok) return null;
-  const best = ((await r.json()) as any)?.dictionary_terms?.compound?.[0];
-  return best ? cidByExact(best) : null;
+  // The public autocomplete endpoint expects the entity category ("compound")
+  // between the resource and the term.  Without it the server responds 400.
+  const url = `${PUBCHEM}/autocomplete/compound/${encodeURIComponent(term)}/JSON?limit=20`;
+  const r = await fetch(url);
+  if (!r.ok) {
+    if (process.env.NODE_ENV === 'development') {
+      console.warn('[cidByAutocomplete] PubChem autocomplete failed', r.status, term);
+    }
+    return null;
+  }
+
+  const suggestions = ((await r.json()) as any)?.dictionary_terms?.compound ?? [];
+  for (const name of suggestions) {
+    const cid = await cidByExact(name);
+    if (cid) {
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[cidByAutocomplete] picked', name, '→', cid);
+      }
+      return cid;
+    }
+  }
+
+  return null;
 }
 
 // C. Entrez class search
