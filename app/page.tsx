@@ -1,12 +1,17 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Header } from './components/layout/Header';
 import { Footer } from './components/layout/Footer';
 import { InputPanel } from './components/panels/InputPanel';
 import MoleculeViewer from './components/panels/MoleculeViewer';
-import { VisualizationOutput } from './types';
+import { VisualizationOutput, HistoryEntry } from './types';
 import { LayoutWrapper } from './components/layout/LayoutWrapper';
+import { TimeMachinePanel } from './components/panels/TimeMachinePanel';
+import {
+  saveHistoryToSession,
+  loadHistoryFromSession,
+} from './lib/utils';
 
 export default function HomePage() {
   // Default molecule data (Propane)
@@ -34,6 +39,8 @@ END`;
   const [prompt, setPrompt] = useState('');
   const [model, setModel] = useState<string | null>(null);
   const [isInteractive, setIsInteractive] = useState(false);
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [isTimeMachineOpen, setIsTimeMachineOpen] = useState(false);
 
   const handleVisualizationUpdate = (pdb: string, htmlContent?: string, vizTitle?: string) => {
     setPdbData(pdb);
@@ -41,14 +48,38 @@ END`;
     setTitle(vizTitle ?? null);
   };
 
-  const handlePromptSubmit = (_prompt: string, _visualization?: VisualizationOutput) => {
-    // Currently no-op; could add history or analytics here.
+  useEffect(() => {
+    setHistory(loadHistoryFromSession());
+  }, []);
+
+  useEffect(() => {
+    saveHistoryToSession(history);
+  }, [history]);
+
+  const handlePromptSubmit = (promptText: string, visualization?: VisualizationOutput) => {
+    const entry: HistoryEntry = {
+      prompt: promptText,
+      timestamp: new Date(),
+      visualization,
+      title: visualization?.title,
+    };
+    setHistory(prev => [entry, ...prev]);
+  };
+
+  const handleSelectHistory = (entry: HistoryEntry) => {
+    if (entry.visualization) {
+      setPdbData(entry.visualization.pdb_data);
+      setHtml(entry.visualization.html);
+      setTitle(entry.visualization.title ?? null);
+    }
+    setPrompt(entry.prompt);
+    setIsTimeMachineOpen(false);
   };
 
   return (
     <div className="app-container">
       <Header
-        onOpenTimeMachine={() => {}}
+        onOpenTimeMachine={() => setIsTimeMachineOpen(true)}
         onSettingsChange={({ model: m, isInteractive: i }) => {
           setModel(m);
           setIsInteractive(i);
@@ -84,6 +115,12 @@ END`;
         </LayoutWrapper>
       </main>
       <Footer />
+      <TimeMachinePanel
+        isOpen={isTimeMachineOpen}
+        onClose={() => setIsTimeMachineOpen(false)}
+        history={history}
+        onSelectEntry={handleSelectHistory}
+      />
     </div>
   );
-} 
+}
