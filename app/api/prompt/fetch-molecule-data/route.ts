@@ -4,26 +4,31 @@ import { classifyPrompt, interpretQueryToMoleculeName } from '@/lib/llm';
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const query = body.prompt as string;
+  const query: string | undefined = body.query ?? body.prompt;
   if (!query) {
     return NextResponse.json({ error: 'Missing prompt', status: 'failed' }, { status: 400 });
   }
 
   try {
     const classification = await classifyPrompt(query);
-    if (classification.type === 'unknown') {
-      return NextResponse.json({
-        status: 'failed',
-        job_id: 'rejected',
-        error: 'Prompt not about molecules',
-      });
+    let moleculeQuery = query;
+    let moleculeType: 'small molecule' | 'macromolecule' = 'small molecule';
+
+    if (classification.type !== 'unknown') {
+      moleculeQuery = classification.name ?? (await interpretQueryToMoleculeName(query));
+      moleculeType = classification.type === 'macromolecule' ? 'macromolecule' : 'small molecule';
     }
 
-    const moleculeQuery = classification.name ?? (await interpretQueryToMoleculeName(query));
-    const data = await fetchMoleculeData(moleculeQuery, classification.type);
-    return NextResponse.json({ sdf: data.sdf, title: data.name });
+    const data = await fetchMoleculeData(moleculeQuery, moleculeType);
 
-    throw new Error(`Unknown classification type: ${classification.type}`);
+    // Return full molecule data expected by the frontend
+    return NextResponse.json({
+      pdb_data: data.pdb_data,
+      name: data.name,
+      cid: data.cid,
+      formula: data.formula,
+      sdf: data.sdf,
+    });
   } catch (err: any) {
     return NextResponse.json({ status: 'failed', error: err.message }, { status: 500 });
   }
