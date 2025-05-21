@@ -1,9 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   pollJobStatus,
-  generateFromPubChem,
-  generateFromRCSB,
-  classifyMolecule,
   generateMoleculeHTML,
   fetchMoleculeData,
 } from '@/services/api';
