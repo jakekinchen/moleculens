@@ -590,6 +590,18 @@ export default function MoleculeViewer({ isLoading = false, pdbData, title, show
             ref={labelContainerRef} 
             className="absolute inset-0 pointer-events-none" 
           />
+          {/* Molecule label - Updated to use ScrollingText */}
+          <div
+            className="absolute bottom-5 left-1/2 transform -translate-x-1/2 
+                       text-white px-5 py-2.5 rounded-lg z-20 
+                       pointer-events-none text-center max-w-[80%] 
+                       text-base md:text-lg whitespace-nowrap overflow-hidden"
+            // Removed truncate, overflow will be handled by ScrollingText
+            // Ensure this div provides a clear width for ScrollingText to measure against.
+            // Text-align might need to be left if ScrollingText doesn't center its content naturally.
+          >
+            <ScrollingText text={title} />
+          </div>
           {/* Control buttons */}
           <div className="absolute top-4 right-4 z-20 flex space-x-2">
             {/* Pause/Play button */}
