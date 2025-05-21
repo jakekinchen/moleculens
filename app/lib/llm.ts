@@ -1,4 +1,5 @@
 import OpenAI from 'openai';
+import { z } from 'zod';
 
 const apiKey = process.env.OPENAI_API_KEY;
 const openai = apiKey ? new OpenAI({ apiKey }) : undefined;
@@ -6,10 +7,30 @@ const openai = apiKey ? new OpenAI({ apiKey }) : undefined;
 export async function callLLM(prompt: string): Promise<string> {
   if (!openai) throw new Error('LLM not configured');
   const completion = await openai.chat.completions.create({
-    model: 'gpt-3.5-turbo',
+    model: 'o3-mini',
     messages: [{ role: 'user', content: prompt }],
   });
   return completion.choices[0]?.message?.content ?? '';
+}
+
+export async function structuredLLMResponse<T>(
+  prompt: string,
+  schema: z.ZodSchema<T>
+): Promise<T> {
+  if (!openai) throw new Error('LLM not configured');
+  const completion = await openai.chat.completions.create({
+    model: 'o3-mini',
+    messages: [{ role: 'user', content: prompt }],
+  });
+  const raw = completion.choices[0]?.message?.content ?? '';
+  // Attempt to parse the LLM response as JSON and validate with the provided schema
+  let json: unknown;
+  try {
+    json = JSON.parse(raw);
+  } catch (err) {
+    throw new Error('Structured LLM response is not valid JSON');
+  }
+  return schema.parse(json);
 }
 
 export interface PromptClassification {
@@ -25,6 +46,7 @@ export interface PromptClassification {
  */
 export async function classifyPrompt(prompt: string): Promise<PromptClassification> {
   if (!openai) {
+    console.warn('LLM not configured. Defaulting to small molecule classification.');
     return { type: 'small molecule', name: prompt };
   }
 
@@ -32,24 +54,11 @@ export async function classifyPrompt(prompt: string): Promise<PromptClassificati
 
 User input: "${prompt}"`;
 
-  const result = await callLLM(question);
-  try {
-    const parsed = JSON.parse(result);
-    let type: 'small molecule' | 'macromolecule' | 'unknown' = 'unknown';
-    if (parsed.type === 'small molecule' || parsed.type === 'macromolecule') {
-      type = parsed.type;
-    } else if (parsed.type === 'unknown') {
-      type = 'unknown';
-    }
-    const name =
-      typeof parsed.name === 'string' && parsed.name.trim() !== '' ? parsed.name.trim() : null;
-    return { type, name };
-  } catch (err) {
-    const lower = result.toLowerCase();
-    if (lower.includes('macromolecule')) return { type: 'macromolecule', name: null };
-    if (lower.includes('small molecule')) return { type: 'small molecule', name: null };
-    return { type: 'unknown', name: null };
-  }
+  const result = await structuredLLMResponse(question, z.object({
+    type: z.enum(['small molecule', 'macromolecule', 'unknown']),
+    name: z.string().nullable()
+  }));
+  return result;
 }
 
 export async function interpretQueryToMoleculeName(userInput: string): Promise<string> {

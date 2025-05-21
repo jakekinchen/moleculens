@@ -18,9 +18,14 @@ interface MoleculeViewerProps {
   isLoading?: boolean;
   pdbData: string;
   title: string;
+  /**
+   * Whether atom symbol labels should be rendered.  For macromolecules we
+   * disable this to improve performance.  Defaults to true.
+   */
+  showAnnotations?: boolean;
 }
 
-export default function MoleculeViewer({ isLoading = false, pdbData, title }: MoleculeViewerProps) {
+export default function MoleculeViewer({ isLoading = false, pdbData, title, showAnnotations = true }: MoleculeViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const labelContainerRef = useRef<HTMLDivElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -52,7 +57,7 @@ export default function MoleculeViewer({ isLoading = false, pdbData, title }: Mo
     let animationId: number;
     let resizeObserver: ResizeObserver;
 
-    const config = { enableAnnotations: true };
+    const config = { enableAnnotations: showAnnotations };
 
     // Handle resize
     const onResize = () => {
@@ -70,13 +75,17 @@ export default function MoleculeViewer({ isLoading = false, pdbData, title }: Mo
       renderer.domElement.style.width = '100%';
       renderer.domElement.style.height = '100%';
       
-      labelRenderer.setSize(width, height);
-      labelRenderer.domElement.style.width = '100%';
-      labelRenderer.domElement.style.height = '100%';
+      if (showAnnotations && labelRenderer) {
+        labelRenderer.setSize(width, height);
+        labelRenderer.domElement.style.width = '100%';
+        labelRenderer.domElement.style.height = '100%';
+      }
       
       // Force a render to update the view
       renderer.render(scene, camera);
-      labelRenderer.render(scene, camera);
+      if (showAnnotations && labelRenderer) {
+        labelRenderer.render(scene, camera);
+      }
     };
 
     // Initialization
@@ -124,15 +133,17 @@ export default function MoleculeViewer({ isLoading = false, pdbData, title }: Mo
       containerRef.current.appendChild(renderer.domElement);
 
       // CSS2D renderer
-      labelRenderer = new CSS2DRenderer();
-      labelRenderer.setSize(
-        labelContainerRef.current.clientWidth,
-        labelContainerRef.current.clientHeight
-      );
-      labelRenderer.domElement.style.position = 'absolute';
-      labelRenderer.domElement.style.top = '0px';
-      labelRenderer.domElement.style.pointerEvents = 'none';
-      labelContainerRef.current.appendChild(labelRenderer.domElement);
+      if (showAnnotations) {
+        labelRenderer = new CSS2DRenderer();
+        labelRenderer.setSize(
+          labelContainerRef.current.clientWidth,
+          labelContainerRef.current.clientHeight
+        );
+        labelRenderer.domElement.style.position = 'absolute';
+        labelRenderer.domElement.style.top = '0px';
+        labelRenderer.domElement.style.pointerEvents = 'none';
+        labelContainerRef.current.appendChild(labelRenderer.domElement);
+      }
 
       // Controls
       controls = new OrbitControls(camera, renderer.domElement);
@@ -184,6 +195,11 @@ export default function MoleculeViewer({ isLoading = false, pdbData, title }: Mo
         const position = new THREE.Vector3();
         const color = new THREE.Color();
 
+        // Heuristic: disable per-atom labels if the structure is huge (avoids
+        // thousands of CSS2DObjects that kill performance for macromolecules).
+        const MAX_LABEL_ATOMS = 500; // tweak as needed
+        const enableLabelsThisModel = config.enableAnnotations && positions.count <= MAX_LABEL_ATOMS;
+
         // Atoms
         for (let i = 0; i < positions.count; i++) {
           position.set(positions.getX(i), positions.getY(i), positions.getZ(i));
@@ -195,8 +211,8 @@ export default function MoleculeViewer({ isLoading = false, pdbData, title }: Mo
           atom.scale.setScalar(40);
           root.add(atom);
 
-          // Labels
-          if (config.enableAnnotations && json.atoms[i]) {
+          // Labels (only for small molecules)
+          if (enableLabelsThisModel && json.atoms[i]) {
             const atomSymbol = json.atoms[i][4];
             if (atomSymbol) {
               const text = document.createElement('div');
@@ -324,7 +340,9 @@ export default function MoleculeViewer({ isLoading = false, pdbData, title }: Mo
       // Always update controls and render the scene
       controls.update();
       renderer.render(scene, camera);
-      labelRenderer.render(scene, camera);
+      if (showAnnotations && labelRenderer) {
+        labelRenderer.render(scene, camera);
+      }
     };
 
     init();
@@ -357,7 +375,7 @@ export default function MoleculeViewer({ isLoading = false, pdbData, title }: Mo
       if (currentRendererRef?.domElement && currentContainerRef?.contains(currentRendererRef.domElement)) {
         currentContainerRef.removeChild(currentRendererRef.domElement);
       }
-      if (currentLabelRendererRef?.domElement && currentLabelContainerRef?.contains(currentLabelRendererRef.domElement)) {
+      if (showAnnotations && currentLabelRendererRef?.domElement && currentLabelContainerRef?.contains(currentLabelRendererRef.domElement)) {
         currentLabelContainerRef.removeChild(currentLabelRendererRef.domElement);
       }
 
@@ -378,7 +396,7 @@ export default function MoleculeViewer({ isLoading = false, pdbData, title }: Mo
       rendererRef.current = null;
       labelRendererRef.current = null;
     }; // eslint-disable-line react-hooks/exhaustive-deps
-  }, [isLoading, pdbData, isPaused]); // Add isPaused to dependencies
+  }, [isLoading, pdbData, isPaused, showAnnotations]); // Add isPaused and showAnnotations to dependencies
 
   const toggleFullscreen = async () => {
     if (!wrapperRef.current) return;

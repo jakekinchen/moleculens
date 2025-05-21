@@ -11,6 +11,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const classification = await classifyPrompt(query);
+    console.log(`[PubChemService] Classification: ${JSON.stringify(classification)}`);
     let moleculeQuery = query;
     let moleculeType: 'small molecule' | 'macromolecule' = 'small molecule';
 
@@ -27,7 +28,6 @@ export async function POST(req: NextRequest) {
       name: data.name,
       cid: data.cid,
       formula: data.formula,
-      sdf: data.sdf,
     });
   } catch (err: any) {
     return NextResponse.json({ status: 'failed', error: err.message }, { status: 500 });

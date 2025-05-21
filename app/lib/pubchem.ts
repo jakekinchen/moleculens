@@ -1,9 +1,7 @@
-import { generateFromRCSB } from '../services/api';
-import fetch, { Response } from 'node-fetch';
+import fetch from 'node-fetch';
 
 export interface MoleculeData {
   pdb_data: string;
-  sdf: string;
   name: string;
   cid: number;
   formula: string;
@@ -19,13 +17,7 @@ interface SDFToPDBResponse {
 
 const PUBCHEM = 'https://pubchem.ncbi.nlm.nih.gov/rest/pug';
 const MOLECULENS_API = 'https://api.moleculens.com/prompt';
-
-const COMMON_NAME_MAPPINGS: Record<string, string> = {
-  bullvalene: 'tricyclo[3.3.2.0²,⁸]deca-3,6,9-triene',
-  'crown ether': '18-crown-6',
-  'crown ethers': '18-crown-6',
-  // …
-};
+const ENTREZ = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils';
 
 /**
  * Break a free‑form user prompt into several candidate strings that might
@@ -38,67 +30,165 @@ const COMMON_NAME_MAPPINGS: Record<string, string> = {
  * The array is ordered from most‑specific (full string) to simplest tokens,
  * so exact multi‑word names like "sodium chloride" are still tried first.
  */
-function candidateStrings(input: string): string[] {
-  const set = new Set<string>();
-
-  // 0. raw
-  const raw = input.trim();
-  if (raw) set.add(raw);
-
-  // 1. strip straight & curly quotes
-  let s = raw.replace(/["'""]/g, '');
-
-  // 2. strip possessive 's  (ferrocene's -> ferrocene)
-  s = s.replace(/\b([A-Za-z0-9-]+)'s\b/gi, '$1');
-  if (s !== raw) set.add(s);
-
-  // 3. remove simple punctuation , . ; : ? ! ( )
-  const punctFree = s.replace(/[.,;:?!()]/g, '');
-  if (punctFree !== s) set.add(punctFree);
-
-  // 4. single‑word tokens (≥3 chars) and bigrams
-  const words = punctFree
-    .split(/\s+/)
-    .map(w => w.replace(/[^A-Za-z0-9+\-[\]]/g, ''))
-    .filter(Boolean);
-
-  words.forEach(w => {
-    if (w.length >= 3) set.add(w);
-  });
-
-  for (let i = 0; i < words.length - 1; i++) {
-    const bigram = `${words[i]} ${words[i + 1]}`.trim();
-    if (bigram.split(' ').length === 2) set.add(bigram);
-  }
-
-  return Array.from(set);
-}
 
 /* ----------  top-level  ---------- */
 
 export async function resolveCid(q: string): Promise<number> {
-  for (const cand of candidateStrings(q)) {
-    // A. direct / synonym
-    let cid = await cidByExact(cand);
-    if (cid) return cid;
+  // A. direct / synonym
+  let cid = await cidByExact(q);
+  if (cid) return cid;
 
-    // B. fuzzy autocomplete
-    cid = await cidByAutocomplete(cand);
-    if (cid) return cid;
+  // B. fuzzy autocomplete
+  cid = await cidByAutocomplete(q);
+  if (cid) return cid;
 
-    // C. class / family
-    cid = await cidByClassSearch(cand);
-    if (cid) return cid;
+  // C. class / family
+  cid = await cidByClassSearch(q);
+  if (cid) return cid;
 
-    // D. hard‑coded mapping
-    const mapped = COMMON_NAME_MAPPINGS[cand.toLowerCase()];
-    if (mapped) {
-      cid = await cidByExact(mapped);
-      if (cid) return cid;
-    }
-  }
   throw new Error(`No PubChem compound matches "${q}"`);
 }
+
+const RCSB_FILES = 'https://files.rcsb.org/download';
+const RCSB_DATA  = 'https://data.rcsb.org/rest/v1/core/entry';
+const RCSB_AC    = 'https://search.rcsb.org/rcsbsearch/v1/keyboard_autocomplete';
+const RCSB_FT    = 'https://search.rcsb.org/rcsbsearch/v2/query';
+
+// ① quick regex test
+const PDB_ID_RE = /^[A-Za-z0-9]{4,6}$/;
+
+// Add common protein fallback and JSON Accept header utility
+const JSON_HEADERS = { 'Content-Type': 'application/json', Accept: 'application/json' } as const;
+
+// A few ubiquitous proteins that users ask about – provide a representative PDB ID if
+// the network searches fail (or are offline).
+const COMMON_PROTEIN_IDS: Record<string, string> = {
+  hemoglobin: '4HHB', // human oxy-hemoglobin
+  myoglobin: '1MBN',  // sperm-whale myoglobin
+  insulin: '4INS',    // human insulin (T-state)
+  lysozyme: '1LYZ',   // hen egg-white lysozyme
+};
+
+// ---------- resolvePdbId ---------- //
+// ---------- resolvePdbId ---------- //
+export async function resolvePdbId(q: string): Promise<string> {
+  const term = q.trim();
+  const termLower = term.toLowerCase();
+  const log = (...args: any[]) =>
+    process.env.NODE_ENV === 'development' && console.log('[resolvePdbId]', ...args);
+
+  // 0. static map
+  if (COMMON_PROTEIN_IDS[termLower]) {
+    log('common-map', term, '→', COMMON_PROTEIN_IDS[termLower]);
+    return COMMON_PROTEIN_IDS[termLower];
+  }
+
+  // A. exact ID
+  if (PDB_ID_RE.test(term)) {
+    log('exact-match', term);
+    return term.toUpperCase();
+  }
+
+  // B. keyboard_autocomplete
+  try {
+    const acURL = `${RCSB_AC}?term=${encodeURIComponent(term)}&target=entry&num_results=20`;
+    const ac = await fetch(acURL, { headers: JSON_HEADERS }).then(r => r.json());
+    const first = ac?.suggestions?.[0];
+    const candidate = (first?.identifier || first?.value || '').trim();
+    if (PDB_ID_RE.test(candidate)) {
+      log('autocomplete', candidate);
+      return candidate.toUpperCase();
+    }
+  } catch (e) {
+    log('autocomplete-error', e);
+  }
+
+  // C. full-text (service: full_text)
+  try {
+    const body = {
+      query: { type: 'terminal', service: 'full_text', parameters: { value: term } },
+      return_type: 'entry',
+      request_options: {
+        pager: { start: 0, rows: 20 },
+        sort: [{ sort_by: 'score', direction: 'desc' }],
+      },
+    };
+    const ft = await fetch(RCSB_FT, {
+      method: 'POST',
+      headers: JSON_HEADERS,
+      body: JSON.stringify(body),
+    }).then(r => r.json());
+
+    const hits = (ft?.result_set ?? []).filter((h: any) => PDB_ID_RE.test(h.identifier));
+    if (hits.length) {
+      log('full_text', hits.map((h: any) => h.identifier));
+      return hits[0].identifier.toUpperCase();
+    }
+  } catch (e) {
+    log('full_text-error', e);
+  }
+
+  // D. robust text search (service: text, attribute struct.title / entry_id)
+  try {
+    const mkBody = (attr: string, val: string) => ({
+      query: {
+        type: 'terminal',
+        service: 'text',
+        parameters: { attribute: attr, operator: 'contains_words', value: val },
+      },
+      return_type: 'entry',
+      request_options: {
+        pager: { start: 0, rows: 20 },
+        sort: [{ sort_by: 'score', direction: 'desc' }],
+      },
+    });
+
+    const searchAttrs = ['struct.title', 'rcsb_entry_container_identifiers.entry_id'];
+    for (const attr of searchAttrs) {
+      const rs = await fetch(RCSB_FT, {
+        method: 'POST',
+        headers: JSON_HEADERS,
+        body: JSON.stringify(mkBody(attr, term)),
+      }).then(r => r.json());
+
+      const hits = (rs?.result_set ?? []).filter((h: any) => PDB_ID_RE.test(h.identifier));
+      if (hits.length) {
+        hits.sort((a: any, b: any) => b.score - a.score);
+        log('robust_text', hits.map((h: any) => ({ id: h.identifier, score: h.score })));
+        return hits[0].identifier.toUpperCase();
+      }
+    }
+  } catch (e) {
+    log('robust_text-error', e);
+  }
+
+  // final fallback – common protein map if network searches failed
+  if (COMMON_PROTEIN_IDS[termLower]) {
+    log('fallback-common-map', term, '→', COMMON_PROTEIN_IDS[termLower]);
+    return COMMON_PROTEIN_IDS[termLower];
+  }
+
+  throw new Error(`No PDB entry matches "${q}"`);
+}
+
+// ---------- generateFromRCSB ---------- //
+export async function generateFromRCSB({prompt}:{prompt:string}) {
+  const id = await resolvePdbId(prompt);
+
+  // fetch PDB block
+  const pdb_data = await fetch(`${RCSB_FILES}/${id}.pdb`).then(r=>r.text());
+
+  // fetch minimal metadata
+  let title = prompt;
+  try {
+    const meta = await fetch(`${RCSB_DATA}/${id}`).then(r=>r.json());
+    title = meta?.struct?.title ?? title;
+  } catch {/* ignore */}
+
+  return {pdb_data, title, pdb_id: id};
+}
+
+
 
 export async function fetchMoleculeData(query: string, type: 'small molecule' | 'macromolecule'): Promise<MoleculeData> {
   console.log(`[PubChemService] Fetching molecule data for query: "${query}"`);
@@ -107,7 +197,6 @@ export async function fetchMoleculeData(query: string, type: 'small molecule' | 
     const response = await generateFromRCSB({ prompt: query });
     return {
       pdb_data: response.pdb_data,
-      sdf: '',
       name: response.title || query,
       cid: 0,
       formula: '',
@@ -164,7 +253,6 @@ export async function fetchMoleculeData(query: string, type: 'small molecule' | 
 
   return {
     pdb_data,
-    sdf,
     name: query,
     cid,
     formula,
@@ -194,9 +282,9 @@ async function cidByAutocomplete(term: string): Promise<number | null> {
 
 // C. Entrez class search
 async function cidByClassSearch(term: string): Promise<number | null> {
-  const xml = await fetch(`${PUBCHEM}/compound/name/${encodeURIComponent(term)}/cids/XML`).then(
-    res => res.text()
-  );
+  const xml = await fetch(
+    `${ENTREZ}/esearch.fcgi?db=pccompound&retmax=200&term=${encodeURIComponent(term)}`
+  ).then(r=>r.text());
   const cids = [...xml.matchAll(/<Id>(\d+)<\/Id>/g)].map(m => m[1]);
   if (!cids.length) return null;
 
