@@ -172,6 +172,77 @@ export default function MoleculeViewer({ isLoading = false, pdbData, title, show
       labelRendererRef.current = labelRenderer;
     };
 
+    const buildInstancedAtoms = (
+      sphereGeometry: THREE.IcosahedronGeometry,
+      positions: THREE.BufferAttribute,
+      colors: THREE.BufferAttribute,
+      json: any,
+      enableLabels: boolean
+    ) => {
+      const material = new THREE.MeshPhongMaterial({ vertexColors: true });
+      const mesh = new THREE.InstancedMesh(
+        sphereGeometry,
+        material,
+        positions.count
+      );
+
+      const dummy = new THREE.Object3D();
+      const color = new THREE.Color();
+
+      for (let i = 0; i < positions.count; i++) {
+        dummy.position
+          .set(
+            positions.getX(i),
+            positions.getY(i),
+            positions.getZ(i)
+          )
+          .multiplyScalar(120);
+        dummy.scale.setScalar(40);
+        dummy.updateMatrix();
+        mesh.setMatrixAt(i, dummy.matrix);
+
+        color.setRGB(colors.getX(i), colors.getY(i), colors.getZ(i));
+        mesh.setColorAt(i, color);
+
+        if (enableLabels && json.atoms[i]) {
+          const atomSymbol = json.atoms[i][4];
+          if (atomSymbol) {
+            const text = document.createElement('div');
+            text.className = 'atom-label';
+            text.textContent = atomSymbol;
+            text.style.color = `rgb(${Math.round(color.r * 255)}, ${Math.round(
+              color.g * 255
+            )}, ${Math.round(color.b * 255)})`;
+            text.style.textShadow = '-1px 1px 1px rgb(0,0,0)';
+            text.style.fontSize = '14px';
+            text.style.pointerEvents = 'none';
+
+            const label = new CSS2DObject(text);
+            label.position.copy(dummy.position);
+            labelsGroup.add(label);
+          }
+        }
+      }
+
+      mesh.instanceMatrix.needsUpdate = true;
+      if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+      root.add(mesh);
+    };
+
+    const buildPointsCloud = (
+      positions: THREE.BufferAttribute,
+      colors: THREE.BufferAttribute
+    ) => {
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute('position', positions.clone());
+      geometry.setAttribute('color', colors.clone());
+      geometry.scale(120, 120, 120);
+
+      const material = new THREE.PointsMaterial({ size: 40, vertexColors: true });
+      const points = new THREE.Points(geometry, material);
+      root.add(points);
+    };
+
     // PDB loader
     const loadMolecule = () => {
       const pdbBlob = new Blob([pdbData], { type: 'text/plain' });
@@ -200,63 +271,108 @@ export default function MoleculeViewer({ isLoading = false, pdbData, title, show
         const MAX_LABEL_ATOMS = 500; // tweak as needed
         const enableLabelsThisModel = config.enableAnnotations && positions.count <= MAX_LABEL_ATOMS;
 
-        // Atoms
-        for (let i = 0; i < positions.count; i++) {
-          position.set(positions.getX(i), positions.getY(i), positions.getZ(i));
-          color.setRGB(colors.getX(i), colors.getY(i), colors.getZ(i));
+        const ATOMS_INSTANCED_THRESHOLD = 5000;
+        const POINTS_THRESHOLD = 20000;
 
-          const atomMaterial = new THREE.MeshPhongMaterial({ color });
-          const atom = new THREE.Mesh(sphereGeometry, atomMaterial);
-          atom.position.copy(position).multiplyScalar(120);
-          atom.scale.setScalar(40);
-          root.add(atom);
+        if (positions.count <= ATOMS_INSTANCED_THRESHOLD) {
+          // Individual meshes (existing path)
+          for (let i = 0; i < positions.count; i++) {
+            position.set(
+              positions.getX(i),
+              positions.getY(i),
+              positions.getZ(i)
+            );
+            color.setRGB(colors.getX(i), colors.getY(i), colors.getZ(i));
 
-          // Labels (only for small molecules)
-          if (enableLabelsThisModel && json.atoms[i]) {
-            const atomSymbol = json.atoms[i][4];
-            if (atomSymbol) {
-              const text = document.createElement('div');
-              text.className = 'atom-label';
-              text.textContent = atomSymbol;
-              text.style.color = `rgb(${Math.round(color.r * 255)}, ${Math.round(
-                color.g * 255
-              )}, ${Math.round(color.b * 255)})`;
-              text.style.textShadow = '-1px 1px 1px rgb(0,0,0)';
-              text.style.fontSize = '14px';
-              text.style.pointerEvents = 'none';
+            const atomMaterial = new THREE.MeshPhongMaterial({ color });
+            const atom = new THREE.Mesh(sphereGeometry, atomMaterial);
+            atom.position.copy(position).multiplyScalar(120);
+            atom.scale.setScalar(40);
+            root.add(atom);
 
-              const label = new CSS2DObject(text);
-              label.position.copy(atom.position);
-              labelsGroup.add(label);
+            if (enableLabelsThisModel && json.atoms[i]) {
+              const atomSymbol = json.atoms[i][4];
+              if (atomSymbol) {
+                const text = document.createElement('div');
+                text.className = 'atom-label';
+                text.textContent = atomSymbol;
+                text.style.color = `rgb(${Math.round(color.r * 255)}, ${Math.round(
+                  color.g * 255
+                )}, ${Math.round(color.b * 255)})`;
+                text.style.textShadow = '-1px 1px 1px rgb(0,0,0)';
+                text.style.fontSize = '14px';
+                text.style.pointerEvents = 'none';
+
+                const label = new CSS2DObject(text);
+                label.position.copy(atom.position);
+                labelsGroup.add(label);
+              }
             }
           }
-        }
 
-        // Bonds
-        positions = geometryBonds.getAttribute('position');
-        const start = new THREE.Vector3();
-        const end = new THREE.Vector3();
+          // Bonds
+          positions = geometryBonds.getAttribute('position');
+          const start = new THREE.Vector3();
+          const end = new THREE.Vector3();
 
-        for (let i = 0; i < positions.count; i += 2) {
-          start
-            .set(positions.getX(i), positions.getY(i), positions.getZ(i))
-            .multiplyScalar(120);
-          end
-            .set(
-              positions.getX(i + 1),
-              positions.getY(i + 1),
-              positions.getZ(i + 1)
-            )
-            .multiplyScalar(120);
+          for (let i = 0; i < positions.count; i += 2) {
+            start
+              .set(positions.getX(i), positions.getY(i), positions.getZ(i))
+              .multiplyScalar(120);
+            end
+              .set(
+                positions.getX(i + 1),
+                positions.getY(i + 1),
+                positions.getZ(i + 1)
+              )
+              .multiplyScalar(120);
 
-          const bondMesh = new THREE.Mesh(
-            boxGeometry,
-            new THREE.MeshPhongMaterial({ color: 0xffffff })
+            const bondMesh = new THREE.Mesh(
+              boxGeometry,
+              new THREE.MeshPhongMaterial({ color: 0xffffff })
+            );
+            bondMesh.position.copy(start).lerp(end, 0.5);
+            bondMesh.scale.set(8, 8, start.distanceTo(end));
+            bondMesh.lookAt(end);
+            root.add(bondMesh);
+          }
+        } else if (positions.count <= POINTS_THRESHOLD) {
+          buildInstancedAtoms(
+            sphereGeometry,
+            positions,
+            colors,
+            json,
+            enableLabelsThisModel
           );
-          bondMesh.position.copy(start).lerp(end, 0.5);
-          bondMesh.scale.set(8, 8, start.distanceTo(end));
-          bondMesh.lookAt(end);
-          root.add(bondMesh);
+
+          // Bonds for instanced meshes
+          positions = geometryBonds.getAttribute('position');
+          const start = new THREE.Vector3();
+          const end = new THREE.Vector3();
+
+          for (let i = 0; i < positions.count; i += 2) {
+            start
+              .set(positions.getX(i), positions.getY(i), positions.getZ(i))
+              .multiplyScalar(120);
+            end
+              .set(
+                positions.getX(i + 1),
+                positions.getY(i + 1),
+                positions.getZ(i + 1)
+              )
+              .multiplyScalar(120);
+
+            const bondMesh = new THREE.Mesh(
+              boxGeometry,
+              new THREE.MeshPhongMaterial({ color: 0xffffff })
+            );
+            bondMesh.position.copy(start).lerp(end, 0.5);
+            bondMesh.scale.set(8, 8, start.distanceTo(end));
+            bondMesh.lookAt(end);
+            root.add(bondMesh);
+          }
+        } else {
+          buildPointsCloud(positions, colors);
         }
 
         URL.revokeObjectURL(pdbUrl);
