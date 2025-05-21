@@ -28,6 +28,7 @@ export async function POST(req: NextRequest) {
       name: data.name,
       cid: data.cid,
       formula: data.formula,
+      info: data.info,
     });
   } catch (err: any) {
     return NextResponse.json({ status: 'failed', error: err.message }, { status: 500 });

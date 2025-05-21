@@ -1,10 +1,12 @@
 import fetch from 'node-fetch';
+import { MoleculeInfo } from '@/types';
 
 export interface MoleculeData {
   pdb_data: string;
   name: string;
   cid: number;
   formula: string;
+  info: MoleculeInfo;
 }
 
 interface SDFToPDBRequest {
@@ -271,11 +273,23 @@ export async function fetchMoleculeData(query: string, type: 'small molecule' | 
     // If conversion fails, we might still want to return other data, but PDB will be empty
   }
 
+  let info: MoleculeInfo = { formula };
+  try {
+    const recordResp = await fetch(`${PUBCHEM}/compound/cid/${cid}/record/JSON`);
+    if (recordResp.ok) {
+      const record = await recordResp.json();
+      info = { ...info, ...extractPubChemInfo(record) };
+    }
+  } catch (e) {
+    console.error('[PubChemService] Error fetching record info:', e);
+  }
+
   return {
     pdb_data,
     name: query,
     cid,
     formula,
+    info,
   };
 }
 
@@ -361,4 +375,34 @@ async function convertSDFToPDB(sdfData: string): Promise<string> {
     console.error('[PubChemService] Error converting SDF to PDB:', error);
     throw error;
   }
+}
+
+function extractPubChemInfo(record: any): MoleculeInfo {
+  const info: MoleculeInfo = {};
+  const compound = record?.PC_Compounds?.[0];
+  const props = compound?.props || [];
+
+  const getProp = (label: string) => {
+    for (const p of props) {
+      if (p?.urn?.label === label) {
+        return p?.value?.sval ?? p?.value?.fval ?? p?.value?.ival;
+      }
+    }
+    return undefined;
+  };
+
+  info.formula = getProp('Molecular Formula');
+  const mw = getProp('Molecular Weight');
+  if (mw !== undefined) info.formula_weight = parseFloat(mw);
+  info.canonical_smiles = getProp('Canonical SMILES');
+  info.isomeric_smiles = getProp('Isomeric SMILES');
+  info.inchi = getProp('InChI');
+  info.inchikey = getProp('InChIKey');
+  const fc = getProp('Formal Charge');
+  if (fc !== undefined) info.formal_charge = parseInt(fc as any, 10);
+  info.synonyms = props
+    .filter((p: any) => p?.urn?.label === 'Synonym')
+    .map((p: any) => p?.value?.sval)
+    .filter(Boolean);
+  return info;
 }

@@ -23,15 +23,17 @@ interface MoleculeViewerProps {
    * disable this to improve performance.  Defaults to true.
    */
   showAnnotations?: boolean;
+  moleculeInfo?: any | null;
 }
 
-export default function MoleculeViewer({ isLoading = false, pdbData, title, showAnnotations = true }: MoleculeViewerProps) {
+export default function MoleculeViewer({ isLoading = false, pdbData, title, showAnnotations = true, moleculeInfo }: MoleculeViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const captionRef = useRef<HTMLDivElement | null>(null);
   const labelContainerRef = useRef<HTMLDivElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
+  const [isInfoOpen, setIsInfoOpen] = useState(false);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const labelRendererRef = useRef<CSS2DRenderer | null>(null);
   const rotationRef = useRef<number>(0);
@@ -541,6 +543,10 @@ export default function MoleculeViewer({ isLoading = false, pdbData, title, show
     setIsPaused(!isPaused);
   };
 
+  const toggleInfo = () => {
+    setIsInfoOpen(!isInfoOpen);
+  };
+
   useEffect(() => {
     const handleFullscreenChange = () => {
       setIsFullscreen(!!document.fullscreenElement);
@@ -622,6 +628,16 @@ export default function MoleculeViewer({ isLoading = false, pdbData, title, show
                 </svg>
               )}
             </button>
+            {/* Info button */}
+            <button
+              onClick={toggleInfo}
+              className="p-2 rounded-lg text-white hover:text-gray-300 transition-colors duration-200"
+              title={isInfoOpen ? 'Hide Info' : 'Show Info'}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-9-3a1 1 0 112 0 1 1 0 01-2 0zm2 8a1 1 0 11-2 0v-4a1 1 0 112 0v4z" clipRule="evenodd" />
+              </svg>
+            </button>
             {/* Fullscreen button */}
             <button
               onClick={toggleFullscreen}
@@ -640,6 +656,27 @@ export default function MoleculeViewer({ isLoading = false, pdbData, title, show
               )}
             </button>
           </div>
+          {moleculeInfo && (
+            <div
+              className={`absolute left-0 right-0 bottom-0 bg-gray-800 bg-opacity-90 text-white text-xs p-3 transition-transform duration-300 ${isInfoOpen ? 'translate-y-0' : 'translate-y-full'}`}
+            >
+              {moleculeInfo.formula && (
+                <div className="mb-1">Formula: {moleculeInfo.formula}</div>
+              )}
+              {moleculeInfo.formula_weight && (
+                <div className="mb-1">MW: {moleculeInfo.formula_weight}</div>
+              )}
+              {moleculeInfo.canonical_smiles && (
+                <div className="mb-1 break-all">SMILES: {moleculeInfo.canonical_smiles}</div>
+              )}
+              {moleculeInfo.inchi && (
+                <div className="mb-1 break-all">InChI: {moleculeInfo.inchi}</div>
+              )}
+              {moleculeInfo.synonyms && moleculeInfo.synonyms.length > 0 && (
+                <div className="mb-1">Synonyms: {moleculeInfo.synonyms.slice(0,3).join(', ')}</div>
+              )}
+            </div>
+          )}
         </>
       )}
     </div>

@@ -99,6 +99,7 @@ export const fetchMoleculeData = async (
   name: string;
   cid: number;
   formula: string;
+  info: any;
   sdf: string;
 }> => {
   const endpoint = `${API_BASE_URL}/prompt/fetch-molecule-data/`;

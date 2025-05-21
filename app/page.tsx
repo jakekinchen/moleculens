@@ -41,6 +41,7 @@ END`;
   const [isInteractive, setIsInteractive] = useState(false);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [isTimeMachineOpen, setIsTimeMachineOpen] = useState(false);
+  const [moleculeInfo, setMoleculeInfo] = useState<any | null>(null);
 
   const handleVisualizationUpdate = (pdb: string, htmlContent?: string, vizTitle?: string) => {
     setPdbData(pdb);
@@ -90,27 +91,29 @@ END`;
         <LayoutWrapper useConstraints={true}>
           <div className="panels-container">
             <div className="input-panel-container">
-              <InputPanel
-                onVisualizationUpdate={handleVisualizationUpdate}
-                onLoadingChange={setIsLoading}
-                currentPrompt={prompt}
-                onPromptChange={setPrompt}
-                onPromptSubmit={handlePromptSubmit}
-                model={model}
-                isInteractive={isInteractive}
-                usePubChem={true}
-                currentHtml={html ?? undefined}
-                currentTitle={title ?? undefined}
-              />
-            </div>
+            <InputPanel
+              onVisualizationUpdate={handleVisualizationUpdate}
+              onLoadingChange={setIsLoading}
+              currentPrompt={prompt}
+              onPromptChange={setPrompt}
+              onPromptSubmit={handlePromptSubmit}
+              model={model}
+              isInteractive={isInteractive}
+              usePubChem={true}
+              currentHtml={html ?? undefined}
+              currentTitle={title ?? undefined}
+              onInfoUpdate={setMoleculeInfo}
+            />
+          </div>
 
-            <div className="molecule-viewer-container">
-              <MoleculeViewer
-                isLoading={isLoading}
-                pdbData={pdbData!}
-                title={title!}
-              />
-            </div>
+          <div className="molecule-viewer-container">
+            <MoleculeViewer
+              isLoading={isLoading}
+              pdbData={pdbData!}
+              title={title!}
+              moleculeInfo={moleculeInfo}
+            />
+          </div>
           </div>
         </LayoutWrapper>
       </main>

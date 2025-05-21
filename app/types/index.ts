@@ -59,6 +59,17 @@ export interface ModelInfo {
   is_default: boolean;
 }
 
+export interface MoleculeInfo {
+  formula?: string;
+  formula_weight?: number;
+  canonical_smiles?: string;
+  isomeric_smiles?: string;
+  inchi?: string;
+  inchikey?: string;
+  formal_charge?: number;
+  synonyms?: string[];
+}
+
 export interface MoleculePlacement {
   molecule: string;
   x: number;
