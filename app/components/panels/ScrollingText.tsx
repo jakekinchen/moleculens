@@ -11,6 +11,7 @@ const ScrollingText: React.FC<ScrollingTextProps> = ({ text, className }) => {
   const textRef = useRef<HTMLSpanElement>(null);
   const [isOverflowing, setIsOverflowing] = useState(false);
   const [animationDuration, setAnimationDuration] = useState('20s');
+  const [duplicateOffset, setDuplicateOffset] = useState(0);
 
   useEffect(() => {
     const checkOverflowAndSetDuration = () => {
@@ -21,6 +22,7 @@ const ScrollingText: React.FC<ScrollingTextProps> = ({ text, className }) => {
         setIsOverflowing(newIsOverflowing);
 
         if (newIsOverflowing) {
+          setDuplicateOffset(textWidth);
           // Adjust the divisor (e.g., 40) to control speed. Lower = faster.
           const duration = Math.max(5, textWidth / 40); // Min duration 5s
           setAnimationDuration(`${duration}s`);
@@ -50,7 +52,7 @@ const ScrollingText: React.FC<ScrollingTextProps> = ({ text, className }) => {
         <span
           aria-hidden="true"
           className={`${styles.span} ${styles.animate} ${styles.duplicate}`}
-          style={{ animationDuration }}
+          style={{ animationDuration, left: `${duplicateOffset}px` }}
         >
           {text}
         </span>

@@ -222,6 +222,7 @@ export async function fetchMoleculeData(query: string, type: 'small molecule' | 
       name: response.title || query,
       cid: 0,
       formula: '',
+      info: {},
     };
   }
   // 1. Get CID
