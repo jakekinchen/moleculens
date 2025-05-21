@@ -114,6 +114,19 @@
   .panel {
     @apply bg-white rounded-lg shadow-lg p-4;
   }
+
+  .molecule-title {
+    position: absolute;
+    bottom: 8px;
+    left: 8px;
+    max-width: 90%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    pointer-events: none;
+    font-weight: 600;
+    color: #fff;
+  }
 }
 
 
