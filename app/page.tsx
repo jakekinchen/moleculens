@@ -8,10 +8,7 @@ import MoleculeViewer from './components/panels/MoleculeViewer';
 import { VisualizationOutput, HistoryEntry } from './types';
 import { LayoutWrapper } from './components/layout/LayoutWrapper';
 import { TimeMachinePanel } from './components/panels/TimeMachinePanel';
-import {
-  saveHistoryToSession,
-  loadHistoryFromSession,
-} from './lib/utils';
+import { saveHistoryToSession, loadHistoryFromSession } from './lib/utils';
 
 export default function HomePage() {
   // Default molecule data (Propane)
@@ -91,29 +88,30 @@ END`;
         <LayoutWrapper useConstraints={true}>
           <div className="panels-container">
             <div className="input-panel-container">
-            <InputPanel
-              onVisualizationUpdate={handleVisualizationUpdate}
-              onLoadingChange={setIsLoading}
-              currentPrompt={prompt}
-              onPromptChange={setPrompt}
-              onPromptSubmit={handlePromptSubmit}
-              model={model}
-              isInteractive={isInteractive}
-              usePubChem={true}
-              currentHtml={html ?? undefined}
-              currentTitle={title ?? undefined}
-              onInfoUpdate={setMoleculeInfo}
-            />
-          </div>
+              <InputPanel
+                onVisualizationUpdate={handleVisualizationUpdate}
+                onLoadingChange={setIsLoading}
+                currentPrompt={prompt}
+                onPromptChange={setPrompt}
+                onPromptSubmit={handlePromptSubmit}
+                model={model}
+                isInteractive={isInteractive}
+                usePubChem={true}
+                currentHtml={html ?? undefined}
+                currentTitle={title ?? undefined}
+                onInfoUpdate={setMoleculeInfo}
+              />
+            </div>
 
-          <div className="molecule-viewer-container">
-            <MoleculeViewer
-              isLoading={isLoading}
-              pdbData={pdbData!}
-              title={title!}
-              moleculeInfo={moleculeInfo}
-            />
-          </div>
+            <div className="molecule-viewer-container">
+              <MoleculeViewer
+                isLoading={isLoading}
+                pdbData={pdbData!}
+                title={title!}
+                moleculeInfo={moleculeInfo}
+                enableRibbonOverlay={false}
+              />
+            </div>
           </div>
         </LayoutWrapper>
       </main>
