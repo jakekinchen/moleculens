@@ -18,6 +18,9 @@ interface SDFToPDBResponse {
 }
 
 const PUBCHEM = 'https://pubchem.ncbi.nlm.nih.gov/rest/pug';
+// Autocomplete lives outside the PUG namespace
+const PUBCHEM_AC =
+  'https://pubchem.ncbi.nlm.nih.gov/rest/autocomplete/compound';
 const MOLECULENS_API = 'https://api.moleculens.com/prompt';
 const ENTREZ = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils';
 
@@ -309,9 +312,9 @@ async function cidByExact(term: string): Promise<number | null> {
 
 // B. autocomplete → reuse A.
 async function cidByAutocomplete(term: string): Promise<number | null> {
-  // The public autocomplete endpoint expects the entity category ("compound")
-  // between the resource and the term.  Without it the server responds 400.
-  const url = `${PUBCHEM}/autocomplete/compound/${encodeURIComponent(term)}/JSON?limit=20`;
+  // The autocomplete endpoint is separate from PUG and already includes
+  // the "compound" entity segment.
+  const url = `${PUBCHEM_AC}/${encodeURIComponent(term)}/JSON?limit=20`;
   const r = await fetch(url);
   if (!r.ok) {
     if (process.env.NODE_ENV === 'development') {
