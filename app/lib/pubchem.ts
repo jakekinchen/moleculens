@@ -197,23 +197,59 @@ export async function resolvePdbId(q: string): Promise<string> {
 }
 
 // ---------- generateFromRCSB ---------- //
+function extractRCSBInfo(meta: any): MoleculeInfo {
+  const info: MoleculeInfo = {};
+  
+  try {
+    // Basic structure info
+    info.structure_title = meta?.struct?.title;
+    info.resolution = meta?.rcsb_entry_info?.resolution_combined?.[0];
+    info.experimental_method = meta?.rcsb_entry_info?.experimental_method;
+    info.formula_weight = meta?.rcsb_entry_info?.molecular_weight;
+    
+    // Chain info
+    info.chain_count = meta?.rcsb_entry_info?.deposited_polymer_entity_instance_count;
+    
+    // Publication info
+    info.publication_year = meta?.rcsb_primary_citation?.year;
+    info.publication_doi = meta?.rcsb_primary_citation?.pdbx_database_id_doi;
+    
+    // Keywords and classification
+    info.keywords = meta?.struct_keywords?.pdbx_keywords?.split(',').map((k: string) => k.trim()) || [];
+    
+    // Source organism
+    const source = meta?.rcsb_entity_source_organism?.[0] || {};
+    info.organism_scientific = source?.scientific_name;
+    info.organism_common = source?.common_name;
+    
+    // Dates
+    info.deposition_date = meta?.rcsb_accession_info?.deposit_date;
+  } catch (error) {
+    console.error('[PubChemService] Error extracting RCSB info:', error);
+  }
+  
+  return info;
+}
+
 export async function generateFromRCSB({prompt}:{prompt:string}) {
   const id = await resolvePdbId(prompt);
 
   // fetch PDB block
   const pdb_data = await fetch(`${RCSB_FILES}/${id}.pdb`).then(r=>r.text());
 
-  // fetch minimal metadata
+  // fetch metadata
   let title = prompt;
+  let info: MoleculeInfo = {};
   try {
     const meta = await fetch(`${RCSB_DATA}/${id}`).then(r=>r.json());
     title = meta?.struct?.title ?? title;
-  } catch {/* ignore */}
+    info = extractRCSBInfo(meta);
+  } catch (error) {
+    console.error('[PubChemService] Error fetching RCSB metadata:', error);
+  }
 
-  return {pdb_data, title, pdb_id: id};
+  return {pdb_data, title, pdb_id: id, info};
 }
-
-
 
 export async function fetchMoleculeData(query: string, type: 'small molecule' | 'macromolecule'): Promise<MoleculeData> {
   console.log(`[PubChemService] Fetching molecule data for query: "${query}"`);
@@ -225,7 +261,7 @@ export async function fetchMoleculeData(query: string, type: 'small molecule' | 
       name: response.title || query,
       cid: 0,
       formula: '',
-      info: {},
+      info: response.info,  // Now passing through the RCSB info
     };
   }
   // 1. Get CID

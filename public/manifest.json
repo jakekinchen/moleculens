@@ -1,7 +1,7 @@
 {
-  "name": "SciVizAI",
-  "short_name": "SciVizAI",
-  "description": "Interactive Scientific Visualization Platform for Chemistry Learning",
+  "name": "Moleculens",
+  "short_name": "Moleculens",
+  "description": "Interactive Molecular Visualization Platform for Chemistry Learning",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",

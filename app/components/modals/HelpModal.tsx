@@ -25,12 +25,12 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose }) => {
           </div>
 
           <h2 className="text-2xl font-semibold mb-4 text-white">
-            Welcome to SciVizAI
+            Welcome to Moleculens
           </h2>
 
           <div className="space-y-4 text-gray-300">
             <p>
-              SciVizAI helps you learn chemistry through interactive 3D visualizations. 
+              Moleculens helps you learn chemistry through interactive 3D visualizations. 
               Simply describe what you want to learn about, and we&apos;ll generate a 3D model 
               that you can explore.
             </p>

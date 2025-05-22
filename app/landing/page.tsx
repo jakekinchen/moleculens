@@ -1,7 +1,7 @@
 import Link from 'next/link';
 
 export const metadata = {
-  title: 'Sci-Viz AI – Explore Molecules with AI',
+  title: 'Moleculens – Explore Molecules with AI',
   description: 'Interactive AI-powered molecular visualisation for both small molecules and large macromolecules',
 };
 
@@ -11,7 +11,7 @@ export default function LandingPage() {
       {/* Hero */}
       <section className="w-full max-w-4xl text-center space-y-6">
         <h1 className="text-4xl md:text-6xl font-bold leading-tight">
-          Welcome to <span className="text-indigo-400">Sci-Viz&nbsp;AI</span>
+          Welcome to <span className="text-indigo-400">Moleculens</span>
         </h1>
         <p className="text-lg md:text-2xl text-gray-300">
           AI-assisted 3-D visualisation of atoms, molecules, and massive biomacromolecules – right in your browser.

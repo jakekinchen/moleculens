@@ -9,7 +9,7 @@ export function cn(...inputs: ClassValue[]) {
 
 // Storage keys
 const STORAGE_KEYS = {
-  HISTORY: 'sciviz_history',
+  HISTORY: 'moleculens_history',
 };
 
 // Save visualization history to session storage

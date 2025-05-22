@@ -770,10 +770,13 @@ export default function MoleculeViewer({
             <div
               className={`absolute left-0 right-0 bottom-0 bg-gray-800 bg-opacity-90 text-white text-xs p-3 transition-transform duration-300 ${isInfoOpen ? 'translate-y-0' : 'translate-y-full'}`}
             >
+              {/* Common fields */}
               {moleculeInfo.formula && <div className="mb-1">Formula: {moleculeInfo.formula}</div>}
               {moleculeInfo.formula_weight && (
-                <div className="mb-1">MW: {moleculeInfo.formula_weight}</div>
+                <div className="mb-1">MW: {moleculeInfo.formula_weight.toFixed(2)} kDa</div>
               )}
+
+              {/* Small molecule specific fields */}
               {moleculeInfo.canonical_smiles && (
                 <div className="mb-1 break-all">SMILES: {moleculeInfo.canonical_smiles}</div>
               )}
@@ -782,6 +785,41 @@ export default function MoleculeViewer({
               )}
               {moleculeInfo.synonyms && moleculeInfo.synonyms.length > 0 && (
                 <div className="mb-1">Synonyms: {moleculeInfo.synonyms.slice(0, 3).join(', ')}</div>
+              )}
+
+              {/* Macromolecule specific fields */}
+              {moleculeInfo.resolution && (
+                <div className="mb-1">Resolution: {moleculeInfo.resolution.toFixed(1)} Å</div>
+              )}
+              {moleculeInfo.experimental_method && (
+                <div className="mb-1">Method: {moleculeInfo.experimental_method}</div>
+              )}
+              {moleculeInfo.chain_count && (
+                <div className="mb-1">Chains: {moleculeInfo.chain_count}</div>
+              )}
+              {moleculeInfo.organism_scientific && (
+                <div className="mb-1">
+                  Source: {moleculeInfo.organism_scientific}
+                  {moleculeInfo.organism_common && ` (${moleculeInfo.organism_common})`}
+                </div>
+              )}
+              {moleculeInfo.keywords && moleculeInfo.keywords.length > 0 && (
+                <div className="mb-1">Keywords: {moleculeInfo.keywords.join(', ')}</div>
+              )}
+              {moleculeInfo.publication_year && (
+                <div className="mb-1">
+                  Published: {moleculeInfo.publication_year}
+                  {moleculeInfo.publication_doi && (
+                    <a
+                      href={`https://doi.org/${moleculeInfo.publication_doi}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="ml-2 text-blue-300 hover:text-blue-400"
+                    >
+                      DOI
+                    </a>
+                  )}
+                </div>
               )}
             </div>
           )}

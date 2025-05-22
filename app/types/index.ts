@@ -60,14 +60,29 @@ export interface ModelInfo {
 }
 
 export interface MoleculeInfo {
+  // Common fields
   formula?: string;
   formula_weight?: number;
+  
+  // Small molecule specific fields
   canonical_smiles?: string;
   isomeric_smiles?: string;
   inchi?: string;
   inchikey?: string;
   formal_charge?: number;
   synonyms?: string[];
+  
+  // Macromolecule specific fields
+  resolution?: number;
+  experimental_method?: string;
+  chain_count?: number;
+  publication_year?: number;
+  publication_doi?: string;
+  keywords?: string[];
+  organism_scientific?: string;
+  organism_common?: string;
+  deposition_date?: string;
+  structure_title?: string;
 }
 
 export interface MoleculePlacement {
