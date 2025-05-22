@@ -16,8 +16,19 @@ export async function POST(req: NextRequest) {
     let moleculeType: 'small molecule' | 'macromolecule' = 'small molecule';
 
     if (classification.type !== 'unknown') {
-      moleculeQuery = classification.name ?? (await interpretQueryToMoleculeName(query));
       moleculeType = classification.type === 'macromolecule' ? 'macromolecule' : 'small molecule';
+
+      // Start with the LLM-supplied (or fallback) name.
+      moleculeQuery = classification.name ?? '';
+
+      // Heuristics when the LLM is not configured and we got back the raw prompt:
+      //  • more than 3 words, OR contains punctuation → likely not a molecule name.
+      const looksLikeRawPrompt =
+        moleculeQuery.trim().split(/\s+/).length > 3 || /[?!.,:;]/.test(moleculeQuery);
+
+      if (!moleculeQuery || looksLikeRawPrompt) {
+        moleculeQuery = await interpretQueryToMoleculeName(query);
+      }
     }
 
     const data = await fetchMoleculeData(moleculeQuery, moleculeType);

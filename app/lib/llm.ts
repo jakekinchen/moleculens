@@ -50,7 +50,7 @@ export async function classifyPrompt(prompt: string): Promise<PromptClassificati
     return { type: 'small molecule', name: prompt };
   }
 
-  const question = `You are a chemical assistant. Classify the following user input as a 'small molecule', 'macromolecule', or 'unknown'. If a specific molecule or macromolecule can be identified, provide its common name. Respond ONLY with JSON in the form {"type":"molecule|macromolecule|unknown","name":"<name>"}.
+  const question = `You are a chemical assistant. Classify the following user input as a 'small molecule', 'macromolecule', or 'unknown'. If a specific molecule or macromolecule can be identified, provide its common name. Respond ONLY with JSON in the form {"type":"molecule|macromolecule|unknown","name":"<name>"}. For example if the prompt is "Tell me about the structure of glucose", the response should be {"type":"small molecule","name":"glucose"} or if the prompt is "Tell me about the structure of a protein", the response should be {"type":"macromolecule","name":"leucine"}.
 
 User input: "${prompt}"`;
 
