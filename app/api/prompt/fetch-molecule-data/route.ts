@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchMoleculeData } from '@/lib/pubchem';
-import { classifyPrompt, interpretQueryToMoleculeName } from '@/lib/llm';
+import { classifyPrompt} from '@/lib/llm';
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
   try {
     const classification = await classifyPrompt(query);
     console.log(`[PubChemService] Classification: ${JSON.stringify(classification)}`);
-    let moleculeQuery = query;
+    let moleculeQuery = classification.name ?? '';
     let moleculeType: 'small molecule' | 'macromolecule' = 'small molecule';
 
     if (classification.type !== 'unknown') {
@@ -21,14 +21,11 @@ export async function POST(req: NextRequest) {
       // Start with the LLM-supplied (or fallback) name.
       moleculeQuery = classification.name ?? '';
 
-      // Heuristics when the LLM is not configured and we got back the raw prompt:
-      //  • more than 3 words, OR contains punctuation → likely not a molecule name.
-      const looksLikeRawPrompt =
-        moleculeQuery.trim().split(/\s+/).length > 3 || /[?!.,:;]/.test(moleculeQuery);
-
-      if (!moleculeQuery || looksLikeRawPrompt) {
-        moleculeQuery = await interpretQueryToMoleculeName(query);
-      }
+    } else {
+      return NextResponse.json({
+        status: 'failed',
+        error: 'Non-molecular prompt: Your prompt should be related to molecular structures. Click on the "Suggest Molecule" button to get started.'
+      }, { status: 400 });
     }
 
     const data = await fetchMoleculeData(moleculeQuery, moleculeType);

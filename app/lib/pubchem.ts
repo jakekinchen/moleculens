@@ -315,7 +315,7 @@ export async function fetchMoleculeData(query: string, type: 'small molecule' | 
   console.log(`[PubChemService] Resolved CID: ${cid} for query: "${query}"`);
 
   // 2. Get SDF data
-  const sdfResp = await fetch(`${PUBCHEM}/compound/cid/${cid}/SDF`);
+  const sdfResp = await fetch(`${PUBCHEM}/compound/cid/${cid}/SDF?record_type=3d`);
   if (!sdfResp.ok) {
     const errorText = await sdfResp.text();
     console.error(`[PubChemService] PubChem SDF request failed: ${sdfResp.status} - ${errorText}`);
