@@ -788,6 +788,9 @@ export default function MoleculeViewer({
               )}
 
               {/* Macromolecule specific fields */}
+              {moleculeInfo.full_description && (
+                <div className="mb-1">Description: {moleculeInfo.full_description}</div>
+              )}
               {moleculeInfo.resolution && (
                 <div className="mb-1">Resolution: {moleculeInfo.resolution.toFixed(1)} Å</div>
               )}

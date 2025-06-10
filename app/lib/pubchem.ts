@@ -197,10 +197,55 @@ export async function resolvePdbId(q: string): Promise<string> {
 }
 
 // ---------- generateFromRCSB ---------- //
+function generateMacromoleculeTitle(meta: any): string {
+  try {
+    // Get the molecule name from keywords or title
+    let moleculeName = '';
+    const keywords = meta?.struct_keywords?.pdbx_keywords || '';
+    const fullTitle = meta?.struct?.title || '';
+    
+    // Try to extract the main molecule name (usually the first word in keywords or before "FROM" in title)
+    if (keywords) {
+      moleculeName = keywords.split(',')[0].trim();
+    } else {
+      const fromMatch = fullTitle.match(/^([^(]+?)(?:\s+FROM|$)/i);
+      if (fromMatch) {
+        moleculeName = fromMatch[1].trim();
+      } else {
+        moleculeName = fullTitle.split(/\s+/)[0];
+      }
+    }
+
+    // Get organism info
+    const organism = meta?.rcsb_entity_source_organism?.[0];
+    const organismName = organism?.common_name || organism?.scientific_name;
+
+    // Get resolution
+    const resolution = meta?.rcsb_entry_info?.resolution_combined?.[0];
+    
+    // Construct the title
+    let title = moleculeName;
+    if (organismName) {
+      title += ` from ${organismName}`;
+    }
+    if (resolution) {
+      title += ` (${resolution.toFixed(1)} Å)`;
+    }
+    
+    return title;
+  } catch (error) {
+    console.error('[PubChemService] Error generating macromolecule title:', error);
+    return meta?.struct?.title || '';
+  }
+}
+
 function extractRCSBInfo(meta: any): MoleculeInfo {
   const info: MoleculeInfo = {};
   
   try {
+    // Store the full description
+    info.full_description = meta?.struct?.title;
+    
     // Basic structure info
     info.structure_title = meta?.struct?.title;
     info.resolution = meta?.rcsb_entry_info?.resolution_combined?.[0];
@@ -242,7 +287,7 @@ export async function generateFromRCSB({prompt}:{prompt:string}) {
   let info: MoleculeInfo = {};
   try {
     const meta = await fetch(`${RCSB_DATA}/${id}`).then(r=>r.json());
-    title = meta?.struct?.title ?? title;
+    title = generateMacromoleculeTitle(meta);
     info = extractRCSBInfo(meta);
   } catch (error) {
     console.error('[PubChemService] Error fetching RCSB metadata:', error);
@@ -305,6 +350,7 @@ export async function fetchMoleculeData(query: string, type: 'small molecule' | 
     console.log(
       `[PubChemService] Successfully converted SDF to PDB (length: ${pdb_data.length}) for CID: ${cid}`
     );
+    console.log("PDB data is ", pdb_data, "and SDF data is ", sdf);
   } catch (conversionError) {
     console.error(
       `[PubChemService] SDF to PDB conversion failed for CID: ${cid}:`,

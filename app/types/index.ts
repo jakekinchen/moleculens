@@ -83,6 +83,7 @@ export interface MoleculeInfo {
   organism_common?: string;
   deposition_date?: string;
   structure_title?: string;
+  full_description?: string;  // Store the full RCSB title/description
 }
 
 export interface MoleculePlacement {
