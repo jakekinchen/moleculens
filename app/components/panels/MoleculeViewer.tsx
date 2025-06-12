@@ -173,7 +173,13 @@ export default function MoleculeViewer({
 
       // Renderer
       renderer = new THREE.WebGLRenderer({ antialias: true });
-      renderer.outputEncoding = THREE.sRGBEncoding;
+      // Use new outputColorSpace (r152+); fall back to legacy outputEncoding
+      if ('outputColorSpace' in renderer) {
+        (renderer as any).outputColorSpace = THREE.SRGBColorSpace;
+      } else {
+        // @ts-expect-error - legacy property for older Three.js types
+        renderer.outputEncoding = THREE.sRGBEncoding;
+      }
       renderer.toneMapping = THREE.ACESFilmicToneMapping;
       renderer.toneMappingExposure = 1.1;
       (renderer as any).physicallyCorrectLights = true;
