@@ -1,4 +1,6 @@
 import fetch from 'node-fetch';
+import fs from 'fs';
+import path from 'path';
 import { MoleculeInfo } from '@/types';
 
 export interface MoleculeData {
@@ -394,7 +396,43 @@ export async function fetchMoleculeData(query: string, type: 'small molecule' | 
 }
 
 export function moleculeHTML(moleculeData: MoleculeData): string {
-  return `<div class="molecule" data-cid="${moleculeData.cid}"></div>`;
+  try {
+    const templatePath = path.join(process.cwd(), 'output.html');
+    let html = fs.readFileSync(templatePath, 'utf8');
+
+    // Escape backticks in PDB data so it can reside inside template literal
+    const escapeBackticks = (str: string) => str.replace(/`/g, '\\`');
+    const pdbEscaped = escapeBackticks(moleculeData.pdb_data);
+
+    // Replace the pdbData string inside the template
+    html = html.replace(
+      /const\s+pdbData\s*=\s*`[\s\S]*?`;/m,
+      `const pdbData = \
+\`${pdbEscaped}\`;`
+    );
+
+    // Update the title in <title> tag if present
+    if (moleculeData.name) {
+      html = html.replace(/<title>[\s\S]*?<\/title>/i, `<title>${moleculeData.name}</title>`);
+
+      // Also patch scriptData.title if present (VR presentation script)
+      html = html.replace(
+        /"title"\s*:\s*"[^"]*"/,
+        `"title": "${moleculeData.name}"`
+      );
+    }
+
+    // Insert CID attribute on top-level div if it exists in template
+    if (moleculeData.cid) {
+      html = html.replace(/data-cid="[^"]*"/, `data-cid="${moleculeData.cid}"`);
+    }
+
+    return html;
+  } catch (err) {
+    console.error('[moleculeHTML] Failed to build HTML from template:', err);
+    // Fallback minimal
+    return `<div class="molecule" data-cid="${moleculeData.cid}"></div>`;
+  }
 }
 
 /* ----------  helpers  ---------- */
