@@ -314,13 +314,27 @@ export async function fetchMoleculeData(query: string, type: 'small molecule' | 
   // No need to check cid here, resolveCid throws if not found
   console.log(`[PubChemService] Resolved CID: ${cid} for query: "${query}"`);
 
-  // 2. Get SDF data
-  const sdfResp = await fetch(`${PUBCHEM}/compound/cid/${cid}/SDF?record_type=3d`);
+  // 2. Get SDF data – prefer 3D, fallback to 2D then generic
+  let sdfResp = await fetch(`${PUBCHEM}/compound/cid/${cid}/SDF?record_type=3d`);
+  if (!sdfResp.ok) {
+    console.warn(
+      `[PubChemService] 3D SDF not found for CID ${cid}. Falling back to 2D.`
+    );
+    sdfResp = await fetch(`${PUBCHEM}/compound/cid/${cid}/SDF?record_type=2d`);
+    if (!sdfResp.ok) {
+      console.warn(
+        `[PubChemService] 2D SDF not found for CID ${cid}. Trying default SDF.`
+      );
+      sdfResp = await fetch(`${PUBCHEM}/compound/cid/${cid}/SDF`);
+    }
+  }
+
   if (!sdfResp.ok) {
     const errorText = await sdfResp.text();
     console.error(`[PubChemService] PubChem SDF request failed: ${sdfResp.status} - ${errorText}`);
     throw new Error(`PubChem SDF request failed: ${sdfResp.status} - ${errorText}`);
   }
+
   const sdf = await sdfResp.text();
   console.log(
     `[PubChemService] Successfully fetched SDF data (length: ${sdf.length}) for CID: ${cid}`

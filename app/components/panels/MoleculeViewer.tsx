@@ -12,6 +12,8 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass';
 // @ts-expect-error - Three.js examples module not properly typed but works correctly
 import { OutlinePass } from 'three/examples/jsm/postprocessing/OutlinePass';
+// @ts-expect-error - Three.js examples module not properly typed but works correctly
+import { RGBELoader } from 'three/examples/jsm/loaders/RGBELoader';
 import { LoadingFacts } from './LoadingFacts';
 import ScrollingText from './ScrollingText';
 
@@ -118,6 +120,22 @@ export default function MoleculeViewer({
       }
     };
 
+    // Helper to load an HDRI environment map for realistic reflections
+    const addEnvironment = (renderer: THREE.WebGLRenderer, scene: THREE.Scene) => {
+      new RGBELoader().load(
+        'https://cdn.jsdelivr.net/gh/pmndrs/drei-assets@master/hdri/venice_sunset_1k.hdr',
+        (hdr: any) => {
+          const pmrem = new THREE.PMREMGenerator(renderer);
+          const envMap = pmrem.fromEquirectangular(hdr).texture;
+          scene.environment = envMap;
+          hdr.dispose();
+          pmrem.dispose();
+        },
+        undefined,
+        (err: any) => console.error('Failed to load HDRI environment', err)
+      );
+    };
+
     // Initialization
     const init = () => {
       if (!containerRef.current || !labelContainerRef.current || !wrapperRef.current) return;
@@ -134,11 +152,16 @@ export default function MoleculeViewer({
       camera = new THREE.PerspectiveCamera(50, rect.width / rect.height, 1, 5000);
       camera.position.z = 800;
 
-      // Lights
-      const light1 = new THREE.DirectionalLight(0xffffff, 2.5);
+      // Ambient + hemi lights for base illumination
+      scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+
+      const hemi = new THREE.HemisphereLight(0xffffff, 0x080820, 0.7);
+      scene.add(hemi);
+
+      const light1 = new THREE.DirectionalLight(0xffffff, 1.2);
       light1.position.set(1, 1, 1);
       scene.add(light1);
-      const light2 = new THREE.DirectionalLight(0xffffff, 1.5);
+      const light2 = new THREE.DirectionalLight(0xffffff, 0.8);
       light2.position.set(-1, -1, 1);
       scene.add(light2);
 
@@ -150,9 +173,17 @@ export default function MoleculeViewer({
 
       // Renderer
       renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.outputEncoding = THREE.sRGBEncoding;
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.1;
+      (renderer as any).physicallyCorrectLights = true;
+
       renderer.setPixelRatio(window.devicePixelRatio);
       renderer.setSize(containerRef.current.clientWidth, containerRef.current.clientHeight);
       containerRef.current.appendChild(renderer.domElement);
+
+      // Add environment reflections
+      addEnvironment(renderer, scene);
 
       composer = new EffectComposer(renderer);
       composer.setSize(containerRef.current.clientWidth, containerRef.current.clientHeight);
@@ -221,7 +252,12 @@ export default function MoleculeViewer({
       json: any,
       enableLabels: boolean
     ) => {
-      const material = new THREE.MeshPhongMaterial({ vertexColors: true });
+      const material = new THREE.MeshStandardMaterial({
+        vertexColors: true,
+        metalness: 0.3,
+        roughness: 0.25,
+        envMapIntensity: 1.0,
+      });
       const mesh = new THREE.InstancedMesh(sphereGeometry, material, positions.count);
 
       const dummy = new THREE.Object3D();
@@ -244,10 +280,10 @@ export default function MoleculeViewer({
             const text = document.createElement('div');
             text.className = 'atom-label';
             text.textContent = atomSymbol;
-            text.style.color = `rgb(${Math.round(color.r * 255)}, ${Math.round(
-              color.g * 255
-            )}, ${Math.round(color.b * 255)})`;
-            text.style.textShadow = '-1px 1px 1px rgb(0,0,0)';
+            const lum = 0.2126 * color.r + 0.7152 * color.g + 0.0722 * color.b;
+            const txtColor = lum > 0.45 ? '#000' : '#fff';
+            text.style.color = txtColor;
+            text.style.textShadow = `0 0 4px ${txtColor === '#000' ? '#fff' : '#000'}`;
             text.style.fontSize = '14px';
             text.style.pointerEvents = 'none';
 
@@ -321,7 +357,14 @@ export default function MoleculeViewer({
         const geometry = new THREE.TubeGeometry(curve, pts.length * 4, 12, 6, false);
         const color = new THREE.Color().setHSL(h, 0.6, 0.5);
         h += 0.3;
-        const material = new THREE.MeshPhongMaterial({ color, transparent: true, opacity: 0.6 });
+        const material = new THREE.MeshStandardMaterial({
+          color,
+          transparent: true,
+          opacity: 0.6,
+          metalness: 0.0,
+          roughness: 0.5,
+          envMapIntensity: 1.0,
+        });
         const mesh = new THREE.Mesh(geometry, material);
         root.add(mesh);
       });
@@ -366,7 +409,12 @@ export default function MoleculeViewer({
             position.set(positions.getX(i), positions.getY(i), positions.getZ(i));
             color.setRGB(colors.getX(i), colors.getY(i), colors.getZ(i));
 
-            const atomMaterial = new THREE.MeshPhongMaterial({ color });
+            const atomMaterial = new THREE.MeshStandardMaterial({
+              color,
+              metalness: 0.3,
+              roughness: 0.25,
+              envMapIntensity: 1.0,
+            });
             const atom = new THREE.Mesh(sphereGeometry, atomMaterial);
             atom.position.copy(position).multiplyScalar(120);
             atom.scale.setScalar(40);
@@ -378,10 +426,10 @@ export default function MoleculeViewer({
                 const text = document.createElement('div');
                 text.className = 'atom-label';
                 text.textContent = atomSymbol;
-                text.style.color = `rgb(${Math.round(color.r * 255)}, ${Math.round(
-                  color.g * 255
-                )}, ${Math.round(color.b * 255)})`;
-                text.style.textShadow = '-1px 1px 1px rgb(0,0,0)';
+                const lum = 0.2126 * color.r + 0.7152 * color.g + 0.0722 * color.b;
+                const txtColor = lum > 0.45 ? '#000' : '#fff';
+                text.style.color = txtColor;
+                text.style.textShadow = `0 0 4px ${txtColor === '#000' ? '#fff' : '#000'}`;
                 text.style.fontSize = '14px';
                 text.style.pointerEvents = 'none';
 
@@ -405,7 +453,12 @@ export default function MoleculeViewer({
 
             const bondMesh = new THREE.Mesh(
               boxGeometry,
-              new THREE.MeshPhongMaterial({ color: 0xffffff })
+              new THREE.MeshStandardMaterial({
+                color: 0xffffff,
+                metalness: 0.1,
+                roughness: 0.3,
+                envMapIntensity: 1.0,
+              })
             );
             bondMesh.position.copy(start).lerp(end, 0.5);
             bondMesh.scale.set(8, 8, start.distanceTo(end));
@@ -428,7 +481,12 @@ export default function MoleculeViewer({
 
             const bondMesh = new THREE.Mesh(
               boxGeometry,
-              new THREE.MeshPhongMaterial({ color: 0xffffff })
+              new THREE.MeshStandardMaterial({
+                color: 0xffffff,
+                metalness: 0.1,
+                roughness: 0.3,
+                envMapIntensity: 1.0,
+              })
             );
             bondMesh.position.copy(start).lerp(end, 0.5);
             bondMesh.scale.set(8, 8, start.distanceTo(end));
