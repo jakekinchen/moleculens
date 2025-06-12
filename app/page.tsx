@@ -30,6 +30,7 @@ CONECT    3    9   10   11
 END`;
 
   const [pdbData, setPdbData] = useState<string | null>(DEFAULT_PDB_DATA);
+  const [sdfData, setSdfData] = useState<string | null>(null);
   const [html, setHtml] = useState<string | null>(null);
   const [title, setTitle] = useState<string | null>('Propane (C3H8)');
   const [isLoading, setIsLoading] = useState(false);
@@ -42,6 +43,12 @@ END`;
 
   const handleVisualizationUpdate = (pdb: string, htmlContent?: string, vizTitle?: string) => {
     setPdbData(pdb);
+    // Heuristic: treat data as SDF if it contains 'V2000' marker
+    if (/V2000|M {2}END/.test(pdb)) {
+      setSdfData(pdb);
+    } else {
+      setSdfData(null);
+    }
     setHtml(htmlContent ?? null);
     setTitle(vizTitle ?? null);
   };
@@ -107,6 +114,7 @@ END`;
               <MoleculeViewer
                 isLoading={isLoading}
                 pdbData={pdbData!}
+                sdfData={sdfData ?? undefined}
                 title={title!}
                 moleculeInfo={moleculeInfo}
                 enableRibbonOverlay={false}

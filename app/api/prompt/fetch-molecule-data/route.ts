@@ -33,6 +33,7 @@ export async function POST(req: NextRequest) {
     // Return full molecule data expected by the frontend
     return NextResponse.json({
       pdb_data: data.pdb_data,
+      sdf: data.sdf,
       name: data.name,
       cid: data.cid,
       formula: data.formula,

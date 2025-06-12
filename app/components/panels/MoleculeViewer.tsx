@@ -14,6 +14,8 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass';
 import { OutlinePass } from 'three/examples/jsm/postprocessing/OutlinePass';
 // @ts-expect-error - Three.js examples module not properly typed but works correctly
 import { RGBELoader } from 'three/examples/jsm/loaders/RGBELoader';
+// @ts-expect-error - three-sdf-loader lacks types
+import { loadSDF } from 'three-sdf-loader';
 import { LoadingFacts } from './LoadingFacts';
 import ScrollingText from './ScrollingText';
 
@@ -25,6 +27,8 @@ const PAUSE_SMOOTHING = 0.15; // Smoothing factor for pause/play transitions
 interface MoleculeViewerProps {
   isLoading?: boolean;
   pdbData: string;
+  /** If provided, SDF format will be used instead of PDB */
+  sdfData?: string;
   title: string;
   /**
    * Whether atom symbol labels should be rendered.  For macromolecules we
@@ -39,6 +43,7 @@ interface MoleculeViewerProps {
 export default function MoleculeViewer({
   isLoading = false,
   pdbData,
+  sdfData,
   title,
   showAnnotations = true,
   moleculeInfo,
@@ -243,7 +248,7 @@ export default function MoleculeViewer({
       // Initial size
       onResize();
 
-      // Load molecule (Propane)
+      // Load molecule depending on format
       loadMolecule();
 
       // Store references for cleanup
@@ -378,6 +383,74 @@ export default function MoleculeViewer({
 
     // PDB loader
     const loadMolecule = () => {
+      // Detect SDF format: if sdfData prop supplied or pdbData doesn't start with 'COMPND'/'HEADER'
+      const sdfAvailable = (sdfData && sdfData.trim().length > 0);
+
+      if (sdfAvailable) {
+        try {
+          const mol = loadSDF(sdfData!);
+
+          // Upgrade materials for PBR & reflections
+          mol.traverse((obj: any) => {
+            if (obj.isMesh) {
+              const base = obj.material.color?.clone?.() ?? new THREE.Color(0xffffff);
+              obj.material = new THREE.MeshStandardMaterial({
+                color: base,
+                metalness: 0.3,
+                roughness: 0.25,
+                envMapIntensity: 1.0,
+              });
+            }
+          });
+
+          // Wrap molecule in a parent group so we can rotate it easily
+          const molGroup = new THREE.Group();
+          molGroup.add(mol);
+          root.add(molGroup);
+
+          // Labels
+          if (showAnnotations) {
+            const atomSymbols: string[] = [];
+            mol.traverse((o: any) => {
+              if (o.isMesh && o.userData?.atom?.symbol) {
+                atomSymbols.push(o.userData.atom.symbol);
+              }
+            });
+
+            let atomIndex = 0;
+            mol.traverse((obj: any) => {
+              if (!obj.isMesh) return;
+              const geoType = obj.geometry?.type;
+              if (geoType !== 'SphereGeometry' && geoType !== 'IcosahedronGeometry') return;
+
+              const symbol = atomSymbols[atomIndex++] ?? '';
+              if (!symbol) return;
+
+              const div = document.createElement('div');
+              div.className = 'atom-label';
+              div.textContent = symbol;
+              const { r, g, b } = obj.material.color;
+              const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+              const txtColor = lum > 0.45 ? '#000' : '#fff';
+              div.style.color = txtColor;
+              div.style.fontSize = '12px';
+              div.style.textShadow = `0 0 4px ${txtColor === '#000' ? '#fff' : '#000'}`;
+
+              const label = new CSS2DObject(div);
+              label.position.set(0, 0, 0);
+              obj.add(label);
+            });
+          }
+
+          fitCameraToMolecule();
+          labelsGroup.visible = config.enableAnnotations;
+          return; // done
+        } catch (e) {
+          console.error('Failed to load SDF molecule:', e);
+        }
+      }
+
+      /* -------- existing PDB path -------- */
       const pdbBlob = new Blob([pdbData], { type: 'text/plain' });
       const pdbUrl = URL.createObjectURL(pdbBlob);
 
@@ -658,7 +731,7 @@ export default function MoleculeViewer({
       composerRef.current = null;
       outlinePassRef.current = null;
     }; // eslint-disable-line react-hooks/exhaustive-deps
-  }, [isLoading, pdbData, isPaused, showAnnotations, enableRibbonOverlay]); // Add isPaused and showAnnotations to dependencies
+  }, [isLoading, pdbData, sdfData, isPaused, showAnnotations, enableRibbonOverlay]); // Add isPaused and showAnnotations to dependencies
 
   const toggleFullscreen = async () => {
     if (!wrapperRef.current) return;

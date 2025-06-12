@@ -7,6 +7,7 @@ export interface Topic {
 
 export interface VisualizationOutput {
   pdb_data: string;
+  sdf?: string;
   html: string;
   title?: string;
   timecode_markers?: string[];
@@ -17,6 +18,7 @@ export interface VisualizationData {
   type: 'molecule' | 'reaction' | 'structure';
   data: {
     pdb_data: string;
+    sdf?: string;
     html: string;
     title?: string;
     timecode_markers?: string[];

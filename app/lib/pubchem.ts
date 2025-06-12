@@ -5,6 +5,7 @@ import { MoleculeInfo } from '@/types';
 
 export interface MoleculeData {
   pdb_data: string;
+  sdf?: string;
   name: string;
   cid: number;
   formula: string;
@@ -308,7 +309,8 @@ export async function fetchMoleculeData(query: string, type: 'small molecule' | 
       name: response.title || query,
       cid: 0,
       formula: '',
-      info: response.info,  // Now passing through the RCSB info
+      info: response.info,
+      sdf: '',
     };
   }
   // 1. Get CID
@@ -358,22 +360,9 @@ export async function fetchMoleculeData(query: string, type: 'small molecule' | 
     console.log(`[PubChemService] Successfully fetched formula: ${formula} for CID: ${cid}`);
   }
 
-  // 4. Convert SDF to PDB using external API
-  console.log(`[PubChemService] Converting SDF to PDB for CID: ${cid}`);
-  let pdb_data = '';
-  try {
-    pdb_data = await convertSDFToPDB(sdf);
-    console.log(
-      `[PubChemService] Successfully converted SDF to PDB (length: ${pdb_data.length}) for CID: ${cid}`
-    );
-    console.log("PDB data is ", pdb_data, "and SDF data is ", sdf);
-  } catch (conversionError) {
-    console.error(
-      `[PubChemService] SDF to PDB conversion failed for CID: ${cid}:`,
-      conversionError
-    );
-    // If conversion fails, we might still want to return other data, but PDB will be empty
-  }
+  // For small molecules we no longer perform SDF → PDB conversion; viewer will parse SDF directly.
+  const pdb_data = '';
+  const sdf_text = sdf; // rename for clarity
 
   let info: MoleculeInfo = { formula };
   try {
@@ -388,6 +377,7 @@ export async function fetchMoleculeData(query: string, type: 'small molecule' | 
 
   return {
     pdb_data,
+    sdf: sdf_text,
     name: query,
     cid,
     formula,

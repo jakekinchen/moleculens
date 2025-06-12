@@ -95,12 +95,12 @@ export const pollJobStatus = async (jobId: string): Promise<JobStatusResponse> =
 export const fetchMoleculeData = async (
   query: string
 ): Promise<{
-  pdb_data: string;
+  pdb_data?: string;
+  sdf?: string;
   name: string;
   cid: number;
   formula: string;
   info: any;
-  sdf: string;
 }> => {
   const endpoint = `${API_BASE_URL}/prompt/fetch-molecule-data/`;
   try {

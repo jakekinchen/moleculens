@@ -639,11 +639,12 @@ export const InputPanel: React.FC<InputPanelProps> = ({
     );
 
     try {
-
       const response = await fetchMoleculeData(currentPrompt);
 
-      if (response.pdb_data) {
-        const pdbData = response.pdb_data;
+      const moleculeDataString = response.pdb_data || response.sdf;
+
+      if (moleculeDataString) {
+        const pdbData = moleculeDataString;
         const name = response.name;
         const cid = response.cid;
         const formula = response.formula;
@@ -651,14 +652,13 @@ export const InputPanel: React.FC<InputPanelProps> = ({
 
         setCurrentScript(pdbData);
         setTitle(name);
-        //setCurrentHtml(html);
         onVisualizationUpdate(pdbData, undefined, name ?? undefined);
         if (onInfoUpdate) onInfoUpdate(info);
         onPromptSubmit(currentPrompt, { pdb_data: pdbData, html: '', title: name });
         setIsLoading(false);
         onLoadingChange(false);
       } else {
-        throw new Error('No PDB data received from API');
+        throw new Error('No molecule data received from API');
       }
     } catch (err: unknown) {
       setIsLoading(false);
