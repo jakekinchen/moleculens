@@ -592,6 +592,14 @@ export default function MoleculeViewer({
     const fitCameraToMolecule = (closenessFactor = 0.5) => {
       if (!root) return;
 
+      // Slightly pull the camera back on small screens so the
+      // molecule isn't cropped when first shown
+      const isMobileScreen =
+        typeof window !== 'undefined' && window.innerWidth < 768;
+      if (isMobileScreen) {
+        closenessFactor *= 1.3; // move camera further away on mobile
+      }
+
       // Create a bounding box for all objects in the scene
       const box = new THREE.Box3();
       root.children.forEach(child => {
