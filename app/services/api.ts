@@ -1,19 +1,6 @@
 /* eslint-disable */
 import { ModelInfo, DiagramPromptRequest, DiagramResponse } from '../types';
 
-interface PromptRequest {
-  prompt: string;
-  model?: string;
-  preferred_model_category?: string;
-}
-
-// Initial prompt submission response
-interface InitialPromptResponse {
-  job_id: string;
-  status: string;
-  message: string;
-}
-
 // Response while processing or when complete
 interface JobStatusResponse {
   job_id: string;
@@ -27,21 +14,6 @@ interface JobStatusResponse {
 // Visualization data when job is completed
 interface VisualizationData {
   html: string;
-  title: string;
-  timecode_markers: string[];
-  total_elements: number;
-}
-
-// Legacy response types - keeping for backward compatibility
-interface PromptResponse {
-  result: string;
-  is_molecular: boolean;
-  validation_message?: string;
-}
-
-interface ComplexPromptResponse {
-  html: string;
-  js: string;
   title: string;
   timecode_markers: string[];
   total_elements: number;
@@ -103,6 +75,13 @@ export const fetchMoleculeData = async (
   info: any;
 }> => {
   const endpoint = `${API_BASE_URL}/prompt/fetch-molecule-data/`;
+
+  // Log the request details
+  console.log('=== MOLECULE DATA REQUEST ===');
+  console.log('Query:', query);
+  console.log('Endpoint:', endpoint);
+  console.log('Timestamp:', new Date().toISOString());
+
   try {
     const response = await fetch(endpoint, {
       method: 'POST',
@@ -128,6 +107,25 @@ export const fetchMoleculeData = async (
       throw new Error(result.detail);
     }
 
+    // Log the response with SDF information
+    console.log('=== MOLECULE DATA RESPONSE ===');
+    console.log('Molecule Name:', result.name);
+    console.log('CID:', result.cid);
+    console.log('Formula:', result.formula);
+    console.log('Has PDB Data:', !!result.pdb_data);
+    console.log('Has SDF Data:', !!result.sdf);
+    if (result.sdf) {
+      console.log('SDF Data Length:', result.sdf.length);
+      console.log('SDF Data Preview (first 500 chars):', result.sdf.substring(0, 500));
+      console.log('Full SDF Data:', result.sdf);
+    }
+    if (result.pdb_data) {
+      console.log('PDB Data Length:', result.pdb_data.length);
+      console.log('PDB Data Preview (first 500 chars):', result.pdb_data.substring(0, 500));
+    }
+    console.log('Additional Info:', result.info);
+    console.log('================================');
+
     return result;
   } catch (error: any) {
     console.error('Error fetching molecule data:', error);
@@ -146,6 +144,22 @@ export const generateMoleculeHTML = async (
   moleculeData: Record<string, any>
 ): Promise<{ html: string }> => {
   const endpoint = `${API_BASE_URL}/prompt/generate-molecule-html/`;
+
+  // Log the HTML generation request details
+  console.log('=== MOLECULE HTML GENERATION REQUEST ===');
+  console.log('Molecule Data:', moleculeData);
+  console.log('Endpoint:', endpoint);
+  console.log('Timestamp:', new Date().toISOString());
+  if (moleculeData.sdf) {
+    console.log('SDF Data Length:', moleculeData.sdf.length);
+    console.log('SDF Data Preview (first 500 chars):', moleculeData.sdf.substring(0, 500));
+    console.log('Full SDF Data:', moleculeData.sdf);
+  }
+  if (moleculeData.pdb_data) {
+    console.log('PDB Data Length:', moleculeData.pdb_data.length);
+    console.log('PDB Data Preview (first 500 chars):', moleculeData.pdb_data.substring(0, 500));
+  }
+
   try {
     const response = await fetch(endpoint, {
       method: 'POST',
@@ -163,6 +177,13 @@ export const generateMoleculeHTML = async (
     if (!result.html) {
       throw new Error('No HTML returned from backend');
     }
+
+    // Log the HTML generation response
+    console.log('=== MOLECULE HTML GENERATION RESPONSE ===');
+    console.log('HTML Length:', result.html.length);
+    console.log('HTML Preview (first 500 chars):', result.html.substring(0, 500));
+    console.log('==========================================');
+
     return result;
   } catch (error: any) {
     console.error('Error generating HTML:', error);
@@ -212,6 +233,12 @@ export const generateMoleculeDiagram = async (
 ): Promise<DiagramResponse> => {
   const endpoint = `${API_BASE_URL}/prompt/generate-molecule-diagram/`;
 
+  // Log the diagram request details
+  console.log('=== MOLECULE DIAGRAM REQUEST ===');
+  console.log('Request:', request);
+  console.log('Endpoint:', endpoint);
+  console.log('Timestamp:', new Date().toISOString());
+
   const response = await fetch(endpoint, {
     method: 'POST',
     headers: {
@@ -227,5 +254,17 @@ export const generateMoleculeDiagram = async (
     );
   }
 
-  return response.json();
+  const result = await response.json();
+
+  // Log the diagram response
+  console.log('=== MOLECULE DIAGRAM RESPONSE ===');
+  console.log('Response:', result);
+  console.log('Has Diagram Image:', !!result.diagram_image);
+  console.log('Has Diagram Plan:', !!result.diagram_plan);
+  if (result.diagram_plan) {
+    console.log('Diagram Plan:', result.diagram_plan);
+  }
+  console.log('===================================');
+
+  return result;
 };
