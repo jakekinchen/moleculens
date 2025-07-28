@@ -40,6 +40,13 @@ interface MoleculeViewerProps {
   enableRibbonOverlay?: boolean;
 }
 
+interface MoleculeStats {
+  atomCount: number;
+  bondCount: number;
+  averageBondLength?: number;
+  averageBondAngle?: number;
+}
+
 export default function MoleculeViewer({
   isLoading = false,
   pdbData,
@@ -56,6 +63,7 @@ export default function MoleculeViewer({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [isInfoOpen, setIsInfoOpen] = useState(false);
+  const [stats, setStats] = useState<MoleculeStats | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const labelRendererRef = useRef<CSS2DRenderer | null>(null);
   const rotationRef = useRef<number>(0);
@@ -381,6 +389,80 @@ export default function MoleculeViewer({
       });
     };
 
+    // Helper to compute simple molecule statistics
+    const computeStatsFromGeometry = (
+      atomPositions: THREE.BufferAttribute,
+      bondPositions: THREE.BufferAttribute
+    ): MoleculeStats => {
+      const atomCount = atomPositions.count;
+      const bondCount = Math.floor(bondPositions.count / 2);
+
+      // For huge molecules just return counts
+      const MAX_STATS_ATOMS = 2000;
+      if (atomCount > MAX_STATS_ATOMS) {
+        return { atomCount, bondCount };
+      }
+
+      const atoms: THREE.Vector3[] = [];
+      const idxMap = new Map<string, number>();
+      for (let i = 0; i < atomCount; i++) {
+        const x = atomPositions.getX(i);
+        const y = atomPositions.getY(i);
+        const z = atomPositions.getZ(i);
+        atoms.push(new THREE.Vector3(x, y, z));
+        idxMap.set(`${x.toFixed(3)},${y.toFixed(3)},${z.toFixed(3)}`, i);
+      }
+
+      const neighbors: number[][] = Array.from({ length: atomCount }, () => []);
+      let totalLength = 0;
+
+      for (let i = 0; i < bondPositions.count; i += 2) {
+        const sx = bondPositions.getX(i);
+        const sy = bondPositions.getY(i);
+        const sz = bondPositions.getZ(i);
+        const ex = bondPositions.getX(i + 1);
+        const ey = bondPositions.getY(i + 1);
+        const ez = bondPositions.getZ(i + 1);
+
+        const start = new THREE.Vector3(sx, sy, sz);
+        const end = new THREE.Vector3(ex, ey, ez);
+        totalLength += start.distanceTo(end);
+
+        const si = idxMap.get(`${sx.toFixed(3)},${sy.toFixed(3)},${sz.toFixed(3)}`);
+        const ei = idxMap.get(`${ex.toFixed(3)},${ey.toFixed(3)},${ez.toFixed(3)}`);
+        if (si !== undefined && ei !== undefined) {
+          neighbors[si].push(ei);
+          neighbors[ei].push(si);
+        }
+      }
+
+      const averageBondLength = bondCount ? totalLength / bondCount : undefined;
+
+      let angleSum = 0;
+      let angleCount = 0;
+      for (let i = 0; i < atomCount; i++) {
+        const nbs = neighbors[i];
+        if (nbs.length < 2) continue;
+        for (let a = 0; a < nbs.length; a++) {
+          for (let b = a + 1; b < nbs.length; b++) {
+            const va = atoms[nbs[a]].clone().sub(atoms[i]);
+            const vb = atoms[nbs[b]].clone().sub(atoms[i]);
+            const ang = va.angleTo(vb);
+            if (!isNaN(ang)) {
+              angleSum += ang;
+              angleCount++;
+            }
+          }
+        }
+      }
+
+      const averageBondAngle = angleCount
+        ? (angleSum / angleCount) * (180 / Math.PI)
+        : undefined;
+
+      return { atomCount, bondCount, averageBondLength, averageBondAngle };
+    };
+
     // PDB loader
     const loadMolecule = () => {
       // Detect SDF format: if sdfData prop supplied or pdbData doesn't start with 'COMPND'/'HEADER'
@@ -444,6 +526,7 @@ export default function MoleculeViewer({
 
           fitCameraToMolecule();
           labelsGroup.visible = config.enableAnnotations;
+          setStats(null);
           return; // done
         } catch (e) {
           console.error('Failed to load SDF molecule:', e);
@@ -580,6 +663,18 @@ export default function MoleculeViewer({
           buildRibbonOverlay(pdbData);
         }
 
+        // Compute basic statistics for info panel
+        try {
+          const statsResult = computeStatsFromGeometry(
+            geometryAtoms.getAttribute('position'),
+            geometryBonds.getAttribute('position')
+          );
+          setStats(statsResult);
+        } catch (e) {
+          console.warn('Failed to compute molecule statistics', e);
+          setStats(null);
+        }
+
         URL.revokeObjectURL(pdbUrl);
         labelsGroup.visible = config.enableAnnotations;
 
@@ -591,6 +686,14 @@ export default function MoleculeViewer({
     // Function to fit camera to molecule
     const fitCameraToMolecule = (closenessFactor = 0.5) => {
       if (!root) return;
+
+      // Slightly pull the camera back on small screens so the
+      // molecule isn't cropped when first shown
+      const isMobileScreen =
+        typeof window !== 'undefined' && window.innerWidth < 768;
+      if (isMobileScreen) {
+        closenessFactor *= 1.3; // move camera further away on mobile
+      }
 
       // Create a bounding box for all objects in the scene
       const box = new THREE.Box3();
@@ -730,6 +833,7 @@ export default function MoleculeViewer({
       labelRendererRef.current = null;
       composerRef.current = null;
       outlinePassRef.current = null;
+      setStats(null);
     }; // eslint-disable-line react-hooks/exhaustive-deps
   }, [isLoading, pdbData, sdfData, isPaused, showAnnotations, enableRibbonOverlay]); // Add isPaused and showAnnotations to dependencies
 
@@ -958,6 +1062,22 @@ export default function MoleculeViewer({
                     >
                       DOI
                     </a>
+                  )}
+                </div>
+              )}
+              {stats && (
+                <div className="mt-2 grid grid-cols-2 gap-x-4 text-[11px]">
+                  <div>Atoms: {stats.atomCount}</div>
+                  <div>Bonds: {stats.bondCount}</div>
+                  {stats.averageBondLength !== undefined && (
+                    <div className="col-span-2">
+                      Avg bond length: {stats.averageBondLength.toFixed(2)} Å
+                    </div>
+                  )}
+                  {stats.averageBondAngle !== undefined && (
+                    <div className="col-span-2">
+                      Avg bond angle: {stats.averageBondAngle.toFixed(1)}°
+                    </div>
                   )}
                 </div>
               )}
