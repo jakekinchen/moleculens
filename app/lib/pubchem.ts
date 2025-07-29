@@ -3,6 +3,60 @@ import fs from 'fs';
 import path from 'path';
 import { MoleculeInfo } from '@/types';
 
+interface RCSBSearchHit {
+  identifier: string;
+  score?: number;
+}
+
+interface RCSBMetadata {
+  struct_keywords?: {
+    pdbx_keywords?: string;
+  };
+  struct?: {
+    title?: string;
+  };
+  rcsb_entry_info?: {
+    resolution_combined?: number[];
+    experimental_method?: string;
+    deposited_polymer_entity_instance_count?: number;
+    deposited_modeled_polymer_monomer_count?: number;
+    deposition_date?: string;
+    molecular_weight?: number;
+  };
+  rcsb_accession_info?: {
+    initial_release_date?: string;
+  };
+  rcsb_primary_citation?: {
+    year?: number;
+    pdbx_database_id_doi?: string;
+  };
+  rcsb_entity_source_organism?: Array<{
+    ncbi_scientific_name?: string;
+    ncbi_common_name?: string;
+  }>;
+}
+
+interface PubChemIdentifierResponse {
+  IdentifierList?: {
+    CID?: number[];
+  };
+}
+
+interface PubChemAutocompleteResponse {
+  dictionary_terms?: {
+    compound?: string[];
+  };
+}
+
+interface PubChemClassSearchResponse {
+  InformationList?: {
+    Information?: Array<{
+      CID?: number;
+      SubstanceCount?: number;
+    }>;
+  };
+}
+
 export interface MoleculeData {
   pdb_data: string;
   sdf?: string;
@@ -12,19 +66,9 @@ export interface MoleculeData {
   info: MoleculeInfo;
 }
 
-interface SDFToPDBRequest {
-  sdf: string;
-}
-
-interface SDFToPDBResponse {
-  pdb_data: string;
-}
-
 const PUBCHEM = 'https://pubchem.ncbi.nlm.nih.gov/rest/pug';
 // Autocomplete lives outside the PUG namespace
-const PUBCHEM_AC =
-  'https://pubchem.ncbi.nlm.nih.gov/rest/autocomplete/compound';
-const MOLECULENS_API = 'https://api.moleculens.com/prompt';
+const PUBCHEM_AC = 'https://pubchem.ncbi.nlm.nih.gov/rest/autocomplete/compound';
 const ENTREZ = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils';
 
 /**
@@ -58,9 +102,9 @@ export async function resolveCid(q: string): Promise<number> {
 }
 
 const RCSB_FILES = 'https://files.rcsb.org/download';
-const RCSB_DATA  = 'https://data.rcsb.org/rest/v1/core/entry';
-const RCSB_AC    = 'https://search.rcsb.org/rcsbsearch/v1/keyboard_autocomplete';
-const RCSB_FT    = 'https://search.rcsb.org/rcsbsearch/v2/query';
+const RCSB_DATA = 'https://data.rcsb.org/rest/v1/core/entry';
+const RCSB_AC = 'https://search.rcsb.org/rcsbsearch/v1/keyboard_autocomplete';
+const RCSB_FT = 'https://search.rcsb.org/rcsbsearch/v2/query';
 
 // ① quick regex test – classic PDB entries are 4-character codes.  Some search
 // services may return longer identifiers (e.g. AlphaFold IDs) that don't have
@@ -84,7 +128,7 @@ const COMMON_PROTEIN_IDS: Record<string, string> = {
 export async function resolvePdbId(q: string): Promise<string> {
   const term = q.trim();
   const termLower = term.toLowerCase();
-  const log = (...args: any[]) =>
+  const log = (...args: unknown[]) =>
     process.env.NODE_ENV === 'development' && console.log('[resolvePdbId]', ...args);
 
   // 0. static map only in development
@@ -129,9 +173,12 @@ export async function resolvePdbId(q: string): Promise<string> {
       body: JSON.stringify(body),
     }).then(r => r.json());
 
-    const hits = (ft?.result_set ?? []).filter((h: any) => PDB_ID_RE.test(h.identifier));
+    const hits = (ft?.result_set ?? []).filter((h: RCSBSearchHit) => PDB_ID_RE.test(h.identifier));
     if (hits.length) {
-      log('full_text', hits.map((h: any) => h.identifier));
+      log(
+        'full_text',
+        hits.map((h: RCSBSearchHit) => h.identifier)
+      );
       return hits[0].identifier.toUpperCase();
     }
   } catch (e) {
@@ -166,10 +213,15 @@ export async function resolvePdbId(q: string): Promise<string> {
         body: JSON.stringify(mkBody(attr, term)),
       }).then(r => r.json());
 
-      const hits = (rs?.result_set ?? []).filter((h: any) => PDB_ID_RE.test(h.identifier));
+      const hits = (rs?.result_set ?? []).filter((h: RCSBSearchHit) =>
+        PDB_ID_RE.test(h.identifier)
+      );
       if (hits.length) {
-        hits.sort((a: any, b: any) => b.score - a.score);
-        log('robust_text', hits.map((h: any) => ({ id: h.identifier, score: h.score })));
+        hits.sort((a: RCSBSearchHit, b: RCSBSearchHit) => (b.score ?? 0) - (a.score ?? 0));
+        log(
+          'robust_text',
+          hits.map((h: RCSBSearchHit) => ({ id: h.identifier, score: h.score }))
+        );
         return hits[0].identifier.toUpperCase();
       }
     }
@@ -180,7 +232,9 @@ export async function resolvePdbId(q: string): Promise<string> {
   // E. use /search/suggest endpoint similar to website autosuggest
   try {
     const suggestURL = `https://www.rcsb.org/search/suggest/false/${encodeURIComponent(term)}`;
-    const text = await fetch(suggestURL, { headers: { Accept: 'application/json' } }).then(r => r.text());
+    const text = await fetch(suggestURL, { headers: { Accept: 'application/json' } }).then(r =>
+      r.text()
+    );
     const idMatch = text.match(/[A-Za-z0-9]{4,6}/);
     if (idMatch && PDB_ID_RE.test(idMatch[0])) {
       log('suggest', idMatch[0]);
@@ -200,13 +254,13 @@ export async function resolvePdbId(q: string): Promise<string> {
 }
 
 // ---------- generateFromRCSB ---------- //
-function generateMacromoleculeTitle(meta: any): string {
+function generateMacromoleculeTitle(meta: RCSBMetadata): string {
   try {
     // Get the molecule name from keywords or title
     let moleculeName = '';
     const keywords = meta?.struct_keywords?.pdbx_keywords || '';
     const fullTitle = meta?.struct?.title || '';
-    
+
     // Try to extract the main molecule name (usually the first word in keywords or before "FROM" in title)
     if (keywords) {
       moleculeName = keywords.split(',')[0].trim();
@@ -221,11 +275,11 @@ function generateMacromoleculeTitle(meta: any): string {
 
     // Get organism info
     const organism = meta?.rcsb_entity_source_organism?.[0];
-    const organismName = organism?.common_name || organism?.scientific_name;
+    const organismName = organism?.ncbi_common_name || organism?.ncbi_scientific_name;
 
     // Get resolution
     const resolution = meta?.rcsb_entry_info?.resolution_combined?.[0];
-    
+
     // Construct the title
     let title = moleculeName;
     if (organismName) {
@@ -234,7 +288,7 @@ function generateMacromoleculeTitle(meta: any): string {
     if (resolution) {
       title += ` (${resolution.toFixed(1)} Å)`;
     }
-    
+
     return title;
   } catch (error) {
     console.error('[PubChemService] Error generating macromolecule title:', error);
@@ -242,64 +296,68 @@ function generateMacromoleculeTitle(meta: any): string {
   }
 }
 
-function extractRCSBInfo(meta: any): MoleculeInfo {
+function extractRCSBInfo(meta: RCSBMetadata): MoleculeInfo {
   const info: MoleculeInfo = {};
-  
+
   try {
     // Store the full description
     info.full_description = meta?.struct?.title;
-    
+
     // Basic structure info
     info.structure_title = meta?.struct?.title;
     info.resolution = meta?.rcsb_entry_info?.resolution_combined?.[0];
     info.experimental_method = meta?.rcsb_entry_info?.experimental_method;
     info.formula_weight = meta?.rcsb_entry_info?.molecular_weight;
-    
+
     // Chain info
     info.chain_count = meta?.rcsb_entry_info?.deposited_polymer_entity_instance_count;
-    
+
     // Publication info
     info.publication_year = meta?.rcsb_primary_citation?.year;
     info.publication_doi = meta?.rcsb_primary_citation?.pdbx_database_id_doi;
-    
+
     // Keywords and classification
-    info.keywords = meta?.struct_keywords?.pdbx_keywords?.split(',').map((k: string) => k.trim()) || [];
-    
+    info.keywords =
+      meta?.struct_keywords?.pdbx_keywords?.split(',').map((k: string) => k.trim()) || [];
+
     // Source organism
     const source = meta?.rcsb_entity_source_organism?.[0] || {};
-    info.organism_scientific = source?.scientific_name;
-    info.organism_common = source?.common_name;
-    
+    info.organism_scientific = source?.ncbi_scientific_name;
+    info.organism_common = source?.ncbi_common_name;
+
     // Dates
-    info.deposition_date = meta?.rcsb_accession_info?.deposit_date;
+    info.deposition_date = meta?.rcsb_accession_info?.initial_release_date;
   } catch (error) {
     console.error('[PubChemService] Error extracting RCSB info:', error);
   }
-  
+
   return info;
 }
 
-export async function generateFromRCSB({prompt}:{prompt:string}) {
+export async function generateFromRCSB({ prompt }: { prompt: string }) {
   const id = await resolvePdbId(prompt);
 
   // fetch PDB block
-  const pdb_data = await fetch(`${RCSB_FILES}/${id}.pdb`).then(r=>r.text());
+  const pdb_data = await fetch(`${RCSB_FILES}/${id}.pdb`).then(r => r.text());
 
   // fetch metadata
   let title = prompt;
   let info: MoleculeInfo = {};
   try {
-    const meta = await fetch(`${RCSB_DATA}/${id}`).then(r=>r.json());
+    const meta = await fetch(`${RCSB_DATA}/${id}`).then(r => r.json());
     title = generateMacromoleculeTitle(meta);
     info = extractRCSBInfo(meta);
   } catch (error) {
     console.error('[PubChemService] Error fetching RCSB metadata:', error);
   }
 
-  return {pdb_data, title, pdb_id: id, info};
+  return { pdb_data, title, pdb_id: id, info };
 }
 
-export async function fetchMoleculeData(query: string, type: 'small molecule' | 'macromolecule'): Promise<MoleculeData> {
+export async function fetchMoleculeData(
+  query: string,
+  type: 'small molecule' | 'macromolecule'
+): Promise<MoleculeData> {
   console.log(`[PubChemService] Fetching molecule data for query: "${query}"`);
   if (type === 'macromolecule') {
     // Generate PDB data from RCSB
@@ -321,14 +379,10 @@ export async function fetchMoleculeData(query: string, type: 'small molecule' | 
   // 2. Get SDF data – prefer 3D, fallback to 2D then generic
   let sdfResp = await fetch(`${PUBCHEM}/compound/cid/${cid}/SDF?record_type=3d`);
   if (!sdfResp.ok) {
-    console.warn(
-      `[PubChemService] 3D SDF not found for CID ${cid}. Falling back to 2D.`
-    );
+    console.warn(`[PubChemService] 3D SDF not found for CID ${cid}. Falling back to 2D.`);
     sdfResp = await fetch(`${PUBCHEM}/compound/cid/${cid}/SDF?record_type=2d`);
     if (!sdfResp.ok) {
-      console.warn(
-        `[PubChemService] 2D SDF not found for CID ${cid}. Trying default SDF.`
-      );
+      console.warn(`[PubChemService] 2D SDF not found for CID ${cid}. Trying default SDF.`);
       sdfResp = await fetch(`${PUBCHEM}/compound/cid/${cid}/SDF`);
     }
   }
@@ -355,7 +409,9 @@ export async function fetchMoleculeData(query: string, type: 'small molecule' | 
   }
   let formula = '';
   if (formulaResp.ok) {
-    const formulaData = (await formulaResp.json()) as any; // Type assertion for safety
+    const formulaData = (await formulaResp.json()) as {
+      PropertyTable?: { Properties?: Array<{ MolecularFormula?: string }> };
+    };
     formula = formulaData.PropertyTable?.Properties?.[0]?.MolecularFormula ?? '';
     console.log(`[PubChemService] Successfully fetched formula: ${formula} for CID: ${cid}`);
   }
@@ -406,10 +462,7 @@ export function moleculeHTML(moleculeData: MoleculeData): string {
       html = html.replace(/<title>[\s\S]*?<\/title>/i, `<title>${moleculeData.name}</title>`);
 
       // Also patch scriptData.title if present (VR presentation script)
-      html = html.replace(
-        /"title"\s*:\s*"[^"]*"/,
-        `"title": "${moleculeData.name}"`
-      );
+      html = html.replace(/"title"\s*:\s*"[^"]*"/, `"title": "${moleculeData.name}"`);
     }
 
     // Insert CID attribute on top-level div if it exists in template
@@ -430,7 +483,7 @@ export function moleculeHTML(moleculeData: MoleculeData): string {
 async function cidByExact(term: string): Promise<number | null> {
   const r = await fetch(`${PUBCHEM}/compound/name/${encodeURIComponent(term)}/cids/JSON`);
   if (!r.ok) return null;
-  const data = (await r.json()) as any;
+  const data = (await r.json()) as PubChemIdentifierResponse;
   return data?.IdentifierList?.CID?.[0] ?? null;
 }
 
@@ -447,7 +500,8 @@ async function cidByAutocomplete(term: string): Promise<number | null> {
     return null;
   }
 
-  const suggestions = ((await r.json()) as any)?.dictionary_terms?.compound ?? [];
+  const suggestions =
+    ((await r.json()) as PubChemAutocompleteResponse)?.dictionary_terms?.compound ?? [];
   for (const name of suggestions) {
     const cid = await cidByExact(name);
     if (cid) {
@@ -465,72 +519,68 @@ async function cidByAutocomplete(term: string): Promise<number | null> {
 async function cidByClassSearch(term: string): Promise<number | null> {
   const xml = await fetch(
     `${ENTREZ}/esearch.fcgi?db=pccompound&retmax=200&term=${encodeURIComponent(term)}`
-  ).then(r=>r.text());
+  ).then(r => r.text());
   const cids = [...xml.matchAll(/<Id>(\d+)<\/Id>/g)].map(m => m[1]);
   if (!cids.length) return null;
 
   const prop = await fetch(
     `${PUBCHEM}/compound/cid/${cids.join(',')}/property/SubstanceCount/JSON`
-  ).then(res => res.json() as any);
-  const best = prop.PropertyTable?.Properties?.sort(
-    (a: any, b: any) => b.SubstanceCount - a.SubstanceCount
+  ).then(res => res.json() as PubChemClassSearchResponse);
+  const best = prop.InformationList?.Information?.sort(
+    (a, b) => (b.SubstanceCount ?? 0) - (a.SubstanceCount ?? 0)
   )[0];
 
   return best?.CID ?? null;
 }
 
-// New function to convert SDF to PDB using external API
-async function convertSDFToPDB(sdfData: string): Promise<string> {
-  console.log('[PubChemService] Converting SDF to PDB using Moleculens API');
-  try {
-    const response = await fetch(`${MOLECULENS_API}/sdf-to-pdb/`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ sdf: sdfData }),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`SDF to PDB conversion failed: ${response.status} - ${errorText}`);
-    }
-
-    const data = (await response.json()) as SDFToPDBResponse;
-    console.log('[PubChemService] Successfully converted SDF to PDB using Moleculens API');
-    return data.pdb_data;
-  } catch (error) {
-    console.error('[PubChemService] Error converting SDF to PDB:', error);
-    throw error;
-  }
-}
-
-function extractPubChemInfo(record: any): MoleculeInfo {
+function extractPubChemInfo(record: unknown): MoleculeInfo {
   const info: MoleculeInfo = {};
-  const compound = record?.PC_Compounds?.[0];
-  const props = compound?.props || [];
+  const compound = (record as { PC_Compounds?: unknown[] })?.PC_Compounds?.[0];
+  const props = (compound as { props?: unknown[] })?.props || [];
 
   const getProp = (label: string) => {
     for (const p of props) {
-      if (p?.urn?.label === label) {
-        return p?.value?.sval ?? p?.value?.fval ?? p?.value?.ival;
+      const prop = p as {
+        urn?: { label?: string };
+        value?: { sval?: string; fval?: number; ival?: number };
+      };
+      if (prop?.urn?.label === label) {
+        return prop?.value?.sval ?? prop?.value?.fval ?? prop?.value?.ival;
       }
     }
     return undefined;
   };
 
-  info.formula = getProp('Molecular Formula');
+  const formula = getProp('Molecular Formula');
+  info.formula = typeof formula === 'string' ? formula : undefined;
+
   const mw = getProp('Molecular Weight');
-  if (mw !== undefined) info.formula_weight = parseFloat(mw);
-  info.canonical_smiles = getProp('Canonical SMILES');
-  info.isomeric_smiles = getProp('Isomeric SMILES');
-  info.inchi = getProp('InChI');
-  info.inchikey = getProp('InChIKey');
+  if (mw !== undefined) info.formula_weight = parseFloat(String(mw));
+
+  const canonicalSmiles = getProp('Canonical SMILES');
+  info.canonical_smiles = typeof canonicalSmiles === 'string' ? canonicalSmiles : undefined;
+
+  const isomericSmiles = getProp('Isomeric SMILES');
+  info.isomeric_smiles = typeof isomericSmiles === 'string' ? isomericSmiles : undefined;
+
+  const inchi = getProp('InChI');
+  info.inchi = typeof inchi === 'string' ? inchi : undefined;
+
+  const inchikey = getProp('InChIKey');
+  info.inchikey = typeof inchikey === 'string' ? inchikey : undefined;
+
   const fc = getProp('Formal Charge');
-  if (fc !== undefined) info.formal_charge = parseInt(fc as any, 10);
+  if (fc !== undefined) info.formal_charge = parseInt(String(fc), 10);
+
   info.synonyms = props
-    .filter((p: any) => p?.urn?.label === 'Synonym')
-    .map((p: any) => p?.value?.sval)
-    .filter(Boolean);
+    .filter((p: unknown) => {
+      const prop = p as { urn?: { label?: string }; value?: { sval?: string } };
+      return prop?.urn?.label === 'Synonym';
+    })
+    .map((p: unknown) => {
+      const prop = p as { value?: { sval?: string } };
+      return prop?.value?.sval;
+    })
+    .filter((s): s is string => Boolean(s));
   return info;
 }

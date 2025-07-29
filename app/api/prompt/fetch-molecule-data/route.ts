@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchMoleculeData } from '@/lib/pubchem';
-import { classifyPrompt} from '@/lib/llm';
+import { classifyPrompt } from '@/lib/llm';
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
@@ -20,12 +20,15 @@ export async function POST(req: NextRequest) {
 
       // Start with the LLM-supplied (or fallback) name.
       moleculeQuery = classification.name ?? '';
-
     } else {
-      return NextResponse.json({
-        status: 'failed',
-        error: 'Non-molecular prompt: Your prompt should be related to molecular structures. Click on the "Suggest Molecule" button to get started.'
-      }, { status: 400 });
+      return NextResponse.json(
+        {
+          status: 'failed',
+          error:
+            'Non-molecular prompt: Your prompt should be related to molecular structures. Click on the "Suggest Molecule" button to get started.',
+        },
+        { status: 400 }
+      );
     }
 
     const data = await fetchMoleculeData(moleculeQuery, moleculeType);
@@ -39,7 +42,8 @@ export async function POST(req: NextRequest) {
       formula: data.formula,
       info: data.info,
     });
-  } catch (err: any) {
-    return NextResponse.json({ status: 'failed', error: err.message }, { status: 500 });
+  } catch (err: unknown) {
+    const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
+    return NextResponse.json({ status: 'failed', error: errorMessage }, { status: 500 });
   }
 }

@@ -24,8 +24,9 @@ const DiagramInputPanel: React.FC<DiagramInputPanelProps> = ({
     try {
       const response = await generateMoleculeDiagram(request);
       onDiagramUpdate(response.diagram_image, response.diagram_plan);
-    } catch (err: any) {
-      setError(err.message || 'Failed to generate diagram');
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to generate diagram';
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
       onLoadingChange?.(false);

@@ -5,7 +5,7 @@ import { Header } from './components/layout/Header';
 import { Footer } from './components/layout/Footer';
 import { InputPanel } from './components/panels/InputPanel';
 import MoleculeViewer from './components/panels/MoleculeViewer';
-import { VisualizationOutput, HistoryEntry } from './types';
+import { VisualizationOutput, HistoryEntry, MoleculeInfo } from './types';
 import { LayoutWrapper } from './components/layout/LayoutWrapper';
 import { TimeMachinePanel } from './components/panels/TimeMachinePanel';
 import { saveHistoryToSession, loadHistoryFromSession } from './lib/utils';
@@ -39,7 +39,7 @@ END`;
   const [isInteractive, setIsInteractive] = useState(false);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [isTimeMachineOpen, setIsTimeMachineOpen] = useState(false);
-  const [moleculeInfo, setMoleculeInfo] = useState<any | null>(null);
+  const [moleculeInfo, setMoleculeInfo] = useState<MoleculeInfo | null>(null);
 
   const handleVisualizationUpdate = (pdb: string, htmlContent?: string, vizTitle?: string) => {
     setPdbData(pdb);
@@ -106,7 +106,7 @@ END`;
                 usePubChem={true}
                 currentHtml={html ?? undefined}
                 currentTitle={title ?? undefined}
-                onInfoUpdate={setMoleculeInfo}
+                onInfoUpdate={(info: unknown) => setMoleculeInfo(info as MoleculeInfo)}
               />
             </div>
 

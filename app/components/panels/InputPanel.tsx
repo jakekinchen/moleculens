@@ -1,9 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import {
-  pollJobStatus,
-  generateMoleculeHTML,
-  fetchMoleculeData,
-} from '@/services/api';
+import { generateMoleculeHTML, fetchMoleculeData } from '@/services/api';
 import {
   ArrowDownTrayIcon,
   ExclamationTriangleIcon,
@@ -11,6 +7,9 @@ import {
 } from '@heroicons/react/24/outline';
 import { VisualizationOutput } from '@/types';
 import CHEMISTRY_TOPICS from './chemistry_topics';
+
+// Constants
+const VIS_BARS = 8; // Number of audio visualization bars
 
 // Import the VisualizationData interface from the API file
 interface VisualizationData {
@@ -32,20 +31,7 @@ interface InputPanelProps {
   usePubChem?: boolean;
   currentHtml?: string;
   currentTitle?: string;
-  onInfoUpdate?: (info: any) => void;
-}
-
-// Update the JobStatusResponse interface to include legacy fields
-interface ExtendedJobStatusResponse {
-  job_id: string;
-  status: 'processing' | 'completed' | 'failed';
-  progress?: number;
-  message?: string;
-  visualization?: VisualizationData;
-  error?: string;
-  // Legacy fields
-  pdb_data?: string;
-  result_html?: string;
+  onInfoUpdate?: (info: unknown) => void;
 }
 
 // Add new interfaces for audio recording
@@ -77,9 +63,7 @@ export const InputPanel: React.FC<InputPanelProps> = ({
   const [title, setTitle] = useState<string | null>(initialTitle || null);
   const [error, setError] = useState<string | null>(null);
   const [isScientificError, setIsScientificError] = useState(false);
-  const [jobId, setJobId] = useState<string | null>(null);
   const [isSuggestHovered, setIsSuggestHovered] = useState(false);
-  const [isRecording, setIsRecording] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Add new state for audio recording
@@ -94,7 +78,6 @@ export const InputPanel: React.FC<InputPanelProps> = ({
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   // We're keeping these references for future use with real audio
-  const [audioAnalyser, setAudioAnalyser] = useState<AnalyserNode | null>(null);
   const [audioData, setAudioData] = useState<Uint8Array | null>(null);
   const animationFrameRef = useRef<number | undefined>(undefined);
   // Ref for smooth audio visualization
@@ -150,11 +133,11 @@ export const InputPanel: React.FC<InputPanelProps> = ({
   const updateAudioVisualization = useCallback(() => {
     // Initialize values if needed
     if (prevAudioValuesRef.current.length === 0) {
-      prevAudioValuesRef.current = Array(8).fill(50);
+      prevAudioValuesRef.current = Array(VIS_BARS).fill(50);
     }
 
-    // Generate random data for visualization
-    const fakeData = new Uint8Array(8);
+    // Generate fake audio data for visualization
+    const fakeData = new Uint8Array(VIS_BARS);
 
     // Speech pattern simulation parameters
     const time = Date.now() / 1000; // Use time for sinusoidal patterns
@@ -162,7 +145,7 @@ export const InputPanel: React.FC<InputPanelProps> = ({
     const isSpeakingLoudly = speakingFrequency > 0.7; // Threshold for "louder" moments
 
     // Fill the array with smoothly transitioning values
-    for (let i = 0; i < 8; i++) {
+    for (let i = 0; i < VIS_BARS; i++) {
       // Create a base oscillation pattern
       const waveOffset = i * (Math.PI / 4); // Distribute wave phases
       const baseOscillation = Math.sin(time * 2 + waveOffset) * 0.5 + 0.5; // 0 to 1
@@ -196,11 +179,10 @@ export const InputPanel: React.FC<InputPanelProps> = ({
     if (!audioAnalyser || !audioData) return;
     
     audioAnalyser.getByteFrequencyData(audioData);
-    const normalizedData = new Uint8Array(8);
-    
-    // Process the frequency data into 8 segments for better visualization
-    const samplesPerSegment = Math.floor(audioData.length / 8);
-    for (let i = 0; i < 8; i++) {
+    const normalizedData = new Uint8Array(VIS_BARS);
+
+    // Process the frequency data into segments for better visualization
+    const samplesPerSegment = Math.floor(audioData.length / VIS_BARS);    for (let i = 0; i < VIS_BARS; i++) {
       let sum = 0;
       let count = 0;
       for (let j = 0; j < samplesPerSegment; j++) {
@@ -242,7 +224,7 @@ export const InputPanel: React.FC<InputPanelProps> = ({
 
         // Set up initial dummy data for visualization
         // We're using random noise instead of real audio analysis
-        setAudioData(new Uint8Array(8).fill(40));
+        setAudioData(new Uint8Array(VIS_BARS).fill(40));
 
         /* Real audio analysis code - keeping for future use
         const audioContext = new AudioContext();
@@ -540,83 +522,6 @@ export const InputPanel: React.FC<InputPanelProps> = ({
     }
   };
 
-  // Poll for job updates
-  const pollForUpdates = async (id: string) => {
-    try {
-      const pollInterval = setInterval(async () => {
-        const result = (await pollJobStatus(id)) as ExtendedJobStatusResponse;
-
-        console.log('Job status update:', result);
-
-        switch (result.status) {
-          case 'completed':
-            clearInterval(pollInterval);
-            setIsLoading(false);
-            onLoadingChange(false);
-
-            if (result.visualization) {
-              // Handle the structured visualization data
-              const { pdb_data, html, title, timecode_markers, total_elements } =
-                result.visualization;
-              console.log('Visualization received:', { title, total_elements });
-
-              // Update the visualization and store both PDB data and HTML
-              setCurrentScript(pdb_data);
-              setCurrentHtml(html);
-              setTitle(title);
-              onVisualizationUpdate(pdb_data, html ?? undefined, title ?? undefined);
-              const visualizationOutput: VisualizationOutput = {
-                pdb_data,
-                html,
-                title,
-                timecode_markers,
-                total_elements,
-              };
-              onPromptSubmit(currentPrompt, visualizationOutput);
-            } else if (result.pdb_data) {
-              // Fallback for legacy response formats
-              const pdbData = result.pdb_data;
-              const html = result.result_html || '';
-              setCurrentScript(pdbData);
-              setCurrentHtml(html);
-              onVisualizationUpdate(pdbData, html ?? undefined, title ?? undefined);
-              const visualizationOutput: VisualizationOutput = { pdb_data: pdbData, html };
-              onPromptSubmit(currentPrompt, visualizationOutput);
-            }
-            break;
-
-          case 'processing':
-            // Update progress if available
-            if (result.progress !== undefined) {
-              const progressPercent = Math.round(result.progress * 100);
-              console.log(`Processing: ${progressPercent}% complete`);
-              // Could update a progress bar here
-            }
-            break;
-
-          case 'failed':
-            clearInterval(pollInterval);
-            setIsLoading(false);
-            onLoadingChange(false);
-            setError(`Processing failed: ${result.error || 'Unknown error'}`);
-            break;
-
-          default:
-            console.warn('Unknown status received:', result.status);
-            break;
-        }
-      }, 2000); // Poll every 2 seconds
-
-      // Cleanup function to clear interval if component unmounts
-      return () => clearInterval(pollInterval);
-    } catch (error) {
-      console.error('Error polling for updates:', error);
-      setIsLoading(false);
-      onLoadingChange(false);
-      setError('Failed to check processing status');
-    }
-  }; // eslint-disable-next-line @typescript-eslint/no-unused-vars
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -646,8 +551,7 @@ export const InputPanel: React.FC<InputPanelProps> = ({
       if (moleculeDataString) {
         const pdbData = moleculeDataString;
         const name = response.name;
-        const cid = response.cid;
-        const formula = response.formula;
+
         const info = response.info;
 
         setCurrentScript(pdbData);
@@ -683,11 +587,21 @@ export const InputPanel: React.FC<InputPanelProps> = ({
     // Use the backend-generated HTML if available, otherwise fall back to an empty string
     const htmlContent = currentHtml || '';
 
+    // Sanitize filename for filesystem safety
+    const sanitizeFilename = (name: string) => {
+      return name
+        .replace(/[<>:"/\\|?*]/g, '_') // Replace invalid characters with underscore
+        .replace(/\s+/g, '_') // Replace spaces with underscore
+        .substring(0, 100); // Limit length to 100 characters
+    };
+
+    const safeTitle = sanitizeFilename(title || 'visualization');
+
     const blob = new Blob([htmlContent], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${title || 'visualization'}.html`;
+    a.download = `${safeTitle}.html`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -776,7 +690,7 @@ export const InputPanel: React.FC<InputPanelProps> = ({
                       {audioData
                         ? // Render bars based on actual audio data
                           Array.from({ length: 10 }).map((_, i) => {
-                            const value = audioData[i % 8] || 0;
+                            const value = audioData[i % VIS_BARS] || 0;
                             return (
                               <div
                                 key={i}
@@ -1036,74 +950,79 @@ export const InputPanel: React.FC<InputPanelProps> = ({
         </div>
 
         {/* Download button - only shows when visualization is available */}
-        {(currentScript || currentHtml) && !isLoading && (() => {
-          const isMobile = typeof navigator !== 'undefined'
-            && /android|iphone|ipad|mobile/i.test(navigator.userAgent.toLowerCase());
+        {(currentScript || currentHtml) &&
+          !isLoading &&
+          (() => {
+            const isMobile =
+              typeof navigator !== 'undefined' &&
+              /android|iphone|ipad|mobile/i.test(navigator.userAgent.toLowerCase());
 
-          if (isMobile) return null;
+            if (isMobile) return null;
 
-          if (currentScript && !currentHtml) {
-            return (
-              <button
-                type="button"
-                onClick={async () => {
-                  try {
-                    if (!currentScript || !title) {
-                      throw new Error('No molecule data to generate HTML');
+            if (currentScript && !currentHtml) {
+              return (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      if (!currentScript || !title) {
+                        throw new Error('No molecule data to generate HTML');
+                      }
+                      setIsLoading(true);
+                      onLoadingChange(true);
+
+                      const moleculeData = {
+                        pdb_data: currentScript,
+                        name: title,
+                      };
+                      const resp = await generateMoleculeHTML(moleculeData);
+                      const html = resp.html;
+
+                      setCurrentHtml(html);
+                      onVisualizationUpdate(currentScript, html ?? undefined, title ?? undefined);
+                      setIsLoading(false);
+                      onLoadingChange(false);
+                    } catch (err: unknown) {
+                      setIsLoading(false);
+                      onLoadingChange(false);
+                      const errorMessage =
+                        err instanceof Error ? err.message : 'Failed to generate presentation';
+                      setError(errorMessage);
                     }
-                    setIsLoading(true);
-                    onLoadingChange(true);
-
-                    const moleculeData = {
-                      pdb_data: currentScript,
-                      name: title
-                    };
-                    const resp = await generateMoleculeHTML(moleculeData);
-                    const html = resp.html;
-
-                    setCurrentHtml(html);
-                    onVisualizationUpdate(currentScript, html ?? undefined, title ?? undefined);
-                    setIsLoading(false);
-                    onLoadingChange(false);
-                  } catch (err: any) {
-                    setIsLoading(false);
-                    onLoadingChange(false);
-                    setError(err.message || 'Failed to generate presentation');
-                  }
-                }}
-                className="self-end flex items-center justify-center gap-2 px-4 py-2 rounded-lg
+                  }}
+                  className="self-end flex items-center justify-center gap-2 px-4 py-2 rounded-lg
                            bg-gradient-to-r from-blue-600 to-blue-500
                            hover:from-blue-500 hover:to-blue-400
                            text-white text-sm font-medium shadow-md shadow-blue-500/20
                            transition-all duration-200 ease-in-out
                            focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-              >
-                Generate Presentation
-              </button>
-            );
-          }
+                >
+                  Generate Presentation
+                </button>
+              );
+            }
 
-          if (currentHtml) {
-            return (
-              <button
-                type="button"
-                onClick={handleDownload}
-                className="self-end flex items-center justify-center gap-2 px-4 py-2 rounded-lg
+            if (currentHtml) {
+              return (
+                <button
+                  type="button"
+                  onClick={handleDownload}
+                  className="self-end flex items-center justify-center gap-2 px-4 py-2 rounded-lg
                            bg-gradient-to-r from-green-600 to-green-500
                            hover:from-green-500 hover:to-green-400
                            text-white text-sm font-medium shadow-md shadow-green-500/20
                            transition-all duration-200 ease-in-out
                            focus:outline-none focus:ring-2 focus:ring-green-500/50"
-                aria-label="Download visualization"
-              >
-                <ArrowDownTrayIcon className="w-4 h-4" />
-                <span>Download</span>
-              </button>
-            );
-          }
+                  aria-label="Download visualization"
+                >
+                  <ArrowDownTrayIcon className="w-4 h-4" />
+                  <span>Download</span>
+                </button>
+              );
+            }
 
-          return null;
-        })()}
+            return null;
+          })()}
 
         {/* Processing indicator */}
         {audioState.isProcessing && (

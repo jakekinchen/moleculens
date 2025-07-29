@@ -43,13 +43,11 @@ export interface QuizQuestion {
 export interface Message {
   role: 'user' | 'assistant';
   content: string;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  metadata?: any; // If we need to keep this as any
+  metadata?: unknown;
 }
 
 export interface SomeInterface {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  data: any;
+  data: unknown;
 }
 
 export interface ModelInfo {
@@ -65,7 +63,7 @@ export interface MoleculeInfo {
   // Common fields
   formula?: string;
   formula_weight?: number;
-  
+
   // Small molecule specific fields
   canonical_smiles?: string;
   isomeric_smiles?: string;
@@ -73,7 +71,7 @@ export interface MoleculeInfo {
   inchikey?: string;
   formal_charge?: number;
   synonyms?: string[];
-  
+
   // Macromolecule specific fields
   resolution?: number;
   experimental_method?: string;
@@ -85,7 +83,7 @@ export interface MoleculeInfo {
   organism_common?: string;
   deposition_date?: string;
   structure_title?: string;
-  full_description?: string;  // Store the full RCSB title/description
+  full_description?: string; // Store the full RCSB title/description
 }
 
 export interface MoleculePlacement {
