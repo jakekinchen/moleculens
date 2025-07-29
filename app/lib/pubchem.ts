@@ -66,10 +66,87 @@ export interface MoleculeData {
   info: MoleculeInfo;
 }
 
-const PUBCHEM = 'https://pubchem.ncbi.nlm.nih.gov/rest/pug';
-// Autocomplete lives outside the PUG namespace
-const PUBCHEM_AC = 'https://pubchem.ncbi.nlm.nih.gov/rest/autocomplete/compound';
-const ENTREZ = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils';
+// API roots ---------------------------------------------------
+export const PUBCHEM = 'https://pubchem.ncbi.nlm.nih.gov/rest/pug';   // was const
+export const PUBCHEM_AC = 'https://pubchem.ncbi.nlm.nih.gov/rest/autocomplete/compound';
+export const ENTREZ      = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils';
+const NIST_CGI = 'https://webbook.nist.gov/cgi/cbook.cgi';
+const CAS_RE   = /^\d{2,7}-\d{2}-\d$/;
+
+/**
+ * Try to fetch a 3-D SDF from NCI/CACTUS.
+ * – Accepts CID (number) or arbitrary identifier (string).
+ * – Falls back to "plain" SDF (no get3d) if the 3-D request 500s.
+ */
+async function cactus3d(id: number | string): Promise<string | null> {
+  // CACTUS requires the "cid/" path segment when a numeric PubChem CID is supplied.
+  const idPath =
+    typeof id === 'number' || /^\d+$/.test(String(id)) ? `cid/${id}` : encodeURIComponent(String(id));
+
+  const tryFetch = async (get3d: boolean): Promise<string | null> => {
+    const suffix = get3d ? '?format=sdf&get3d=true' : '?format=sdf';
+    const url = `https://cactus.nci.nih.gov/chemical/structure/${idPath}/file${suffix}`;
+    console.log('CACTUS attempt:', url);
+    const r = await fetch(url, { headers: { 'User-Agent': 'moleculens/1.0' } });
+    console.log('CACTUS response:', r.status, r.headers.get('content-type'));
+    // Only return null on 404 (not found); 500 means try without 3D
+    if (r.status === 404) return null;
+    if (!r.ok && r.status !== 500) return null;
+    const txt = await r.text();
+    return isSdf3D(txt) ? txt : null;
+  };
+
+  // 1º – ask CACTUS for a prepared 3-D conformer
+  let txt = await tryFetch(true);
+  // 2º – some metals/inorganics fail with 500; fetch plain SDF and test
+  if (!txt) txt = await tryFetch(false);
+  return txt;
+}
+
+function isSdf3D(text: string): boolean {
+  const head = text.slice(0, 400).toUpperCase();
+  if (head.includes(' 2D')) return false;
+  if (head.includes(' 3D') || head.includes(' V3000')) return true;
+
+  // look at first ~25 atom lines
+  return text
+    .split(/\n/)
+    .slice(4, 30)
+    .some(l => {
+      const z = parseFloat(l.slice(20, 30)); // correct V2000 Z column
+      return !Number.isNaN(z) && Math.abs(z) > 1e-3;
+    });
+}
+
+async function casFromPubChem(cid: number): Promise<string | null> {
+  const r = await fetch(`${PUBCHEM}/compound/cid/${cid}/synonyms/JSON`, { headers: { 'User-Agent': 'moleculens/1.0' } });
+  console.log('CAS response', r.status);
+  if (!r.ok) return null;
+  const syns =
+    (await r.json())?.InformationList?.Information?.[0]?.Synonym as string[] | undefined;
+  return syns?.find(s => CAS_RE.test(s)) ?? null;
+}
+
+async function nist3dSdf(cas: string): Promise<string | null> {
+  const res = await fetch(`${NIST_CGI}?Str3File=C${cas.replace(/-/g, '')}`, { headers: { 'User-Agent': 'moleculens/1.0' } });
+  console.log('NIST', res.status, res.headers.get('content-type'));
+  if (!res.ok) return null;
+  const text = await res.text();
+  return isSdf3D(text) ? text : null;
+}
+
+/**
+ * Normalize chemical names to ASCII for consistent external service queries.
+ * Handles soft-hyphens, fancy dashes, accents, and other Unicode artifacts.
+ */
+export function sanitizeName(name: string): string {
+  return name
+    .normalize('NFKD')          // decompose accents, NB-spaces, etc.
+    .replace(/[\u00AD\u2010-\u2015\u202F]/g, '-')  // soft-hyphens & fancy dashes → -
+    .replace(/[^\u0020-\u007F]/g, '') // strip non-ASCII leftovers (space through DEL)
+    .replace(/\s+/g, ' ')         // collapse whitespace
+    .trim();
+}
 
 /**
  * Break a free‑form user prompt into several candidate strings that might
@@ -86,19 +163,20 @@ const ENTREZ = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils';
 /* ----------  top-level  ---------- */
 
 export async function resolveCid(q: string): Promise<number> {
+  const term = sanitizeName(q);  // normalize to ASCII for consistent lookup
   // A. direct / synonym
-  let cid = await cidByExact(q);
+  let cid = await cidByExact(term);
   if (cid) return cid;
 
   // B. fuzzy autocomplete
-  cid = await cidByAutocomplete(q);
+  cid = await cidByAutocomplete(term);
   if (cid) return cid;
 
   // C. class / family
-  cid = await cidByClassSearch(q);
+  cid = await cidByClassSearch(term);
   if (cid) return cid;
 
-  throw new Error(`No PubChem compound matches "${q}"`);
+  throw new Error(`No PubChem compound matches "${term}"`);
 }
 
 const RCSB_FILES = 'https://files.rcsb.org/download';
@@ -171,9 +249,17 @@ export async function resolvePdbId(q: string): Promise<string> {
       method: 'POST',
       headers: JSON_HEADERS,
       body: JSON.stringify(body),
-    }).then(r => r.json());
+    });
+    if (!ft.ok) {
+      throw new Error(`RCSB returned ${ft.status}`);
+    }
+    const text = await ft.text();
+    if (!text.trim()) {
+      throw new Error('Empty response from RCSB');
+    }
+    const data = JSON.parse(text);
 
-    const hits = (ft?.result_set ?? []).filter((h: RCSBSearchHit) => PDB_ID_RE.test(h.identifier));
+    const hits = (data?.result_set ?? []).filter((h: RCSBSearchHit) => PDB_ID_RE.test(h.identifier));
     if (hits.length) {
       log(
         'full_text',
@@ -211,9 +297,17 @@ export async function resolvePdbId(q: string): Promise<string> {
         method: 'POST',
         headers: JSON_HEADERS,
         body: JSON.stringify(mkBody(attr, term)),
-      }).then(r => r.json());
+      });
+      if (!rs.ok) {
+        throw new Error(`RCSB returned ${rs.status}`);
+      }
+      const text = await rs.text();
+      if (!text.trim()) {
+        throw new Error('Empty response from RCSB');
+      }
+      const data = JSON.parse(text);
 
-      const hits = (rs?.result_set ?? []).filter((h: RCSBSearchHit) =>
+      const hits = (data?.result_set ?? []).filter((h: RCSBSearchHit) =>
         PDB_ID_RE.test(h.identifier)
       );
       if (hits.length) {
@@ -358,87 +452,122 @@ export async function fetchMoleculeData(
   query: string,
   type: 'small molecule' | 'macromolecule'
 ): Promise<MoleculeData> {
-  console.log(`[PubChemService] Fetching molecule data for query: "${query}"`);
   if (type === 'macromolecule') {
-    // Generate PDB data from RCSB
-    const response = await generateFromRCSB({ prompt: query });
-    return {
-      pdb_data: response.pdb_data,
-      name: response.title || query,
-      cid: 0,
-      formula: '',
-      info: response.info,
-      sdf: '',
-    };
+    const { pdb_data, title, info } = await generateFromRCSB({ prompt: query });
+    return { pdb_data, name: title ?? query, cid: 0, formula: '', info, sdf: '' };
   }
-  // 1. Get CID
-  const cid = await resolveCid(query);
-  // No need to check cid here, resolveCid throws if not found
-  console.log(`[PubChemService] Resolved CID: ${cid} for query: "${query}"`);
 
-  // 2. Get SDF data – prefer 3D, fallback to 2D then generic
-  let sdfResp = await fetch(`${PUBCHEM}/compound/cid/${cid}/SDF?record_type=3d`);
-  if (!sdfResp.ok) {
-    console.warn(`[PubChemService] 3D SDF not found for CID ${cid}. Falling back to 2D.`);
-    sdfResp = await fetch(`${PUBCHEM}/compound/cid/${cid}/SDF?record_type=2d`);
-    if (!sdfResp.ok) {
-      console.warn(`[PubChemService] 2D SDF not found for CID ${cid}. Trying default SDF.`);
-      sdfResp = await fetch(`${PUBCHEM}/compound/cid/${cid}/SDF`);
+  /* ---------- small molecules ---------- */
+  const cid = await resolveCid(query);
+  const mustHave3D = false; // generic detection – no CID whitelist
+  let sdf = '';
+
+  /* 1 ─── PubChem “3d” endpoint */
+  {
+    const r = await fetch(`${PUBCHEM}/compound/cid/${cid}/SDF?record_type=3d`);
+    if (r.ok) {
+      const txt = await r.text();
+      if (isSdf3D(txt)) {
+        sdf = txt;
+      } else {
+        console.warn(`PubChem returned planar coordinates for ${query}; will try NIST.`);
+      }
     }
   }
 
-  if (!sdfResp.ok) {
-    const errorText = await sdfResp.text();
-    console.error(`[PubChemService] PubChem SDF request failed: ${sdfResp.status} - ${errorText}`);
-    throw new Error(`PubChem SDF request failed: ${sdfResp.status} - ${errorText}`);
+  /* 2 ─── NIST via CAS */
+  if (!sdf) {
+    const cas = await casFromPubChem(cid);
+    if (cas) {
+      const txt = await nist3dSdf(cas);
+      if (txt && isSdf3D(txt)) {
+        console.log(`Retrieved 3-D coordinates from NIST (CAS ${cas}).`);
+        sdf = txt;
+      }
+    }
   }
 
-  const sdf = await sdfResp.text();
-  console.log(
-    `[PubChemService] Successfully fetched SDF data (length: ${sdf.length}) for CID: ${cid}`
-  );
-
-  // 3. Get formula
-  const formulaResp = await fetch(`${PUBCHEM}/compound/cid/${cid}/property/MolecularFormula/JSON`);
-  if (!formulaResp.ok) {
-    const errorText = await formulaResp.text();
-    console.error(
-      `[PubChemService] PubChem formula request failed: ${formulaResp.status} - ${errorText}`
-    );
-    // Not throwing here, as formula is non-critical, but will log and return empty
+  /* 3 ─── CACTUS (computed / repository 3-D) */
+  if (!sdf) {
+    // (a) direct CID – cheapest, avoids name-parsing quirks
+    const txt = await cactus3d(cid);
+    if (txt) {
+      console.log('[PubChemService] Retrieved 3-D SDF from CACTUS via CID.');
+      sdf = txt;
+    }
   }
+
+  /* 3b ─── CACTUS via SMILES if CID failed */
+  if (!sdf) {
+    const smiles = await getSmiles(cid);
+    if (smiles) {
+      const txt = await cactus3d(smiles);
+      if (txt) {
+        console.log('[PubChemService] Retrieved 3-D SDF from CACTUS via SMILES.');
+        sdf = txt;
+      }
+    }
+  }
+
+  /* 3c ─── CACTUS via cleaned name */
+  if (!sdf) {
+    const txt = await cactus3d(sanitizeName(query));
+    if (txt) {
+      console.log('[PubChemService] Retrieved 3-D SDF from CACTUS via name.');
+      sdf = txt;
+    }
+  }
+
+  if (sdf) {
+    console.log('[PubChemService] Retrieved 3-D SDF from NCI/CACTUS.');
+  }
+
+  /* 4 ─── PubChem computed conformers */
+  if (!sdf) {
+    const conformerUrl = `${PUBCHEM}/compound/cid/${cid}/record/SDF?record_type=3d&response_type=save`;
+    const pc3 = await fetch(conformerUrl, { headers: { 'User-Agent': 'moleculens/1.0' } });
+    console.log('Conformer', pc3.status, pc3.headers.get('content-type'));
+    if (pc3.ok) {
+      const txt = await pc3.text();
+      console.log('[PubChemService] Retrieved computed 3-D from conformer endpoint.');
+      sdf = txt;
+    }
+  }
+  /* 5 ─── PubChem 2-D fallback */
+  if (!sdf) {
+    const r2 =
+      (await fetch(`${PUBCHEM}/compound/cid/${cid}/SDF?record_type=2d`)).ok
+        ? await fetch(`${PUBCHEM}/compound/cid/${cid}/SDF?record_type=2d`)
+        : await fetch(`${PUBCHEM}/compound/cid/${cid}/SDF`);
+    if (r2.ok) {
+      sdf = await r2.text();
+      // Final check: if we have an SDF but it's not 3D, log a warning
+      if (!isSdf3D(sdf)) {
+        console.warn(`[PubChemService] No 3D structure found for ${query}. Falling back to 2D representation.`);
+      }
+    }
+  }
+
+  if (!sdf) throw new Error(`Unable to obtain SDF for “${query}” (CID ${cid}).`);
+
+  /* --- ancillary data (formula, record info) --- */
   let formula = '';
-  if (formulaResp.ok) {
-    const formulaData = (await formulaResp.json()) as {
-      PropertyTable?: { Properties?: Array<{ MolecularFormula?: string }> };
-    };
-    formula = formulaData.PropertyTable?.Properties?.[0]?.MolecularFormula ?? '';
-    console.log(`[PubChemService] Successfully fetched formula: ${formula} for CID: ${cid}`);
+  try {
+    const f = await fetch(`${PUBCHEM}/compound/cid/${cid}/property/MolecularFormula/JSON`);
+    if (f.ok) formula = (await f.json()).PropertyTable.Properties[0].MolecularFormula ?? '';
+  } catch {
+    /* ignore non-critical formula fetch errors */
   }
-
-  // For small molecules we no longer perform SDF → PDB conversion; viewer will parse SDF directly.
-  const pdb_data = '';
-  const sdf_text = sdf; // rename for clarity
 
   let info: MoleculeInfo = { formula };
   try {
-    const recordResp = await fetch(`${PUBCHEM}/compound/cid/${cid}/record/JSON`);
-    if (recordResp.ok) {
-      const record = await recordResp.json();
-      info = { ...info, ...extractPubChemInfo(record) };
-    }
-  } catch (e) {
-    console.error('[PubChemService] Error fetching record info:', e);
+    const r = await fetch(`${PUBCHEM}/compound/cid/${cid}/record/JSON`);
+    if (r.ok) info = { ...info, ...extractPubChemInfo(await r.json()) };
+  } catch {
+    /* ignore non-critical record info fetch errors */
   }
 
-  return {
-    pdb_data,
-    sdf: sdf_text,
-    name: query,
-    cid,
-    formula,
-    info,
-  };
+  return { pdb_data: '', sdf, name: query, cid, formula, info };
 }
 
 export function moleculeHTML(moleculeData: MoleculeData): string {
@@ -533,7 +662,33 @@ async function cidByClassSearch(term: string): Promise<number | null> {
   return best?.CID ?? null;
 }
 
-function extractPubChemInfo(record: unknown): MoleculeInfo {
+/**
+ * Fetch canonical SMILES notation for a compound from PubChem.
+ * Returns null if not found or error occurs.
+ */
+// Fetch CanonicalSMILES, IsomericSMILES or InChI (in that order) for CACTUS
+async function getSmiles(cid: number): Promise<string | null> {
+  try {
+    const props = 'CanonicalSMILES,IsomericSMILES,InChI';
+    const r = await fetch(
+      `${PUBCHEM}/compound/cid/${cid}/property/${props}/JSON`
+    );
+    if (!r.ok) return null;
+
+    const p = (await r.json())?.PropertyTable?.Properties?.[0] ?? {};
+    return (
+      p.CanonicalSMILES ||
+      p.IsomericSMILES ||
+      p.InChI ||
+      null
+    );
+  } catch {
+    return null;
+  }
+}
+
+// helper previously internal → public
+export function extractPubChemInfo(record: unknown): MoleculeInfo {
   const info: MoleculeInfo = {};
   const compound = (record as { PC_Compounds?: unknown[] })?.PC_Compounds?.[0];
   const props = (compound as { props?: unknown[] })?.props || [];
@@ -584,3 +739,5 @@ function extractPubChemInfo(record: unknown): MoleculeInfo {
     .filter((s): s is string => Boolean(s));
   return info;
 }
+
+export { cidByExact, cidByAutocomplete, cidByClassSearch };

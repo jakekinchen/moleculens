@@ -166,27 +166,31 @@ export default function MoleculeViewer({
     };
 
     // Helper to load an HDRI environment map for realistic reflections
-    const addEnvironment = (renderer: THREE.WebGLRenderer, scene: THREE.Scene) => {
-      new RGBELoader().load(
-        'https://cdn.jsdelivr.net/gh/pmndrs/drei-assets@master/hdri/venice_sunset_1k.hdr',
-        (hdr: THREE.Texture) => {
-          const pmrem = new THREE.PMREMGenerator(renderer);
-          const envMap = pmrem.fromEquirectangular(hdr).texture;
-          scene.environment = envMap;
-          hdr.dispose();
-          pmrem.dispose();
-        },
-        undefined,
-        (err: unknown) => {
-          if (process.env.NODE_ENV !== 'production') {
-            console.error('Failed to load HDRI environment', err);
+    const addEnvironment = async (renderer: THREE.WebGLRenderer, scene: THREE.Scene): Promise<void> => {
+      return new Promise((resolve, reject) => {
+        new RGBELoader().load(
+          'https://cdn.jsdelivr.net/gh/pmndrs/drei-assets@master/hdri/venice_sunset_1k.hdr',
+          (hdr: THREE.Texture) => {
+            const pmrem = new THREE.PMREMGenerator(renderer);
+            const envMap = pmrem.fromEquirectangular(hdr).texture;
+            scene.environment = envMap;
+            hdr.dispose();
+            pmrem.dispose();
+            resolve();
+          },
+          undefined,
+          (err: unknown) => {
+            if (process.env.NODE_ENV !== 'production') {
+              console.error('Failed to load HDRI environment', err);
+            }
+            reject(err);
           }
-        }
-      );
+        );
+      });
     };
 
     // Initialization
-    const init = () => {
+    const init = async () => {
       if (!containerRef.current || !labelContainerRef.current || !wrapperRef.current) return;
 
       // Initialize clock
@@ -241,7 +245,11 @@ export default function MoleculeViewer({
       containerRef.current.appendChild(renderer.domElement);
 
       // Add environment reflections
-      addEnvironment(renderer, scene);
+      try {
+        await addEnvironment(renderer, scene);
+      } catch (err) {
+        console.warn('Failed to load environment map, continuing with basic lighting');
+      }
 
       composer = new EffectComposer(renderer);
       composer.setSize(containerRef.current.clientWidth, containerRef.current.clientHeight);
@@ -821,55 +829,43 @@ export default function MoleculeViewer({
       controls.update();
     };
 
-    // Function to fit camera to molecule
-    const fitCameraToMolecule = (closenessFactor = 0.5) => {
+    /**
+     * Re-fit camera & controls so the current molecule fully occupies the viewport.
+     * Works for both Å-scale (small ligands) and 100 Å proteins without manual tweaks.
+     */
+    const fitCameraToMolecule = (margin = 1.15 /* > 1 adds visual breathing room */) => {
       if (!root) return;
 
-      /* ---------- hard‑reset (added lines) ---------- */
-      if (controls) {
-        controls.reset();
-        camera.zoom = 1;
-        camera.updateProjectionMatrix();
-      }
-      rotationRef.current = 0; // <- NEW
-      currentRotationSpeedRef.current = 0; // <- NEW
-      root.rotation.set(0, 0, 0); // <- NEW
-      /* --------------------------------------------- */
+      /* ---------- reset rotation / zoom inherited from previous model ---------- */
+      controls.reset();
+      camera.zoom = 1;
+      camera.updateProjectionMatrix();
+      rotationRef.current = 0;
+      currentRotationSpeedRef.current = 0;
+      root.rotation.set(0, 0, 0);
 
-      const isMobileScreen = typeof window !== 'undefined' && window.innerWidth < 768;
-      if (isMobileScreen) closenessFactor *= 1.3;
+      /* ---------- compute bounding-sphere ---------- */
+      const sphere = new THREE.Sphere();
+      new THREE.Box3().setFromObject(root).getBoundingSphere(sphere);
+      const { center, radius } = sphere;
 
-      const box = new THREE.Box3();
-      root.children.forEach(child => {
-        if (!(child instanceof THREE.Light)) box.expandByObject(child);
-      });
+      /* ---------- move everything so that centre sits on (0,0,0) ---------- */
+      root.position.sub(center);          // translate children instead of camera
 
-      const size = box.getSize(new THREE.Vector3());
-      const center = box.getCenter(new THREE.Vector3());
-      const diagonal = Math.sqrt(size.x ** 2 + size.y ** 2 + size.z ** 2);
-      const scaleFactor = Math.max(1.2, Math.log10(diagonal) * 0.8);
-      const distance = diagonal * scaleFactor * closenessFactor;
-
-      const theta = Math.PI / 4;
-      const phi = Math.PI / 6;
-
-      camera.position.set(
-        center.x + distance * Math.sin(theta) * Math.cos(phi),
-        center.y + distance * Math.sin(phi),
-        center.z + distance * Math.cos(theta) * Math.cos(phi)
-      );
-
-      camera.lookAt(center);
-      controls.target.copy(center);
-
-      camera.near = distance * 0.01;
-      camera.far = distance * 10;
+      /* ---------- place camera ---------- */
+      const fov   = (camera.fov * Math.PI) / 180;          // vertical FOV in rad
+      const dist  = (radius * margin) / Math.sin(fov / 2); // basic geometry
+      camera.position.set(0, 0, dist);
+      camera.near = dist * 0.01;
+      camera.far  = dist * 10;
       camera.updateProjectionMatrix();
 
-      controls.minDistance = distance * 0.1;
-      controls.maxDistance = distance * 5;
+      /* ---------- orbit controls ---------- */
+      controls.target.set(0, 0, 0);
+      controls.minDistance = dist * 0.2;
+      controls.maxDistance = dist * 5;
       controls.update();
-      controls.saveState(); // new baseline for subsequent resets
+      controls.saveState();               // new baseline
     };
 
     // Animation loop
@@ -904,8 +900,10 @@ export default function MoleculeViewer({
       }
     };
 
-    init();
-    animate();
+    (async () => {
+      await init();
+      animate();
+    })();
 
     // Listen for requests to get the fitCameraToMolecule function
     const handleRequestFitCameraFunction = (event: Event) => {

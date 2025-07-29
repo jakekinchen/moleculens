@@ -1,5 +1,6 @@
 import OpenAI from 'openai';
 import { z } from 'zod';
+import { sanitizeName } from './pubchem';
 
 const apiKey = process.env.OPENAI_API_KEY;
 const openai = apiKey ? new OpenAI({ apiKey }) : undefined;
@@ -47,10 +48,10 @@ export interface PromptClassification {
 export async function classifyPrompt(prompt: string): Promise<PromptClassification> {
   if (!openai) {
     console.warn('LLM not configured. Defaulting to small molecule classification.');
-    return { type: 'small molecule', name: prompt };
+    return { type: 'small molecule', name: sanitizeName(prompt) };
   }
 
-  const question = `You are a chemical assistant. Classify the following user input as a 'small molecule', 'macromolecule', or 'unknown'. If a specific molecule or macromolecule can be identified, provide its common name. Respond ONLY with JSON in the form {"type":"molecule|macromolecule|unknown","name":"<name>"}. For example if the prompt is "Tell me about the structure of glucose", the response should be {"type":"small molecule","name":"glucose"} or if the prompt is "Tell me about the structure of a protein", the response should be {"type":"macromolecule","name":"leucine"}.
+  const question = `You are a chemical assistant. Classify the following user input as a 'small molecule', 'macromolecule', or 'unknown'. If a specific molecule or macromolecule can be identified, provide its common name. Respond ONLY with JSON in the form {"type":"molecule|macromolecule|unknown","name":"<name>"}. For example if the prompt is "Tell me about the structure of glucose", the response should be {"type":"small molecule","name":"glucose"} or if the prompt is "Tell me about the structure of a protein", the response should be {"type":"macromolecule","name":"leucine", or if the prompt is "Teach me about metal-carbonyl complexes and back-bonding", the response should be {"type":"small molecule","name":"nickel tetracarbonyl" or with "Teach me about metal-metal quadruple bonds in dimolybdenum complexes", the response should be {"type":"small molecule","name":"dimolybdenum tetraacetate"}.
 
 User input: "${prompt}"`;
 
@@ -58,7 +59,11 @@ User input: "${prompt}"`;
     type: z.enum(['small molecule', 'macromolecule', 'unknown']),
     name: z.string().nullable()
   }));
-  return result;
+  // Sanitize the name to ASCII before returning
+  return {
+    type: result.type,
+    name: result.name ? sanitizeName(result.name) : null
+  };
 }
 
 export async function interpretQueryToMoleculeName(userInput: string): Promise<string> {
