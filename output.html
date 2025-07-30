@@ -531,88 +531,66 @@
       }
 
       function loadSDFMolecule() {
-          console.log('Loading SDF molecule...');
+        console.log('Loading SDF molecule...');
 
-          try {
-              const mol = loadSDF(sdfData, {
-                  showHydrogen: true,
-                  addThreeCenterBonds: true,
-                  layout: 'auto',
-                  renderMultipleBonds: true,
-                  attachAtomData: true,
-                  attachProperties: true,
-              });
+        try {
+          const mol = loadSDF(sdfData, {
+            showHydrogen: true,
+            addThreeCenterBonds: true,
+            layout: 'auto',
+            renderMultipleBonds: true,
+            attachAtomData: true,
+            attachProperties: true,
+          });
 
-              console.log('SDF loaded successfully:', mol);
+          console.log('SDF loaded successfully:', mol);
 
-              // Upgrade materials for better rendering
-              let atomIndex = 0;
-              mol.traverse((obj) => {
-                  if (obj.isMesh) {
-                      const mesh = obj;
-                      if (mesh.geometry?.type === 'SphereGeometry' || mesh.geometry?.type === 'IcosahedronGeometry') {
-                          // This is an atom
-                          mesh.userData.atomIndex = atomIndex++;
+          // Upgrade materials for better rendering
+          let atomIndex = 0;
+          mol.traverse(obj => {
+            if (obj.isMesh) {
+              const mesh = obj;
+              if (
+                mesh.geometry?.type === 'SphereGeometry' ||
+                mesh.geometry?.type === 'IcosahedronGeometry'
+              ) {
+                // This is an atom
+                mesh.userData.atomIndex = atomIndex++;
 
-                          // Upgrade material
-                          const material = mesh.material;
-                          const baseColor = material.color?.clone?.() ?? new THREE.Color(0xffffff);
-                          mesh.material = new THREE.MeshStandardMaterial({
-                              color: baseColor,
-                              metalness: 0.3,
-                              roughness: 0.25,
-                          });
-                      } else {
-                          // This is likely a bond - upgrade material
-                          const material = mesh.material;
-                          const baseColor = material.color?.clone?.() ?? new THREE.Color(0xffffff);
-                          mesh.material = new THREE.MeshStandardMaterial({
-                              color: baseColor,
-                              metalness: 0.1,
-                              roughness: 0.3,
-                          });
-                      }
-                  }
-              });
-
-              root.add(mol);
-
-              // Unify centering logic
-              recenterRoot();
-              fitCameraToMolecule();
-
-              // Store reference
-              moleculeGroup = mol;
-
-          } catch (error) {
-              console.error('Error loading SDF:', error);
-              // Fallback to PDB if SDF fails
-              loadPDBMolecule();
-          }
-      }
-                }
-              });
-
-              root.add(mol);
-
-              // Unify centering logic
-              recenterRoot();
-              fitCameraToMolecule();
-
-              // Store reference
-              moleculeGroup = mol;
-            } catch (error) {
-              console.error('Error loading SDF:', error);
-              // Fallback to PDB if SDF fails
-              loadPDBMolecule();
+                // Upgrade material
+                const material = mesh.material;
+                const baseColor = material.color?.clone?.() ?? new THREE.Color(0xffffff);
+                mesh.material = new THREE.MeshStandardMaterial({
+                  color: baseColor,
+                  metalness: 0.3,
+                  roughness: 0.25,
+                });
+              } else {
+                // This is likely a bond - upgrade material
+                const material = mesh.material;
+                const baseColor = material.color?.clone?.() ?? new THREE.Color(0xffffff);
+                mesh.material = new THREE.MeshStandardMaterial({
+                  color: baseColor,
+                  metalness: 0.1,
+                  roughness: 0.3,
+                });
+              }
             }
-          } else {
-            // Retry after a short delay
-            setTimeout(checkSdfLoader, 100);
-          }
-        };
+          });
 
-        checkSdfLoader();
+          root.add(mol);
+
+          // Unify centering logic
+          recenterRoot();
+          fitCameraToMolecule();
+
+          // Store reference
+          moleculeGroup = mol;
+        } catch (error) {
+          console.error('Error loading SDF:', error);
+          // Fallback to PDB if SDF fails
+          loadPDBMolecule();
+        }
       }
 
       function loadPDBMolecule() {
