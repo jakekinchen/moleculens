@@ -1,4 +1,5 @@
 import React, { useRef, useEffect, useState } from 'react';
+import Image from 'next/image';
 import * as THREE from 'three';
 // @ts-expect-error - Three.js examples module not properly typed but works correctly
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
@@ -18,6 +19,7 @@ import { RGBELoader } from 'three/examples/jsm/loaders/RGBELoader';
 import { loadSDF } from 'three-sdf-loader';
 import { LoadingFacts } from './LoadingFacts';
 import { MoleculeInfo } from '@/types';
+import { safeGet2DTransparentPNG } from '@/services/moleculens-api';
 
 // Constants for animation
 const ROTATION_SPEED = 0.1; // Rotations per second
@@ -37,6 +39,18 @@ interface MoleculeViewerProps {
   moleculeInfo?: MoleculeInfo | null;
   /** Enable experimental ribbon/cartoon rendering */
   enableRibbonOverlay?: boolean;
+  /** Enable PyMOL-powered high-quality rendering */
+  enablePyMOLRendering?: boolean;
+  /** PyMOL rendering options */
+  pymolOptions?: {
+    representation?: 'cartoon' | 'surface' | 'stick' | 'ribbon';
+    quality?: 'fast' | 'high' | 'publication';
+    transparent_background?: boolean;
+  };
+  /** Enable animation features */
+  enableAnimation?: boolean;
+  /** Animation type for PyMOL rendering */
+  animationType?: 'rotation' | 'morph' | 'trajectory';
 }
 
 interface MoleculeStats {
@@ -66,6 +80,8 @@ export default function MoleculeViewer({
   showAnnotations = true,
   moleculeInfo,
   enableRibbonOverlay = false,
+  enablePyMOLRendering = false,
+  pymolOptions,
 }: MoleculeViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const captionRef = useRef<HTMLDivElement | null>(null);
@@ -75,6 +91,8 @@ export default function MoleculeViewer({
   const [isPaused, setIsPaused] = useState(false);
   const [isInfoOpen, setIsInfoOpen] = useState(false);
   const [stats, setStats] = useState<MoleculeStats | null>(null);
+  const [pymolOverlay, setPymolOverlay] = useState<string | null>(null);
+  const [isLoadingPyMOL, setIsLoadingPyMOL] = useState(false);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const labelRendererRef = useRef<CSS2DRenderer | null>(null);
   const rotationRef = useRef<number>(0);
@@ -818,6 +836,26 @@ export default function MoleculeViewer({
           // Fit camera to the molecule after loading
           recenterRoot(); // <-- NEW
           fitCameraToMolecule();
+
+          // Load PyMOL overlay if enabled
+          if (enablePyMOLRendering && title) {
+            setIsLoadingPyMOL(true);
+            (async () => {
+              try {
+                const pngBlob = await safeGet2DTransparentPNG(title, {
+                  resolution: [1024, 1024],
+                  dpi: 300,
+                  quality: pymolOptions?.quality || 'high',
+                });
+                const imageUrl = URL.createObjectURL(pngBlob);
+                setPymolOverlay(imageUrl);
+              } catch (error) {
+                console.error('Failed to load PyMOL overlay:', error);
+              } finally {
+                setIsLoadingPyMOL(false);
+              }
+            })();
+          }
         }
       );
     };
@@ -960,6 +998,11 @@ export default function MoleculeViewer({
         currentLabelContainerRef.removeChild(labelRenderer.domElement);
       }
 
+      // Clean up PyMOL overlay URL
+      if (pymolOverlay) {
+        URL.revokeObjectURL(pymolOverlay);
+      }
+
       if (renderer) {
         renderer.dispose();
       }
@@ -988,7 +1031,17 @@ export default function MoleculeViewer({
       outlinePassRef.current = null;
       setStats(null);
     }; // eslint-disable-line react-hooks/exhaustive-deps
-  }, [isLoading, pdbData, sdfData, enableRibbonOverlay, showAnnotations]); // Added showAnnotations back
+  }, [
+    isLoading,
+    pdbData,
+    sdfData,
+    enableRibbonOverlay,
+    showAnnotations,
+    enablePyMOLRendering,
+    pymolOptions?.quality,
+    title,
+    pymolOverlay,
+  ]); // Added PyMOL dependencies
 
   const toggleFullscreen = async () => {
     if (!wrapperRef.current) return;
@@ -1063,6 +1116,25 @@ export default function MoleculeViewer({
           <div ref={containerRef} className="absolute inset-0" />
           {/* Label renderer container */}
           <div ref={labelContainerRef} className="absolute inset-0 pointer-events-none" />
+
+          {/* PyMOL overlay */}
+          {pymolOverlay && (
+            <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+              <Image
+                src={pymolOverlay}
+                alt="PyMOL rendered molecule"
+                fill
+                className="object-contain opacity-80 mix-blend-overlay"
+                unoptimized // Since this is a blob URL
+              />
+            </div>
+          )}
+          {/* PyMOL loading indicator */}
+          {isLoadingPyMOL && (
+            <div className="absolute top-4 left-4 bg-black bg-opacity-50 text-white px-3 py-1 rounded text-sm">
+              Loading PyMOL render...
+            </div>
+          )}
           {/* Control buttons */}
           <div className="absolute top-4 right-4 z-20 flex space-x-2">
             {/* Pause/Play button */}
@@ -1119,6 +1191,57 @@ export default function MoleculeViewer({
                 />
               </svg>
             </button>
+            {/* PyMOL toggle button */}
+            {enablePyMOLRendering && (
+              <button
+                onClick={() => {
+                  if (pymolOverlay) {
+                    setPymolOverlay(null);
+                  } else {
+                    // Trigger PyMOL overlay loading
+                    if (title) {
+                      setIsLoadingPyMOL(true);
+                      (async () => {
+                        try {
+                          const pngBlob = await safeGet2DTransparentPNG(title, {
+                            resolution: [1024, 1024],
+                            dpi: 300,
+                            quality: pymolOptions?.quality || 'high',
+                          });
+                          const imageUrl = URL.createObjectURL(pngBlob);
+                          setPymolOverlay(imageUrl);
+                        } catch (error) {
+                          console.error('Failed to load PyMOL overlay:', error);
+                        } finally {
+                          setIsLoadingPyMOL(false);
+                        }
+                      })();
+                    }
+                  }
+                }}
+                className={`p-2 rounded-lg transition-colors duration-200 ${
+                  pymolOverlay
+                    ? 'text-blue-400 hover:text-blue-300'
+                    : 'text-white hover:text-gray-300'
+                }`}
+                title={pymolOverlay ? 'Hide PyMOL Overlay' : 'Show PyMOL Overlay'}
+                disabled={isLoadingPyMOL}
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-5 w-5"
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+              </button>
+            )}
+
             {/* Fullscreen button */}
             <button
               onClick={toggleFullscreen}
