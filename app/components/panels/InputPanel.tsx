@@ -5,20 +5,13 @@ import {
   ExclamationTriangleIcon,
   MicrophoneIcon,
 } from '@heroicons/react/24/outline';
-import { VisualizationOutput } from '@/types';
+import { VisualizationOutput, MoleculeInfo } from '@/types';
 import CHEMISTRY_TOPICS from './chemistry_topics';
 
 // Constants
 const VIS_BARS = 8; // Number of audio visualization bars
 
-// Import the VisualizationData interface from the API file
-interface VisualizationData {
-  html: string;
-  pdb_data: string;
-  title: string;
-  timecode_markers: string[];
-  total_elements: number;
-}
+// Note: VisualizationData interface removed as it's not used in this component
 
 interface InputPanelProps {
   onVisualizationUpdate: (pdbData: string, html?: string, title?: string) => void;
@@ -32,6 +25,7 @@ interface InputPanelProps {
   currentHtml?: string;
   currentTitle?: string;
   onInfoUpdate?: (info: unknown) => void;
+  _moleculeInfo?: MoleculeInfo; // Add molecule info prop
 }
 
 // Add new interfaces for audio recording
@@ -56,6 +50,7 @@ export const InputPanel: React.FC<InputPanelProps> = ({
   currentHtml: initialHtml,
   currentTitle: initialTitle,
   onInfoUpdate,
+  _moleculeInfo, // Molecule info prop (currently unused in this component)
 }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [currentScript, setCurrentScript] = useState<string | null>(null);
@@ -64,6 +59,7 @@ export const InputPanel: React.FC<InputPanelProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [isScientificError, setIsScientificError] = useState(false);
   const [isSuggestHovered, setIsSuggestHovered] = useState(false);
+  const [currentMoleculeData, setCurrentMoleculeData] = useState<unknown>(null); // Store complete molecule data
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Add new state for audio recording
@@ -82,6 +78,8 @@ export const InputPanel: React.FC<InputPanelProps> = ({
   const animationFrameRef = useRef<number | undefined>(undefined);
   // Ref for smooth audio visualization
   const prevAudioValuesRef = useRef<number[]>([]);
+
+  const [_mimeType, setMimeType] = useState<string>('audio/webm');
 
   // Function to properly resize textarea accounting for padding
   const resizeTextarea = () => {
@@ -115,18 +113,27 @@ export const InputPanel: React.FC<InputPanelProps> = ({
   }, [initialHtml, initialTitle]);
 
   // Check supported MIME types
-  const getSupportedMimeType = () => {
-    const types = ['audio/webm', 'audio/mp4', 'audio/ogg', 'audio/wav'];
-    console.log('Checking supported MIME types...');
-    for (const type of types) {
-      if (MediaRecorder.isTypeSupported(type)) {
-        console.log('Found supported type:', type);
-        return type;
+  useEffect(() => {
+    const mimeTypes = ['audio/webm', 'audio/mp4', 'audio/ogg', 'audio/wav'];
+
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('Checking supported MIME types...');
+    }
+    const types = MediaRecorder.isTypeSupported;
+    for (const type of mimeTypes) {
+      if (types(type)) {
+        if (process.env.NODE_ENV !== 'production') {
+          console.log('Found supported type:', type);
+        }
+        setMimeType(type);
+        return;
       }
     }
-    console.log('No supported types found, falling back to audio/webm');
-    return 'audio/webm'; // Default fallback
-  };
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('No supported types found, falling back to audio/webm');
+    }
+    setMimeType('audio/webm');
+  }, []);
 
   // Function to update audio visualization with smooth random noise
   // We keep the real audio processing code (commented out) for future use
@@ -219,8 +226,10 @@ export const InputPanel: React.FC<InputPanelProps> = ({
     try {
       if (!audioState.isInitialized) {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        const mimeType = getSupportedMimeType();
-        console.log('Using MIME type:', mimeType);
+        const mimeType = 'audio/webm'; // Default fallback
+        if (process.env.NODE_ENV !== 'production') {
+          console.log('Using MIME type:', mimeType);
+        }
 
         // Set up initial dummy data for visualization
         // We're using random noise instead of real audio analysis
@@ -246,7 +255,9 @@ export const InputPanel: React.FC<InputPanelProps> = ({
         try {
           recorder = new MediaRecorder(stream, { mimeType });
         } catch (e) {
-          console.warn('Failed with specified MIME type, using default');
+          if (process.env.NODE_ENV !== 'production') {
+            console.warn('Failed with specified MIME type, using default');
+          }
           recorder = new MediaRecorder(stream);
         }
 
@@ -257,9 +268,13 @@ export const InputPanel: React.FC<InputPanelProps> = ({
         };
 
         recorder.onstop = () => {
-          console.log('MediaRecorder.onstop fired, creating audio blob');
+          if (process.env.NODE_ENV !== 'production') {
+            console.log('MediaRecorder.onstop fired, creating audio blob');
+          }
           if (chunksRef.current.length === 0) {
-            console.error('No audio chunks recorded');
+            if (process.env.NODE_ENV !== 'production') {
+              console.error('No audio chunks recorded');
+            }
             setAudioState(prev => ({
               ...prev,
               isRecording: false,
@@ -271,7 +286,9 @@ export const InputPanel: React.FC<InputPanelProps> = ({
           }
 
           const blob = new Blob(chunksRef.current, { type: mimeType });
-          console.log('Created audio blob:', { size: blob.size, type: blob.type });
+          if (process.env.NODE_ENV !== 'production') {
+            console.log('Created audio blob:', { size: blob.size, type: blob.type });
+          }
 
           // Clean up audio visualization
           setAudioData(null);
@@ -289,11 +306,15 @@ export const InputPanel: React.FC<InputPanelProps> = ({
 
           // Set the audio blob in state and check if we should transcribe
           setAudioState(prev => {
-            console.log('Setting audio state, transcription pending:', prev.pendingTranscription);
+            if (process.env.NODE_ENV !== 'production') {
+              console.log('Setting audio state, transcription pending:', prev.pendingTranscription);
+            }
 
             // If transcription was requested, process it in the next tick
             if (prev.pendingTranscription) {
-              console.log('Will start transcription after state update');
+              if (process.env.NODE_ENV !== 'production') {
+                console.log('Will start transcription after state update');
+              }
               setTimeout(() => handleTranscription(blob), 0);
             }
 
@@ -332,7 +353,9 @@ export const InputPanel: React.FC<InputPanelProps> = ({
         }
       }
     } catch (err) {
-      console.error('Failed to initialize/toggle media recorder:', err);
+      if (process.env.NODE_ENV !== 'production') {
+        console.error('Failed to initialize/toggle media recorder:', err);
+      }
       setAudioState(prev => ({
         ...prev,
         error: 'Failed to access microphone. Please check permissions.',
@@ -366,7 +389,9 @@ export const InputPanel: React.FC<InputPanelProps> = ({
     const audioBlob = directBlob || audioState.audioBlob;
 
     if (!audioBlob) {
-      console.error('No audio blob available for transcription');
+      if (process.env.NODE_ENV !== 'production') {
+        console.error('No audio blob available for transcription');
+      }
       setAudioState(prev => ({
         ...prev,
         isProcessing: false,
@@ -376,10 +401,12 @@ export const InputPanel: React.FC<InputPanelProps> = ({
       return;
     }
 
-    console.log('Starting transcription with blob:', {
-      size: audioBlob.size,
-      type: audioBlob.type,
-    });
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('Starting transcription with blob:', {
+        size: audioBlob.size,
+        type: audioBlob.type,
+      });
+    }
     setAudioState(prev => ({ ...prev, isProcessing: true, error: null }));
 
     let timeoutId: NodeJS.Timeout | undefined;
@@ -396,24 +423,30 @@ export const InputPanel: React.FC<InputPanelProps> = ({
             const base64Audio = reader.result as string;
             const mimeType = audioBlob.type || 'audio/webm';
 
-            console.log('Preparing audio for transcription:');
-            console.log('MIME type:', mimeType);
-            console.log('Audio data length:', base64Audio.length);
+            if (process.env.NODE_ENV !== 'production') {
+              console.log('Preparing audio for transcription:');
+              console.log('MIME type:', mimeType);
+              console.log('Audio data length:', base64Audio.length);
+            }
 
             // Log the request URL and details
             const apiUrl = '/api/transcribe';
-            console.log('Sending request to:', apiUrl);
+            if (process.env.NODE_ENV !== 'production') {
+              console.log('Sending request to:', apiUrl);
+            }
 
             const requestData = {
               audio: base64Audio,
               mimeType: mimeType,
             };
-            console.log('Request details:', {
-              url: apiUrl,
-              method: 'POST',
-              mimeType: mimeType,
-              audioLength: base64Audio.length,
-            });
+            if (process.env.NODE_ENV !== 'production') {
+              console.log('Request details:', {
+                url: apiUrl,
+                method: 'POST',
+                mimeType: mimeType,
+                audioLength: base64Audio.length,
+              });
+            }
 
             const response = await fetch(apiUrl, {
               method: 'POST',
@@ -424,31 +457,41 @@ export const InputPanel: React.FC<InputPanelProps> = ({
               body: JSON.stringify(requestData),
             });
 
-            console.log('Received response:', {
-              status: response.status,
-              statusText: response.statusText,
-              headers: Object.fromEntries(response.headers.entries()),
-            });
+            if (process.env.NODE_ENV !== 'production') {
+              console.log('Received response:', {
+                status: response.status,
+                statusText: response.statusText,
+                headers: Object.fromEntries(response.headers.entries()),
+              });
+            }
 
             if (!response.ok) {
               const errorText = await response.text();
-              console.error('Transcription API error response:', {
-                status: response.status,
-                statusText: response.statusText,
-                error: errorText,
-              });
+              if (process.env.NODE_ENV !== 'production') {
+                console.error('Transcription API error response:', {
+                  status: response.status,
+                  statusText: response.statusText,
+                  error: errorText,
+                });
+              }
               throw new Error(`API error: ${response.status} ${errorText}`);
             }
 
             const responseText = await response.text();
-            console.log('Raw response text:', responseText);
+            if (process.env.NODE_ENV !== 'production') {
+              console.log('Raw response text:', responseText);
+            }
 
             let data;
             try {
               data = JSON.parse(responseText);
-              console.log('Parsed response data:', data);
+              if (process.env.NODE_ENV !== 'production') {
+                console.log('Parsed response data:', data);
+              }
             } catch (parseError) {
-              console.error('Failed to parse response as JSON:', parseError);
+              if (process.env.NODE_ENV !== 'production') {
+                console.error('Failed to parse response as JSON:', parseError);
+              }
               throw new Error('Invalid response format from server');
             }
 
@@ -482,7 +525,9 @@ export const InputPanel: React.FC<InputPanelProps> = ({
             if (!isResolved) {
               isResolved = true;
               clearTimeout(timeoutId);
-              console.error('Error in transcription process:', err);
+              if (process.env.NODE_ENV !== 'production') {
+                console.error('Error in transcription process:', err);
+              }
               reject(err);
             }
           }
@@ -492,7 +537,9 @@ export const InputPanel: React.FC<InputPanelProps> = ({
           if (!isResolved) {
             isResolved = true;
             clearTimeout(timeoutId);
-            console.error('FileReader error:', reader.error);
+            if (process.env.NODE_ENV !== 'production') {
+              console.error('FileReader error:', reader.error);
+            }
             reject(new Error('Failed to read audio file'));
           }
         };
@@ -503,14 +550,18 @@ export const InputPanel: React.FC<InputPanelProps> = ({
       // Set a timeout for the transcription
       const timeoutPromise = new Promise((_, reject) => {
         timeoutId = setTimeout(() => {
-          console.error('Transcription timed out after 30 seconds');
+          if (process.env.NODE_ENV !== 'production') {
+            console.error('Transcription timed out after 30 seconds');
+          }
           reject(new Error('Transcription timed out'));
         }, 30000); // 30 second timeout
       });
 
       await Promise.race([transcriptionPromise, timeoutPromise]);
     } catch (err) {
-      console.error('Transcription error:', err);
+      if (process.env.NODE_ENV !== 'production') {
+        console.error('Transcription error:', err);
+      }
       setAudioState(prev => ({
         ...prev,
         isProcessing: false,
@@ -532,16 +583,18 @@ export const InputPanel: React.FC<InputPanelProps> = ({
     setError(null);
     setIsScientificError(false);
 
-    console.log(
-      'Making request for:',
-      currentPrompt,
-      'with model:',
-      model,
-      'interactive mode:',
-      isInteractive,
-      'PubChem mode:',
-      usePubChem
-    );
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(
+        'Making request for:',
+        currentPrompt,
+        'with model:',
+        model,
+        'interactive mode:',
+        isInteractive,
+        'PubChem mode:',
+        usePubChem
+      );
+    }
 
     try {
       const response = await fetchMoleculeData(currentPrompt);
@@ -554,6 +607,8 @@ export const InputPanel: React.FC<InputPanelProps> = ({
 
         const info = response.info;
 
+        // Store the complete molecule data for presentation generation
+        setCurrentMoleculeData(response);
         setCurrentScript(pdbData);
         setTitle(name);
         onVisualizationUpdate(pdbData, undefined, name ?? undefined);
@@ -723,23 +778,25 @@ export const InputPanel: React.FC<InputPanelProps> = ({
                       <button
                         type="button"
                         onClick={() => {
-                          console.log('Checkmark button clicked');
-                          if (mediaRecorderRef.current && audioState.isRecording) {
+                          if (process.env.NODE_ENV !== 'production') {
+                            console.log('Checkmark button clicked');
                             console.log('Stopping recording and flagging for transcription');
-                            // Set the pending transcription flag
-                            setAudioState(prev => {
-                              console.log('Setting pending transcription flag');
-                              return {
-                                ...prev,
-                                pendingTranscription: true,
-                              };
-                            });
-
-                            // Stop the recording after state is updated
-                            setTimeout(() => {
-                              mediaRecorderRef.current?.stop();
-                            }, 0);
                           }
+                          // Set the pending transcription flag
+                          setAudioState(prev => {
+                            if (process.env.NODE_ENV !== 'production') {
+                              console.log('Setting pending transcription flag');
+                            }
+                            return {
+                              ...prev,
+                              pendingTranscription: true,
+                            };
+                          });
+
+                          // Stop the recording after state is updated
+                          setTimeout(() => {
+                            mediaRecorderRef.current?.stop();
+                          }, 0);
                         }}
                         className="h-6 w-6 flex items-center justify-center rounded-full 
                                   bg-blue-500/50 hover:bg-blue-500/70 text-white transition-all duration-200"
@@ -965,21 +1022,18 @@ export const InputPanel: React.FC<InputPanelProps> = ({
                   type="button"
                   onClick={async () => {
                     try {
-                      if (!currentScript || !title) {
+                      if (!currentMoleculeData) {
                         throw new Error('No molecule data to generate HTML');
                       }
                       setIsLoading(true);
                       onLoadingChange(true);
 
-                      const moleculeData = {
-                        pdb_data: currentScript,
-                        name: title,
-                      };
-                      const resp = await generateMoleculeHTML(moleculeData);
+                      // Use the complete molecule data that includes all the info needed for presentation
+                      const resp = await generateMoleculeHTML(currentMoleculeData);
                       const html = resp.html;
 
                       setCurrentHtml(html);
-                      onVisualizationUpdate(currentScript, html ?? undefined, title ?? undefined);
+                      onVisualizationUpdate(currentScript!, html ?? undefined, title ?? undefined);
                       setIsLoading(false);
                       onLoadingChange(false);
                     } catch (err: unknown) {

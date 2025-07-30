@@ -67,11 +67,11 @@ export interface MoleculeData {
 }
 
 // API roots ---------------------------------------------------
-export const PUBCHEM = 'https://pubchem.ncbi.nlm.nih.gov/rest/pug';   // was const
+export const PUBCHEM = 'https://pubchem.ncbi.nlm.nih.gov/rest/pug'; // was const
 export const PUBCHEM_AC = 'https://pubchem.ncbi.nlm.nih.gov/rest/autocomplete/compound';
-export const ENTREZ      = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils';
+export const ENTREZ = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils';
 const NIST_CGI = 'https://webbook.nist.gov/cgi/cbook.cgi';
-const CAS_RE   = /^\d{2,7}-\d{2}-\d$/;
+const CAS_RE = /^\d{2,7}-\d{2}-\d$/;
 
 /**
  * Try to fetch a 3-D SDF from NCI/CACTUS.
@@ -81,14 +81,20 @@ const CAS_RE   = /^\d{2,7}-\d{2}-\d$/;
 async function cactus3d(id: number | string): Promise<string | null> {
   // CACTUS requires the "cid/" path segment when a numeric PubChem CID is supplied.
   const idPath =
-    typeof id === 'number' || /^\d+$/.test(String(id)) ? `cid/${id}` : encodeURIComponent(String(id));
+    typeof id === 'number' || /^\d+$/.test(String(id))
+      ? `cid/${id}`
+      : encodeURIComponent(String(id));
 
   const tryFetch = async (get3d: boolean): Promise<string | null> => {
     const suffix = get3d ? '?format=sdf&get3d=true' : '?format=sdf';
     const url = `https://cactus.nci.nih.gov/chemical/structure/${idPath}/file${suffix}`;
-    console.log('CACTUS attempt:', url);
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('CACTUS attempt:', url);
+    }
     const r = await fetch(url, { headers: { 'User-Agent': 'moleculens/1.0' } });
-    console.log('CACTUS response:', r.status, r.headers.get('content-type'));
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('CACTUS response:', r.status, r.headers.get('content-type'));
+    }
     // Only return null on 404 (not found); 500 means try without 3D
     if (r.status === 404) return null;
     if (!r.ok && r.status !== 500) return null;
@@ -119,17 +125,24 @@ function isSdf3D(text: string): boolean {
 }
 
 async function casFromPubChem(cid: number): Promise<string | null> {
-  const r = await fetch(`${PUBCHEM}/compound/cid/${cid}/synonyms/JSON`, { headers: { 'User-Agent': 'moleculens/1.0' } });
-  console.log('CAS response', r.status);
+  const r = await fetch(`${PUBCHEM}/compound/cid/${cid}/synonyms/JSON`, {
+    headers: { 'User-Agent': 'moleculens/1.0' },
+  });
+  if (process.env.NODE_ENV !== 'production') {
+    console.log('CAS response', r.status);
+  }
   if (!r.ok) return null;
-  const syns =
-    (await r.json())?.InformationList?.Information?.[0]?.Synonym as string[] | undefined;
+  const syns = (await r.json())?.InformationList?.Information?.[0]?.Synonym as string[] | undefined;
   return syns?.find(s => CAS_RE.test(s)) ?? null;
 }
 
 async function nist3dSdf(cas: string): Promise<string | null> {
-  const res = await fetch(`${NIST_CGI}?Str3File=C${cas.replace(/-/g, '')}`, { headers: { 'User-Agent': 'moleculens/1.0' } });
-  console.log('NIST', res.status, res.headers.get('content-type'));
+  const res = await fetch(`${NIST_CGI}?Str3File=C${cas.replace(/-/g, '')}`, {
+    headers: { 'User-Agent': 'moleculens/1.0' },
+  });
+  if (process.env.NODE_ENV !== 'production') {
+    console.log('NIST', res.status, res.headers.get('content-type'));
+  }
   if (!res.ok) return null;
   const text = await res.text();
   return isSdf3D(text) ? text : null;
@@ -141,10 +154,10 @@ async function nist3dSdf(cas: string): Promise<string | null> {
  */
 export function sanitizeName(name: string): string {
   return name
-    .normalize('NFKD')          // decompose accents, NB-spaces, etc.
-    .replace(/[\u00AD\u2010-\u2015\u202F]/g, '-')  // soft-hyphens & fancy dashes → -
+    .normalize('NFKD') // decompose accents, NB-spaces, etc.
+    .replace(/[\u00AD\u2010-\u2015\u202F]/g, '-') // soft-hyphens & fancy dashes → -
     .replace(/[^\u0020-\u007F]/g, '') // strip non-ASCII leftovers (space through DEL)
-    .replace(/\s+/g, ' ')         // collapse whitespace
+    .replace(/\s+/g, ' ') // collapse whitespace
     .trim();
 }
 
@@ -163,7 +176,7 @@ export function sanitizeName(name: string): string {
 /* ----------  top-level  ---------- */
 
 export async function resolveCid(q: string): Promise<number> {
-  const term = sanitizeName(q);  // normalize to ASCII for consistent lookup
+  const term = sanitizeName(q); // normalize to ASCII for consistent lookup
   // A. direct / synonym
   let cid = await cidByExact(term);
   if (cid) return cid;
@@ -259,7 +272,9 @@ export async function resolvePdbId(q: string): Promise<string> {
     }
     const data = JSON.parse(text);
 
-    const hits = (data?.result_set ?? []).filter((h: RCSBSearchHit) => PDB_ID_RE.test(h.identifier));
+    const hits = (data?.result_set ?? []).filter((h: RCSBSearchHit) =>
+      PDB_ID_RE.test(h.identifier)
+    );
     if (hits.length) {
       log(
         'full_text',
@@ -459,7 +474,7 @@ export async function fetchMoleculeData(
 
   /* ---------- small molecules ---------- */
   const cid = await resolveCid(query);
-  const mustHave3D = false; // generic detection – no CID whitelist
+  // Note: mustHave3D removed as it was unused
   let sdf = '';
 
   /* 1 ─── PubChem “3d” endpoint */
@@ -481,7 +496,9 @@ export async function fetchMoleculeData(
     if (cas) {
       const txt = await nist3dSdf(cas);
       if (txt && isSdf3D(txt)) {
-        console.log(`Retrieved 3-D coordinates from NIST (CAS ${cas}).`);
+        if (process.env.NODE_ENV !== 'production') {
+          console.log(`Retrieved 3-D coordinates from NIST (CAS ${cas}).`);
+        }
         sdf = txt;
       }
     }
@@ -492,7 +509,9 @@ export async function fetchMoleculeData(
     // (a) direct CID – cheapest, avoids name-parsing quirks
     const txt = await cactus3d(cid);
     if (txt) {
-      console.log('[PubChemService] Retrieved 3-D SDF from CACTUS via CID.');
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('[PubChemService] Retrieved 3-D SDF from CACTUS via CID.');
+      }
       sdf = txt;
     }
   }
@@ -503,7 +522,9 @@ export async function fetchMoleculeData(
     if (smiles) {
       const txt = await cactus3d(smiles);
       if (txt) {
-        console.log('[PubChemService] Retrieved 3-D SDF from CACTUS via SMILES.');
+        if (process.env.NODE_ENV !== 'production') {
+          console.log('[PubChemService] Retrieved 3-D SDF from CACTUS via SMILES.');
+        }
         sdf = txt;
       }
     }
@@ -513,37 +534,46 @@ export async function fetchMoleculeData(
   if (!sdf) {
     const txt = await cactus3d(sanitizeName(query));
     if (txt) {
-      console.log('[PubChemService] Retrieved 3-D SDF from CACTUS via name.');
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('[PubChemService] Retrieved 3-D SDF from CACTUS via name.');
+      }
       sdf = txt;
     }
   }
 
   if (sdf) {
-    console.log('[PubChemService] Retrieved 3-D SDF from NCI/CACTUS.');
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('[PubChemService] Retrieved 3-D SDF from NCI/CACTUS.');
+    }
   }
 
   /* 4 ─── PubChem computed conformers */
   if (!sdf) {
     const conformerUrl = `${PUBCHEM}/compound/cid/${cid}/record/SDF?record_type=3d&response_type=save`;
     const pc3 = await fetch(conformerUrl, { headers: { 'User-Agent': 'moleculens/1.0' } });
-    console.log('Conformer', pc3.status, pc3.headers.get('content-type'));
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('Conformer', pc3.status, pc3.headers.get('content-type'));
+    }
     if (pc3.ok) {
       const txt = await pc3.text();
-      console.log('[PubChemService] Retrieved computed 3-D from conformer endpoint.');
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('[PubChemService] Retrieved computed 3-D from conformer endpoint.');
+      }
       sdf = txt;
     }
   }
   /* 5 ─── PubChem 2-D fallback */
   if (!sdf) {
-    const r2 =
-      (await fetch(`${PUBCHEM}/compound/cid/${cid}/SDF?record_type=2d`)).ok
-        ? await fetch(`${PUBCHEM}/compound/cid/${cid}/SDF?record_type=2d`)
-        : await fetch(`${PUBCHEM}/compound/cid/${cid}/SDF`);
+    const r2 = (await fetch(`${PUBCHEM}/compound/cid/${cid}/SDF?record_type=2d`)).ok
+      ? await fetch(`${PUBCHEM}/compound/cid/${cid}/SDF?record_type=2d`)
+      : await fetch(`${PUBCHEM}/compound/cid/${cid}/SDF`);
     if (r2.ok) {
       sdf = await r2.text();
       // Final check: if we have an SDF but it's not 3D, log a warning
       if (!isSdf3D(sdf)) {
-        console.warn(`[PubChemService] No 3D structure found for ${query}. Falling back to 2D representation.`);
+        console.warn(
+          `[PubChemService] No 3D structure found for ${query}. Falling back to 2D representation.`
+        );
       }
     }
   }
@@ -570,21 +600,88 @@ export async function fetchMoleculeData(
   return { pdb_data: '', sdf, name: query, cid, formula, info };
 }
 
-export function moleculeHTML(moleculeData: MoleculeData): string {
+export async function moleculeHTML(moleculeData: MoleculeData): Promise<string> {
   try {
     const templatePath = path.join(process.cwd(), 'output.html');
     let html = fs.readFileSync(templatePath, 'utf8');
 
-    // Escape backticks in PDB data so it can reside inside template literal
+    // Escape backticks in molecule data so it can reside inside template literal
     const escapeBackticks = (str: string) => str.replace(/`/g, '\\`');
-    const pdbEscaped = escapeBackticks(moleculeData.pdb_data);
 
-    // Replace the pdbData string inside the template
-    html = html.replace(
-      /const\s+pdbData\s*=\s*`[\s\S]*?`;/m,
-      `const pdbData = \
-\`${pdbEscaped}\`;`
-    );
+    // Determine if we have SDF or PDB data
+    const hasSDF = moleculeData.sdf && moleculeData.sdf.trim().length > 0;
+    const hasPDB = moleculeData.pdb_data && moleculeData.pdb_data.trim().length > 0;
+
+    if (hasSDF && moleculeData.sdf) {
+      // Replace SDF data and set molecule type
+      const sdfEscaped = escapeBackticks(moleculeData.sdf);
+      html = html.replace(
+        /const\s+sdfData\s*=\s*`[\s\S]*?`;/m,
+        `const sdfData = \`${sdfEscaped}\`;`
+      );
+      html = html.replace(/const\s+moleculeType\s*=\s*'[^']*';/m, `const moleculeType = 'sdf';`);
+    }
+
+    if (hasPDB && moleculeData.pdb_data) {
+      // Replace PDB data
+      const pdbEscaped = escapeBackticks(moleculeData.pdb_data);
+      html = html.replace(
+        /const\s+pdbData\s*=\s*`[\s\S]*?`;/m,
+        `const pdbData = \`${pdbEscaped}\`;`
+      );
+
+      // Set molecule type to PDB if no SDF data
+      if (!hasSDF) {
+        html = html.replace(/const\s+moleculeType\s*=\s*'[^']*';/m, `const moleculeType = 'pdb';`);
+      }
+    }
+
+    if (hasPDB) {
+      // Replace PDB data
+      const pdbEscaped = escapeBackticks(moleculeData.pdb_data);
+      html = html.replace(
+        /const\s+pdbData\s*=\s*`[\s\S]*?`;/m,
+        `const pdbData = \`${pdbEscaped}\`;`
+      );
+
+      // Set molecule type to PDB if no SDF data
+      if (!hasSDF) {
+        html = html.replace(/const\s+moleculeType\s*=\s*'[^']*';/m, `const moleculeType = 'pdb';`);
+      }
+    }
+
+    // Generate presentation script using LLM directly
+    try {
+      const { generatePresentationScript } = await import('./llm');
+      const script = await generatePresentationScript(moleculeData);
+
+      // Replace the hardcoded scriptData with the generated script
+      // Since we already have a JavaScript object from the LLM, we can inject it directly
+      const scriptDataRegex = /const\s+scriptData\s*=\s*\{[\s\S]*?\};/m;
+
+      // Convert the object to JavaScript object literal syntax
+      const objectToJSLiteral = (obj: unknown): string => {
+        if (typeof obj === 'string') {
+          return `'${obj.replace(/'/g, "\\'").replace(/\n/g, '\\n')}'`;
+        }
+        if (Array.isArray(obj)) {
+          return `[${obj.map(item => objectToJSLiteral(item)).join(', ')}]`;
+        }
+        if (typeof obj === 'object' && obj !== null) {
+          const entries = Object.entries(obj).map(
+            ([key, value]) => `${key}: ${objectToJSLiteral(value)}`
+          );
+          return `{${entries.join(', ')}}`;
+        }
+        return String(obj);
+      };
+
+      const newScriptData = `const scriptData = ${objectToJSLiteral(script)};`;
+      html = html.replace(scriptDataRegex, newScriptData);
+    } catch (scriptError) {
+      console.warn('Error generating presentation script:', scriptError);
+      // Continue with template default if script generation fails
+    }
 
     // Update the title in <title> tag if present
     if (moleculeData.name) {
@@ -670,18 +767,11 @@ async function cidByClassSearch(term: string): Promise<number | null> {
 async function getSmiles(cid: number): Promise<string | null> {
   try {
     const props = 'CanonicalSMILES,IsomericSMILES,InChI';
-    const r = await fetch(
-      `${PUBCHEM}/compound/cid/${cid}/property/${props}/JSON`
-    );
+    const r = await fetch(`${PUBCHEM}/compound/cid/${cid}/property/${props}/JSON`);
     if (!r.ok) return null;
 
     const p = (await r.json())?.PropertyTable?.Properties?.[0] ?? {};
-    return (
-      p.CanonicalSMILES ||
-      p.IsomericSMILES ||
-      p.InChI ||
-      null
-    );
+    return p.CanonicalSMILES || p.IsomericSMILES || p.InChI || null;
   } catch {
     return null;
   }

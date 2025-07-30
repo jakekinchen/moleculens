@@ -39,7 +39,12 @@ END`;
   const [isInteractive, setIsInteractive] = useState(false);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [isTimeMachineOpen, setIsTimeMachineOpen] = useState(false);
-  const [moleculeInfo, setMoleculeInfo] = useState<MoleculeInfo | null>(null);
+  const [moleculeInfo, setMoleculeInfo] = useState<MoleculeInfo | null>({
+    formula: 'C3H8',
+    formula_weight: 44.1,
+    canonical_smiles: 'CCC',
+    synonyms: ['Propane', 'n-Propane', 'Dimethylmethane'],
+  });
 
   const handleVisualizationUpdate = (pdb: string, htmlContent?: string, vizTitle?: string) => {
     setPdbData(pdb);
@@ -107,6 +112,7 @@ END`;
                 currentHtml={html ?? undefined}
                 currentTitle={title ?? undefined}
                 onInfoUpdate={(info: unknown) => setMoleculeInfo(info as MoleculeInfo)}
+                _moleculeInfo={moleculeInfo ?? undefined}
               />
             </div>
 
@@ -116,7 +122,7 @@ END`;
                 pdbData={pdbData!}
                 sdfData={sdfData ?? undefined}
                 title={title!}
-                moleculeInfo={moleculeInfo}
+                moleculeInfo={moleculeInfo ?? undefined}
                 enableRibbonOverlay={false}
               />
             </div>

@@ -76,11 +76,12 @@ export const fetchMoleculeData = async (
 }> => {
   const endpoint = `${API_BASE_URL}/prompt/fetch-molecule-data/`;
 
-  // Log the request details
-  console.log('=== MOLECULE DATA REQUEST ===');
-  console.log('Query:', query);
-  console.log('Endpoint:', endpoint);
-  console.log('Timestamp:', new Date().toISOString());
+  if (process.env.NODE_ENV !== 'production') {
+    console.log('=== MOLECULE DATA REQUEST ===');
+    console.log('Query:', query);
+    console.log('Endpoint:', endpoint);
+    console.log('Timestamp:', new Date().toISOString());
+  }
 
   try {
     const response = await fetch(endpoint, {
@@ -107,24 +108,26 @@ export const fetchMoleculeData = async (
       throw new Error(result.detail);
     }
 
-    // Log the response with SDF information
-    console.log('=== MOLECULE DATA RESPONSE ===');
-    console.log('Molecule Name:', result.name);
-    console.log('CID:', result.cid);
-    console.log('Formula:', result.formula);
-    console.log('Has PDB Data:', !!result.pdb_data);
-    console.log('Has SDF Data:', !!result.sdf);
-    if (result.sdf) {
-      console.log('SDF Data Length:', result.sdf.length);
-      console.log('SDF Data Preview (first 500 chars):', result.sdf.substring(0, 500));
-      console.log('Full SDF Data:', result.sdf);
+    if (process.env.NODE_ENV !== 'production') {
+      // Log the response with SDF information
+      console.log('=== MOLECULE DATA RESPONSE ===');
+      console.log('Molecule Name:', result.name);
+      console.log('CID:', result.cid);
+      console.log('Formula:', result.formula);
+      console.log('Has PDB Data:', !!result.pdb_data);
+      console.log('Has SDF Data:', !!result.sdf);
+      if (result.sdf) {
+        console.log('SDF Data Length:', result.sdf.length);
+        console.log('SDF Data Preview (first 500 chars):', result.sdf.substring(0, 500));
+        console.log('Full SDF Data:', result.sdf);
+      }
+      if (result.pdb_data) {
+        console.log('PDB Data Length:', result.pdb_data.length);
+        console.log('PDB Data Preview (first 500 chars):', result.pdb_data.substring(0, 500));
+      }
+      console.log('Additional Info:', result.info);
+      console.log('================================');
     }
-    if (result.pdb_data) {
-      console.log('PDB Data Length:', result.pdb_data.length);
-      console.log('PDB Data Preview (first 500 chars):', result.pdb_data.substring(0, 500));
-    }
-    console.log('Additional Info:', result.info);
-    console.log('================================');
 
     return result;
   } catch (error: any) {
@@ -145,19 +148,20 @@ export const generateMoleculeHTML = async (
 ): Promise<{ html: string }> => {
   const endpoint = `${API_BASE_URL}/prompt/generate-molecule-html/`;
 
-  // Log the HTML generation request details
-  console.log('=== MOLECULE HTML GENERATION REQUEST ===');
-  console.log('Molecule Data:', moleculeData);
-  console.log('Endpoint:', endpoint);
-  console.log('Timestamp:', new Date().toISOString());
-  if (moleculeData.sdf) {
-    console.log('SDF Data Length:', moleculeData.sdf.length);
-    console.log('SDF Data Preview (first 500 chars):', moleculeData.sdf.substring(0, 500));
-    console.log('Full SDF Data:', moleculeData.sdf);
-  }
-  if (moleculeData.pdb_data) {
-    console.log('PDB Data Length:', moleculeData.pdb_data.length);
-    console.log('PDB Data Preview (first 500 chars):', moleculeData.pdb_data.substring(0, 500));
+  if (process.env.NODE_ENV !== 'production') {
+    console.log('=== MOLECULE HTML GENERATION REQUEST ===');
+    console.log('Molecule Data:', moleculeData);
+    console.log('Endpoint:', endpoint);
+    console.log('Timestamp:', new Date().toISOString());
+    if (moleculeData.sdf) {
+      console.log('SDF Data Length:', moleculeData.sdf.length);
+      console.log('SDF Data Preview (first 500 chars):', moleculeData.sdf.substring(0, 500));
+      console.log('Full SDF Data:', moleculeData.sdf);
+    }
+    if (moleculeData.pdb_data) {
+      console.log('PDB Data Length:', moleculeData.pdb_data.length);
+      console.log('PDB Data Preview (first 500 chars):', moleculeData.pdb_data.substring(0, 500));
+    }
   }
 
   try {
@@ -178,11 +182,13 @@ export const generateMoleculeHTML = async (
       throw new Error('No HTML returned from backend');
     }
 
-    // Log the HTML generation response
-    console.log('=== MOLECULE HTML GENERATION RESPONSE ===');
-    console.log('HTML Length:', result.html.length);
-    console.log('HTML Preview (first 500 chars):', result.html.substring(0, 500));
-    console.log('==========================================');
+    if (process.env.NODE_ENV !== 'production') {
+      // Log the HTML generation response
+      console.log('=== MOLECULE HTML GENERATION RESPONSE ===');
+      console.log('HTML Length:', result.html.length);
+      console.log('HTML Preview (first 500 chars):', result.html.substring(0, 500));
+      console.log('==========================================');
+    }
 
     return result;
   } catch (error: any) {
@@ -199,7 +205,9 @@ export const generateMoleculeHTML = async (
 export const getModels = async (): Promise<ModelInfo[]> => {
   const endpoint = `${API_BASE_URL}/prompt/models/`;
 
-  console.log('Fetching models from:', endpoint);
+  if (process.env.NODE_ENV !== 'production') {
+    console.log('Fetching models from:', endpoint);
+  }
 
   try {
     const response = await fetch(endpoint, {
@@ -216,7 +224,9 @@ export const getModels = async (): Promise<ModelInfo[]> => {
     }
 
     const data = await response.json();
-    console.log('Successfully fetched models:', data);
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('Successfully fetched models:', data);
+    }
     return data;
   } catch (error: any) {
     console.error('Error fetching models:', error);
@@ -233,11 +243,12 @@ export const generateMoleculeDiagram = async (
 ): Promise<DiagramResponse> => {
   const endpoint = `${API_BASE_URL}/prompt/generate-molecule-diagram/`;
 
-  // Log the diagram request details
-  console.log('=== MOLECULE DIAGRAM REQUEST ===');
-  console.log('Request:', request);
-  console.log('Endpoint:', endpoint);
-  console.log('Timestamp:', new Date().toISOString());
+  if (process.env.NODE_ENV !== 'production') {
+    console.log('=== MOLECULE DIAGRAM REQUEST ===');
+    console.log('Request:', request);
+    console.log('Endpoint:', endpoint);
+    console.log('Timestamp:', new Date().toISOString());
+  }
 
   const response = await fetch(endpoint, {
     method: 'POST',
@@ -256,15 +267,63 @@ export const generateMoleculeDiagram = async (
 
   const result = await response.json();
 
-  // Log the diagram response
-  console.log('=== MOLECULE DIAGRAM RESPONSE ===');
-  console.log('Response:', result);
-  console.log('Has Diagram Image:', !!result.diagram_image);
-  console.log('Has Diagram Plan:', !!result.diagram_plan);
-  if (result.diagram_plan) {
-    console.log('Diagram Plan:', result.diagram_plan);
+  if (process.env.NODE_ENV !== 'production') {
+    // Log the diagram response
+    console.log('=== MOLECULE DIAGRAM RESPONSE ===');
+    console.log('Response:', result);
+    console.log('Has Diagram Image:', !!result.diagram_image);
+    console.log('Has Diagram Plan:', !!result.diagram_plan);
+    if (result.diagram_plan) {
+      console.log('Diagram Plan:', result.diagram_plan);
+    }
+    console.log('===================================');
   }
-  console.log('===================================');
 
   return result;
+};
+
+/**
+ * Generate a presentation script for a molecule
+ * @param moleculeData The molecule data to generate a script for
+ * @returns The generated presentation script
+ */
+export const generatePresentationScript = async (
+  moleculeData: Record<string, any>
+): Promise<{ script: any }> => {
+  const endpoint = `${API_BASE_URL}/prompt/generate-presentation-script/`;
+
+  if (process.env.NODE_ENV !== 'production') {
+    console.log('=== PRESENTATION SCRIPT GENERATION REQUEST ===');
+    console.log('Molecule Data:', moleculeData);
+    console.log('Endpoint:', endpoint);
+  }
+
+  try {
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      credentials: includeCredentials ? 'include' : 'same-origin',
+      body: JSON.stringify({ molecule_data: moleculeData }),
+    });
+
+    if (!response.ok) {
+      throw new Error(
+        `Failed to generate presentation script: ${response.status} ${response.statusText}`
+      );
+    }
+
+    const result = await response.json();
+    if (process.env.NODE_ENV !== 'production') {
+      // Log the presentation script generation response
+      console.log('=== PRESENTATION SCRIPT GENERATION RESPONSE ===');
+      console.log('Script:', result.script);
+    }
+
+    return result;
+  } catch (error: any) {
+    console.error('Error generating presentation script:', error);
+    throw error;
+  }
 };

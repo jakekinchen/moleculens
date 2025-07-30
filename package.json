@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "mcp": "npx @agentdeskai/browser-tools-mcp@latest",
+    "bt:server": "npx @agentdeskai/browser-tools-server@latest"
   },
   "dependencies": {
     "@headlessui/react": "^2.2.0",
@@ -36,6 +38,8 @@
     "zod": "^3.24.2"
   },
   "devDependencies": {
+    "@agentdeskai/browser-tools-mcp": "^1.2.1",
+    "@agentdeskai/browser-tools-server": "^1.2.1",
     "@tailwindcss/typography": "^0.5.10",
     "@types/node": "^20.17.23",
     "@types/react": "^19",

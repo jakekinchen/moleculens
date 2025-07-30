@@ -1,713 +1,881 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
+  <head>
     <title>Molecule Viewer</title>
-    <meta charset="utf-8">
-    <meta name="viewport"
-          content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
-    <!-- Include WebXR polyfill for Safari / non-WebXR browsers -->
-    <script src="https://cdn.jsdelivr.net/npm/webxr-polyfill@latest/build/webxr-polyfill.min.js"></script>
-    <!-- Include A-Frame (which has Three.js under the hood) -->
-    <script src="https://aframe.io/releases/1.4.1/aframe.min.js"></script>
-    <!-- Include A-Frame extras (e.g., super-hands for grabbing) -->
-    <script src="https://cdn.jsdelivr.net/npm/aframe-super-hands-component@6.1.0/dist/aframe-super-hands.min.js"></script>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0"
+    />
     <style>
-        body { margin: 0; padding: 0; overflow: hidden; }
-        #container {
-            position: relative;
-            width: 100%;
-            height: 100vh;
-        }
-        #molecule-label {
-            position: absolute;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            color: white;
-            font-family: Arial, sans-serif;
-            font-size: 18px;
-            background-color: rgba(0, 0, 0, 0.7);
-            padding: 10px 20px;
-            border-radius: 5px;
-            z-index: 1000;
-            pointer-events: none;
-            text-align: center;
-            max-width: 80%;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-        .atom-label {
-            text-shadow: -1px 1px 1px rgb(0,0,0);
-            margin-left: 5px;
-            font-size: 14px;
-            color: white;
-            pointer-events: none;
-        }
-        #controls {
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            background-color: rgba(0, 0, 0, 0.7);
-            padding: 10px;
-            border-radius: 5px;
-            z-index: 100;
-            display: flex;
-            gap: 10px;
-        }
-        #controls button {
-            background-color: #333;
-            color: white;
-            border: 1px solid #666;
-            padding: 5px 10px;
-            cursor: pointer;
-            border-radius: 3px;
-            transition: background-color 0.3s;
-            white-space: nowrap;
-        }
-        #controls button:hover {
-            background-color: #555;
-        }
-        /* Pause icon in top-left corner */
-        #pause-icon {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            width: 30px;
-            height: 30px;
-            background-color: rgba(0, 0, 0, 0.7);
-            border-radius: 4px;
-            display: none; /* hidden by default */
-            z-index: 2000;
-            color: white;
-            font-family: Arial, sans-serif;
-            font-size: 24px;
-            text-align: center;
-            line-height: 30px;
-        }
-        a-scene {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: 1;
-            display: none; /* Hidden initially until VR mode is activated */
-        }
+      :root {
+        --bg: #0d1b2a;
+        --panel: #ffffff14;
+        --panel-hover: #ffffff22;
+        --accent: #00b4d8;
+        --text: #f1f1f1;
+        --text-muted: #c9c9c9;
+      }
+      * {
+        box-sizing: border-box;
+        font-family: Inter, Arial, Helvetica, sans-serif;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        overflow: hidden;
+        color: var(--text);
+      }
+      #container {
+        position: relative;
+        width: 100%;
+        height: 100vh;
+      }
+
+      /* ---------- floating caption ---------- */
+      #molecule-label {
+        position: absolute;
+        bottom: 24px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: var(--panel);
+        backdrop-filter: blur(12px);
+        color: var(--text);
+        padding: 10px 24px;
+        border-radius: 8px;
+        max-width: 80%;
+        font-size: 17px;
+        text-align: center;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        transition: opacity 0.3s;
+      }
+
+      /* ---------- shared button style ---------- */
+      button,
+      .ctrl-btn {
+        background: var(--panel);
+        color: var(--text);
+        border: 1px solid var(--panel-hover);
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        cursor: pointer;
+        padding: 6px 14px;
+        border-radius: 6px;
+        font-size: 14px;
+        transition:
+          background 0.25s,
+          border 0.25s;
+      }
+      button:hover {
+        background: var(--panel-hover);
+      }
+
+      /* ---------- top‑right utility ---------- */
+      #controls {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        display: flex;
+        gap: 10px;
+        z-index: 200;
+      }
+
+      /* ---------- presentation HUD ---------- */
+      #presentation-controls {
+        position: absolute;
+        top: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 14px 18px;
+        background: var(--panel);
+        backdrop-filter: blur(12px);
+        border-radius: 10px;
+        transition: opacity 0.3s;
+      }
+      #time-display {
+        font-variant-numeric: tabular-nums;
+        color: var(--text-muted);
+      }
+      #progress-container {
+        position: relative;
+        width: 160px;
+        height: 6px;
+        background: #ffffff24;
+        border-radius: 3px;
+        overflow: hidden;
+      }
+      #progress {
+        position: absolute;
+        inset: 0;
+        width: 0;
+        background: var(--accent);
+      }
+
+      /* ---------- fade HUD when idle ---------- */
+      .hud-hidden {
+        opacity: 0;
+        pointer-events: none;
+      }
+
+      .ctrl-btn {
+        padding: 8px;
+        line-height: 0;
+      }
+
+      .atom-label {
+        font-size: 13px;
+        color: var(--text);
+        text-shadow: 0 0 4px #000;
+      }
+
+      /* ---------- misc ---------- */
+      #pause-icon {
+        display: none;
+      }
     </style>
-</head>
-<body>
-<div id="container"></div>
-<div id="molecule-label"></div>
-<div id="pause-icon">||</div>
+  </head>
+  <body>
+    <div id="container"></div>
+    <div id="molecule-label"></div>
 
-<!-- Embedded A-Frame scene for VR -->
-<a-scene embedded vr-mode-ui="enterVRButton: false">
-    <!-- Entity to hold the molecule object -->
-    <a-entity id="molecule" inject-molecule grabbable stretchable></a-entity>
-    <!-- Camera entity; disable default look-controls to use custom controls -->
-    <a-entity camera position="0 0 5" look-controls="enabled: false" wasd-controls="enabled: false"></a-entity>
-    <!-- VR hand controllers for Quest (using generic hand-controls) with super-hands gestures -->
-    <a-entity hand-controls="hand: left" super-hands></a-entity>
-    <a-entity hand-controls="hand: right" super-hands></a-entity>
-</a-scene>
+    <div id="presentation-controls">
+      <button id="play-pause-btn" onclick="togglePlayback()" class="ctrl-btn">
+        <svg
+          width="18"
+          height="18"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.5"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect x="6" y="4" width="4" height="16"></rect>
+          <rect x="14" y="4" width="4" height="16"></rect>
+        </svg>
+      </button>
+      <button onclick="previousStep()" class="ctrl-btn">
+        <svg
+          width="18"
+          height="18"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.5"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <polygon points="19 20 9 12 19 4 19 20"></polygon>
+          <line x1="5" y1="19" x2="5" y2="5"></line>
+        </svg>
+      </button>
+      <button onclick="nextStep()" class="ctrl-btn">
+        <svg
+          width="18"
+          height="18"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.5"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <polygon points="5 4 15 12 5 20 5 4"></polygon>
+          <line x1="19" y1="5" x2="19" y2="19"></line>
+        </svg>
+      </button>
 
+      <div id="progress-container"><div id="progress"></div></div>
+      <span id="time-display">00:00</span>
 
-<script type="importmap">
-{
-  "imports": {
-    "three": "https://unpkg.com/three@0.156.1/build/three.module.js",
-    "three/addons/": "https://unpkg.com/three@0.156.1/examples/jsm/"
-  }
-}
-</script>
-<script type="module">
-import * as THREE from 'three';
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { PDBLoader } from 'three/addons/loaders/PDBLoader.js';
-import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+      <button onclick="restartPresentation()" class="ctrl-btn">
+        <svg
+          width="18"
+          height="18"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.5"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <polyline points="1 4 1 10 7 10"></polyline>
+          <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
+        </svg>
+      </button>
+    </div>
 
-// ======== Highlight configuration ========
-// Controls the "glow" color and intensity for highlighted atoms
-let highlightColor = new THREE.Color(0xffcc00);  // default highlight color
-let highlightIntensity = 2.0;                    // how strong the emissive glow is
-
-// ======== Script playback controls ========
-let isPlaying = true;                // default is "playing"
-let currentTime = 0;                 // current time in seconds of the "script"
-let currentStepIndex = 0;            // which step in the script we are on
-let lastStepTime = 0;                // track the final step's time (for cleanup)
-let previousStepAtoms = [];          // remember which atoms were highlighted last
-let steps = [];                      // will store script steps with numeric timecodes
-let scriptStart = 0;                 // for timing reference
-let pauseIcon;                       // DOM element for pause icon
-
-// Global variable to control auto-rotation
-let autoRotateEnabled = true;
-
-// Three.js global references
-let camera, scene, renderer, labelRenderer, controls;
-let root;
-const atomMeshes = []; // Store references to atom meshes for highlighting
-
-// A-Frame references
-let aframeScene;
-let inVRMode = false;
-let moleculeGroup; // Will hold the molecule object for injection into A-Frame
-
-// Script object we want to animate through
-const scriptData = {
-  "title": "Methane: The Simplest Hydrocarbon",
-  "content": [
-    {
-      "timecode": "00:00",
-      "atoms": [],
-      "caption": "Methane is the simplest hydrocarbon with the molecular formula CH\u2084."
-    },
-    {
-      "timecode": "00:05",
-      "atoms": [
-        "0"
-      ],
-      "caption": "Methane consists of a single carbon atom at the center."
-    },
-    {
-      "timecode": "00:10",
-      "atoms": [
-        "1",
-        "2",
-        "3",
-        "4"
-      ],
-      "caption": "The carbon atom is bonded to four hydrogen atoms in a tetrahedral arrangement."
-    },
-    {
-      "timecode": "00:15",
-      "atoms": [
-        "0",
-        "1",
-        "2",
-        "3",
-        "4"
-      ],
-      "caption": "Methane is the main component of natural gas and a potent greenhouse gas."
-    }
-  ]
-};
-
-/**
- * Register A-Frame component to inject the molecule into A-Frame scene
- */
-AFRAME.registerComponent('inject-molecule', {
-  init: function () {
-    // Wait for moleculeGroup to be created before injecting it
-    if (moleculeGroup) {
-      this.el.setObject3D('mesh', moleculeGroup);
-    } else {
-      // If molecule isn't ready yet, wait for it
-      document.addEventListener('molecule-ready', () => {
-        this.el.setObject3D('mesh', moleculeGroup);
-      });
-    }
-  }
-});
-
-/**
- * Converts "MM:SS" into total seconds
- */
-function parseTimecode(timecode) {
-    const [minutes, seconds] = timecode.split(':').map(Number);
-    return minutes * 60 + seconds;
-}
-
-/**
- * Initialize script steps with parsed timecodes
- */
-function initScript() {
-    steps = scriptData.content.map(s => ({
-        ...s,
-        timeInSeconds: parseTimecode(s.timecode)
-    }));
-    // Sort by timeInSeconds in case they are out of order
-    steps.sort((a, b) => a.timeInSeconds - b.timeInSeconds);
-    lastStepTime = steps.length ? steps[steps.length - 1].timeInSeconds : 0;
-
-    // Start from time=0 at load
-    currentTime = 0;
-    currentStepIndex = -1;
-    scriptStart = performance.now() * 0.001;
-}
-
-function onWindowResize() {
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    labelRenderer.setSize(window.innerWidth, window.innerHeight);
-}
-
-/**
- * Toggles auto-rotation on/off
- */
-function toggleAutoRotate() {
-    autoRotateEnabled = !autoRotateEnabled;
-    controls.autoRotate = autoRotateEnabled;
-    return autoRotateEnabled; // Return the new state
-}
-
-/**
- * Main animation loop
- */
-function animate() {
-    requestAnimationFrame(animate);
-    if (!inVRMode) {
-        controls.update();
-        renderer.render(scene, camera);
-        labelRenderer.render(scene, camera);
-    }
-
-    // Advance script timeline if playing
-    if (isPlaying) {
-        const now = performance.now() * 0.001; // seconds
-        // currentTime = how long since we unpaused
-        currentTime = now - scriptStart;
-        updateScript();
-    }
-}
-
-/**
- * Check if it's time to move to the next step, highlight, unhighlight, etc.
- */
-function updateScript() {
-    // If we've passed the final step by 5s, unhighlight everything
-    if (currentTime > lastStepTime + 5) {
-        unhighlightAll();
-        return;
-    }
-
-    // Find the largest step whose time <= currentTime
-    let newIndex = 0;
-    for (let i = 0; i < steps.length; i++) {
-        if (steps[i].timeInSeconds <= currentTime) {
-            newIndex = i;
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://unpkg.com/three@0.156.1/build/three.module.js",
+          "three/addons/": "https://unpkg.com/three@0.156.1/examples/jsm/",
+          "three-sdf-loader": "https://esm.sh/three-sdf-loader@0.3.9",
+          "sdf-parser": "https://esm.sh/sdf-parser@7.0.4"
         }
-    }
+      }
+    </script>
+    <!-- SDF loader via ES module -->
+    <!-- Removed previous incorrect app.unpkg.com URL that returned text/plain -->
+    <script type="module">
+      import * as THREE from 'three';
+      import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+      import { PDBLoader } from 'three/addons/loaders/PDBLoader.js';
+      import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+      import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
+      import { loadSDF } from 'three-sdf-loader';
+      // ======== Highlight configuration ========
+      let highlightColor = new THREE.Color(0xffcc00);
+      let highlightIntensity = 2.0;
 
-    // If we changed steps, update highlight/caption
-    if (newIndex !== currentStepIndex) {
-        // Unhighlight old step's atoms
-        unhighlightAtoms(previousStepAtoms, 500);
+      // ======== Script playback controls ========
+      let isPlaying = true;
+      let currentTime = 0;
+      let currentStepIndex = 0;
+      let lastStepTime = 0;
+      let previousStepAtoms = [];
+      let steps = [];
+      let scriptStart = 0;
+      let presentationEnded = false;
 
-        // Highlight new step's atoms
-        const step = steps[newIndex];
-        const atomIndices = step.atoms.map(Number);
-        highlightAtoms(atomIndices, 500);
+      // Global variable to control auto-rotation
+      let autoRotateEnabled = true;
 
-        // Update caption
-        const labelEl = document.getElementById('molecule-label');
-        if (labelEl) labelEl.textContent = step.caption;
+      // Icon SVGs
+      const playIcon = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>`;
+      const pauseIcon = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>`;
 
-        previousStepAtoms = atomIndices;
-        currentStepIndex = newIndex;
-    }
-}
+      // Three.js global references
+      let camera, scene, renderer, labelRenderer, controls;
+      let root;
+      let labelsGroup;
+      let moleculeGroup;
 
-/**
- * Skip to the next step
- */
- function skipForward() {
-  if (currentStepIndex < steps.length - 1) {
-    // 1. Figure out next step index but don't assign it yet
-    const nextIndex = currentStepIndex + 1;
-    // 2. Jump to that step's time
-    currentTime = steps[nextIndex].timeInSeconds;
-    scriptStart = performance.now() * 0.001 - currentTime;
-    // 3. DO NOT do currentStepIndex = nextIndex here
-    // 4. Let updateScript() handle the index change
-    updateScript();
-  }
-}
+      // Molecule data placeholders - will be replaced by the backend
+      const pdbData = [
+        'COMPND    METHANE',
+        'ATOM      1  C   UNL     1       0.000   0.000   0.000  1.00  0.00           C',
+        'ATOM      2  H   UNL     1       1.089   0.000   0.000  1.00  0.00           H',
+        'ATOM      3  H   UNL     1      -0.363   1.027   0.000  1.00  0.00           H',
+        'ATOM      4  H   UNL     1      -0.363  -0.513  -0.889  1.00  0.00           H',
+        'ATOM      5  H   UNL     1      -0.363  -0.513   0.889  1.00  0.00           H',
+        'CONECT    1    2    3    4    5',
+        'END',
+      ].join('\n');
 
-function skipBackward() {
-  if (currentStepIndex > 0) {
-    const prevIndex = currentStepIndex - 1;
-    currentTime = steps[prevIndex].timeInSeconds;
-    scriptStart = performance.now() * 0.001 - currentTime;
-    updateScript();
-  }
-}
+      const sdfData = ``;
 
-/**
- * Sets up keyboard listeners for space (pause/play) and left/right arrows (skip).
- */
-function setupKeyboardControls() {
-    window.addEventListener('keydown', (event) => {
-        if (event.code === 'Space') {
-            event.preventDefault(); // avoid page scroll
-            togglePlayPause();
-        } else if (event.code === 'ArrowRight') {
-            event.preventDefault();
-            skipForward();
-        } else if (event.code === 'ArrowLeft') {
-            event.preventDefault();
-            skipBackward();
+      // Molecule type - will be set by backend: 'pdb' or 'sdf'
+      const moleculeType = 'pdb';
+      // Script object - will be replaced by the backend
+      const scriptData = {
+        title: 'Methane: The Simplest Hydrocarbon',
+        content: [
+          {
+            timecode: '00:00',
+            atoms: [],
+            caption: 'Methane is the simplest hydrocarbon with the molecular formula CH₄.',
+          },
+          {
+            timecode: '00:05',
+            atoms: ['0'],
+            caption: 'Methane consists of a single carbon atom at the center.',
+          },
+          {
+            timecode: '00:10',
+            atoms: ['1', '2', '3', '4'],
+            caption:
+              'The carbon atom is bonded to four hydrogen atoms in a tetrahedral arrangement.',
+          },
+          {
+            timecode: '00:15',
+            atoms: ['0', '1', '2', '3', '4'],
+            caption: 'Methane is the main component of natural gas and a potent greenhouse gas.',
+          },
+        ],
+      };
+
+      // ======== Utility functions ========
+      function timeStringToSeconds(timeStr) {
+        const [minutes, seconds] = timeStr.split(':').map(Number);
+        return minutes * 60 + seconds;
+      }
+
+      function secondsToTimeString(seconds) {
+        const mins = Math.floor(seconds / 60);
+        const secs = Math.floor(seconds % 60);
+        return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+      }
+
+      // ======== Presentation control functions ========
+      window.togglePlayback = function () {
+        isPlaying = !isPlaying;
+        if (isPlaying && steps.length > 0) {
+          scriptStart = Date.now() - currentTime * 1000;
         }
-    });
+        updatePlayButton();
+      };
 
-    // Set up button controls
-    const rewindButton = document.getElementById('rewind');
-    const playPauseButton = document.getElementById('play-pause');
-    const fastForwardButton = document.getElementById('fast-forward');
+      window.previousStep = function () {
+        if (currentStepIndex > 0) {
+          currentStepIndex--;
+          const step = steps[currentStepIndex];
+          currentTime = step.time;
+          scriptStart = Date.now() - currentTime * 1000;
+          highlightAtoms(step.atoms);
+          updateCaption(step.caption);
+          updateTimeDisplay();
+        }
+      };
 
-    if (rewindButton) {
-        rewindButton.addEventListener('click', skipBackward);
-    }
+      window.nextStep = function () {
+        if (currentStepIndex < steps.length - 1) {
+          currentStepIndex++;
+          const step = steps[currentStepIndex];
+          currentTime = step.time;
+          scriptStart = Date.now() - currentTime * 1000;
+          highlightAtoms(step.atoms);
+          updateCaption(step.caption);
+          updateTimeDisplay();
+        }
+      };
 
-    if (playPauseButton) {
-        playPauseButton.addEventListener('click', togglePlayPause);
-    }
+      window.restartPresentation = function () {
+        currentTime = 0;
+        currentStepIndex = 0;
+        scriptStart = Date.now();
+        isPlaying = true;
+        presentationEnded = false;
+        clearHighlights();
+        updateCaption(steps[0]?.caption || '');
+        updateTimeDisplay();
+        updatePlayButton();
+      };
 
-    if (fastForwardButton) {
-        fastForwardButton.addEventListener('click', skipForward);
-    }
-}
+      function updatePlayButton() {
+        const btn = document.getElementById('play-pause-btn');
+        if (btn) {
+          btn.innerHTML = isPlaying ? pauseIcon : playIcon;
+        }
+      }
 
-/**
- * Toggles play/pause state and handles icon display
- */
-function togglePlayPause() {
-    isPlaying = !isPlaying;
-    if (isPlaying) {
-        // Resume from currentTime
-        scriptStart = performance.now() * 0.001 - currentTime;
-        pauseIcon.style.display = 'none';
-    } else {
-        // Pausing: keep currentTime as is
-        pauseIcon.style.display = 'block';
-    }
-}
+      function updateTimeDisplay() {
+        const timeDisplay = document.getElementById('time-display');
+        if (timeDisplay) {
+          timeDisplay.textContent = secondsToTimeString(currentTime);
+        }
+      }
 
-/**
- * Adjusts the camera to fit the molecule in view
- */
-function fitCameraToMolecule() {
-    if (!root) return;
+      function updateCaption(text) {
+        const label = document.getElementById('molecule-label');
+        if (label) {
+          label.textContent = text;
+        }
+      }
 
-    const boundingBox = new THREE.Box3().setFromObject(root);
-    const center = new THREE.Vector3();
-    boundingBox.getCenter(center);
-    const size = new THREE.Vector3();
-    boundingBox.getSize(size);
+      // ======== Highlighting functions ========
+      function highlightAtoms(atomIndices) {
+        clearHighlights();
 
-    const maxDim = Math.max(size.x, size.y, size.z);
-    const fov = camera.fov * (Math.PI / 180);
-    let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2));
+        if (!root || !atomIndices || atomIndices.length === 0) return;
 
-    cameraZ *= 1.5;
+        atomIndices.forEach(indexStr => {
+          const index = parseInt(indexStr);
+          if (isNaN(index)) return;
 
-    camera.position.z = cameraZ;
-    const minZ = boundingBox.min.z;
-    const cameraToFarEdge = (minZ < 0) ? -minZ + cameraZ : cameraZ - minZ;
-    camera.far = cameraToFarEdge * 3;
-    camera.updateProjectionMatrix();
+          root.traverse(child => {
+            if (child.isMesh && child.userData && child.userData.atomIndex === index) {
+              if (child.material) {
+                child.material.emissive = highlightColor;
+                child.material.emissiveIntensity = highlightIntensity;
+              }
+            }
+          });
+        });
 
-    controls.target.copy(center);
-    controls.update();
-    
-    // Also update A-Frame camera position
-    const aframeCamera = document.querySelector('a-entity[camera]');
-    if (aframeCamera) {
-        aframeCamera.setAttribute('position', `0 0 ${cameraZ}`);
-    }
-}
+        previousStepAtoms = [...atomIndices];
+      }
 
-function init() {
-    const container = document.getElementById('container');
-    pauseIcon = document.getElementById('pause-icon');
-    aframeScene = document.querySelector('a-scene');
+      function clearHighlights() {
+        if (!root) return;
 
-    scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x050505);
+        root.traverse(child => {
+          if (child.isMesh && child.material && child.material.emissive) {
+            child.material.emissive.setHex(0x000000);
+            child.material.emissiveIntensity = 0;
+          }
+        });
+      }
 
-    camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 1, 5000);
-    camera.position.z = 500;
+      // ========= central‑atom utilities =========
+      function findCentralAtomPosition() {
+        const atoms = [];
+        root?.traverse(o => {
+          if (o.isMesh && o.userData?.atomIndex !== undefined) atoms.push(o);
+        });
+        if (atoms.length === 0) return null;
 
-    const light1 = new THREE.DirectionalLight(0xffffff, 2.5);
-    light1.position.set(1, 1, 1);
-    scene.add(light1);
+        let bestAtom = atoms[0];
+        let bestScore = Infinity;
 
-    const light2 = new THREE.DirectionalLight(0xffffff, 1.5);
-    light2.position.set(-1, -1, 1);
-    scene.add(light2);
+        for (const a of atoms) {
+          let sum = 0;
+          for (const b of atoms) if (a !== b) sum += a.position.distanceTo(b.position);
+          const avg = sum / (atoms.length - 1);
+          if (avg < bestScore) {
+            bestScore = avg;
+            bestAtom = a;
+          }
+        }
+        return bestAtom.position.clone();
+      }
 
-    root = new THREE.Group();
-    scene.add(root);
-    // Set moleculeGroup to root for A-Frame injection
-    moleculeGroup = root;
+      function alignToCentralAtom() {
+        // call once molecule is in the scene
+        const pos = findCentralAtomPosition();
+        if (pos) {
+          controls.target.copy(pos);
+          controls.update(); // auto‑rotation now pivots on this atom
+        }
+      }
 
-    renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setPixelRatio(window.devicePixelRatio);
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    container.appendChild(renderer.domElement);
+      // ======== Three.js initialization ========
+      function init() {
+        const container = document.getElementById('container');
 
-    labelRenderer = new CSS2DRenderer();
-    labelRenderer.setSize(window.innerWidth, window.innerHeight);
-    labelRenderer.domElement.style.position = 'absolute';
-    labelRenderer.domElement.style.top = '0px';
-    labelRenderer.domElement.style.pointerEvents = 'none';
-    container.appendChild(labelRenderer.domElement);
+        // Scene
+        scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x18223b);
 
-    controls = new OrbitControls(camera, renderer.domElement);
-    controls.enableDamping = true;
-    controls.dampingFactor = 0.05;
-    controls.autoRotate = autoRotateEnabled;
-    controls.autoRotateSpeed = 1.5;
-    controls.enableKeys = false;
-    window.addEventListener('resize', onWindowResize);
+        // Camera
+        camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 1, 5000);
+        camera.position.z = 800;
 
-    // PDB data for norbornane
-    const pdbData = `COMPND    297
-HETATM    1  C1  UNL     1       0.000   0.000   0.000  1.00  0.00           C  
-HETATM    2  H1  UNL     1       0.635   0.635   0.635  1.00  0.00           H  
-HETATM    3  H2  UNL     1      -0.635   0.635  -0.635  1.00  0.00           H  
-HETATM    4  H3  UNL     1      -0.635  -0.635   0.635  1.00  0.00           H  
-HETATM    5  H4  UNL     1       0.635  -0.635  -0.635  1.00  0.00           H  
-CONECT    1    2    3    4    5
-END`;
-    const pdbBlob = new Blob([pdbData], { type: 'text/plain' });
-    const pdbUrl = URL.createObjectURL(pdbBlob);
+        // Lighting
+        scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+        const hemi = new THREE.HemisphereLight(0xffffff, 0x080820, 0.7);
+        scene.add(hemi);
+        const light1 = new THREE.DirectionalLight(0xffffff, 1.2);
+        light1.position.set(1, 1, 1);
+        scene.add(light1);
+        const light2 = new THREE.DirectionalLight(0xffffff, 0.8);
+        light2.position.set(-1, -1, 1);
+        scene.add(light2);
 
-    const loader = new PDBLoader();
-    const scaleFactor = 0.7;
+        // Root group
+        root = new THREE.Group();
+        labelsGroup = new THREE.Group();
+        root.add(labelsGroup);
+        scene.add(root);
 
-    loader.load(pdbUrl, (pdb) => {
-        const geometryAtoms = pdb.geometryAtoms;
-        const geometryBonds = pdb.geometryBonds;
-        const json = pdb.json;
+        // Renderer
+        renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.outputColorSpace = THREE.SRGBColorSpace;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.1;
+        container.appendChild(renderer.domElement);
 
-        // Center the geometry
-        const offset = new THREE.Vector3();
-        geometryAtoms.computeBoundingBox();
-        geometryAtoms.boundingBox.getCenter(offset).negate();
-        geometryAtoms.translate(offset.x, offset.y, offset.z);
-        geometryBonds.translate(offset.x, offset.y, offset.z);
+        new RGBELoader().load(
+          'https://cdn.jsdelivr.net/gh/pmndrs/drei-assets@master/hdri/venice_sunset_1k.hdr',
+          texture => {
+            const pmremGenerator = new THREE.PMREMGenerator(renderer);
+            pmremGenerator.compileEquirectangularShader();
+            const envMap = pmremGenerator.fromEquirectangular(texture).texture;
+            scene.environment = envMap;
+            texture.dispose();
+            pmremGenerator.dispose();
+          }
+        );
 
-        const sphereGeometry = new THREE.IcosahedronGeometry(1, 3);
-        const boxGeometry = new THREE.BoxGeometry(1, 1, 1);
+        // Label renderer
+        labelRenderer = new CSS2DRenderer();
+        labelRenderer.setSize(window.innerWidth, window.innerHeight);
+        labelRenderer.domElement.style.position = 'absolute';
+        labelRenderer.domElement.style.top = '0px';
+        labelRenderer.domElement.style.pointerEvents = 'none';
+        container.appendChild(labelRenderer.domElement);
 
-        const positions = geometryAtoms.getAttribute('position');
-        const position = new THREE.Vector3();
+        // Controls
+        controls = new OrbitControls(camera, renderer.domElement);
+        controls.minDistance = 200;
+        controls.maxDistance = 2000;
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.autoRotate = autoRotateEnabled;
+        controls.autoRotateSpeed = 2.0;
 
-        // Define element colors
-        const elementColors = {
-            'C': 0x777777,  // Gray for carbon
-            'H': 0xffffff,  // White for hydrogen
-            'O': 0xff0000,  // Red for oxygen
-            'N': 0x0000ff,  // Blue for nitrogen
-            'S': 0xffff00,  // Yellow for sulfur
-            'P': 0xffa500,  // Orange for phosphorus
+        // Load molecule
+        loadMolecule();
+
+        // Initialize presentation
+        initializePresentation();
+
+        // Handle resize
+        window.addEventListener('resize', onWindowResize);
+      }
+
+      function loadMolecule() {
+        if (moleculeType === 'sdf' && sdfData && sdfData.trim().length > 0) {
+          loadSDFMolecule();
+        } else {
+          loadPDBMolecule();
+        }
+      }
+
+      function loadSDFMolecule() {
+          console.log('Loading SDF molecule...');
+
+          try {
+              const mol = loadSDF(sdfData, {
+                  showHydrogen: true,
+                  addThreeCenterBonds: true,
+                  layout: 'auto',
+                  renderMultipleBonds: true,
+                  attachAtomData: true,
+                  attachProperties: true,
+              });
+
+              console.log('SDF loaded successfully:', mol);
+
+              // Upgrade materials for better rendering
+              let atomIndex = 0;
+              mol.traverse((obj) => {
+                  if (obj.isMesh) {
+                      const mesh = obj;
+                      if (mesh.geometry?.type === 'SphereGeometry' || mesh.geometry?.type === 'IcosahedronGeometry') {
+                          // This is an atom
+                          mesh.userData.atomIndex = atomIndex++;
+
+                          // Upgrade material
+                          const material = mesh.material;
+                          const baseColor = material.color?.clone?.() ?? new THREE.Color(0xffffff);
+                          mesh.material = new THREE.MeshStandardMaterial({
+                              color: baseColor,
+                              metalness: 0.3,
+                              roughness: 0.25,
+                          });
+                      } else {
+                          // This is likely a bond - upgrade material
+                          const material = mesh.material;
+                          const baseColor = material.color?.clone?.() ?? new THREE.Color(0xffffff);
+                          mesh.material = new THREE.MeshStandardMaterial({
+                              color: baseColor,
+                              metalness: 0.1,
+                              roughness: 0.3,
+                          });
+                      }
+                  }
+              });
+
+              root.add(mol);
+
+              // Unify centering logic
+              recenterRoot();
+              fitCameraToMolecule();
+
+              // Store reference
+              moleculeGroup = mol;
+
+          } catch (error) {
+              console.error('Error loading SDF:', error);
+              // Fallback to PDB if SDF fails
+              loadPDBMolecule();
+          }
+      }
+                }
+              });
+
+              root.add(mol);
+
+              // Unify centering logic
+              recenterRoot();
+              fitCameraToMolecule();
+
+              // Store reference
+              moleculeGroup = mol;
+            } catch (error) {
+              console.error('Error loading SDF:', error);
+              // Fallback to PDB if SDF fails
+              loadPDBMolecule();
+            }
+          } else {
+            // Retry after a short delay
+            setTimeout(checkSdfLoader, 100);
+          }
         };
 
-        // Create atoms
-        for (let i = 0; i < positions.count; i++) {
-            position.set(
-                positions.getX(i),
-                positions.getY(i),
-                positions.getZ(i)
-            );
+        checkSdfLoader();
+      }
 
-            // Get atom symbol and determine color
-            const atomSymbol = json.atoms[i] && json.atoms[i][4];
-            const elementColor = elementColors[atomSymbol] || 0xffffff; // Default to white if unknown
+      function loadPDBMolecule() {
+        console.log('Loading PDB molecule...');
+        const loader = new PDBLoader();
+        const pdbBlob = new Blob([pdbData], { type: 'text/plain' });
+        const pdbUrl = URL.createObjectURL(pdbBlob);
 
-            const material = new THREE.MeshPhongMaterial({
-                color: elementColor,
-                emissive: 0x000000,
-                emissiveIntensity: 1.0
-            });
+        loader.load(
+          pdbUrl,
+          pdb => {
+            console.log('PDB loaded successfully:', pdb);
+            const { geometryAtoms, geometryBonds } = pdb;
+            const boxGeometry = new THREE.BoxGeometry(1, 1, 1);
+            const sphereGeometry = new THREE.IcosahedronGeometry(1, 3);
+            const offset = new THREE.Vector3();
 
-            const atom = new THREE.Mesh(sphereGeometry, material);
-            atom.position.copy(position).multiplyScalar(120 * scaleFactor);
-            atom.scale.setScalar(40 * scaleFactor);
-            root.add(atom);
+            geometryAtoms.computeBoundingBox();
+            geometryAtoms.boundingBox?.getCenter(offset).negate();
 
-            // Store original emissive for highlight fade
-            atom.userData.originalEmissive = new THREE.Color(0x000000);
-            // Also store original emissive intensity
-            atom.userData.originalEmissiveIntensity = atom.material.emissiveIntensity;
+            geometryAtoms.translate(offset.x, offset.y, offset.z);
+            geometryBonds.translate(offset.x, offset.y, offset.z);
 
-            atomMeshes.push(atom);
+            const positions = geometryAtoms.getAttribute('position');
+            const colors = geometryAtoms.getAttribute('color');
+            const position = new THREE.Vector3();
+            const color = new THREE.Color();
 
-            if (atomSymbol) {
+            console.log('Number of atoms:', positions.count);
+
+            // Create atoms
+            for (let i = 0; i < positions.count; i++) {
+              position.set(positions.getX(i), positions.getY(i), positions.getZ(i));
+              color.setRGB(colors.getX(i), colors.getY(i), colors.getZ(i));
+
+              const atomMaterial = new THREE.MeshStandardMaterial({
+                color,
+                metalness: 0.3,
+                roughness: 0.25,
+              });
+              const atom = new THREE.Mesh(sphereGeometry, atomMaterial);
+              atom.position.copy(position).multiplyScalar(120);
+              atom.scale.setScalar(40);
+              atom.userData.atomIndex = i; // Store atom index for highlighting
+              root.add(atom);
+
+              const atomSymbol = pdb.json.atoms[i][4];
+              if (atomSymbol) {
                 const text = document.createElement('div');
                 text.className = 'atom-label';
                 text.textContent = atomSymbol;
+                const lum = 0.2126 * color.r + 0.7152 * color.g + 0.0722 * color.b;
+                const txtColor = lum > 0.45 ? '#000' : '#fff';
+                text.style.color = txtColor;
+                text.style.textShadow = `0 0 4px ${txtColor === '#000' ? '#fff' : '#000'}`;
+                text.style.fontSize = '14px';
+                text.style.pointerEvents = 'none';
+
                 const label = new CSS2DObject(text);
                 label.position.copy(atom.position);
-                scene.add(label);
+                labelsGroup.add(label);
+              }
+
+              console.log(`Atom ${i} position:`, atom.position);
             }
-        }
 
-        // Create bonds
-        const bondPositions = geometryBonds.getAttribute('position');
-        const start = new THREE.Vector3();
-        const end = new THREE.Vector3();
+            // Create bonds
+            const bondPositions = geometryBonds.getAttribute('position');
+            const start = new THREE.Vector3();
+            const end = new THREE.Vector3();
 
-        for (let i = 0; i < bondPositions.count; i += 2) {
-            start.set(
-                bondPositions.getX(i),
-                bondPositions.getY(i),
-                bondPositions.getZ(i)
-            ).multiplyScalar(120 * scaleFactor);
+            for (let i = 0; i < bondPositions.count; i += 2) {
+              start
+                .set(bondPositions.getX(i), bondPositions.getY(i), bondPositions.getZ(i))
+                .multiplyScalar(120);
+              end
+                .set(
+                  bondPositions.getX(i + 1),
+                  bondPositions.getY(i + 1),
+                  bondPositions.getZ(i + 1)
+                )
+                .multiplyScalar(120);
 
-            end.set(
-                bondPositions.getX(i + 1),
-                bondPositions.getY(i + 1),
-                bondPositions.getZ(i + 1)
-            ).multiplyScalar(120 * scaleFactor);
-
-            const bondMesh = new THREE.Mesh(
+              const bondMesh = new THREE.Mesh(
                 boxGeometry,
-                new THREE.MeshPhongMaterial({ color: 0xffffff })
-            );
-            bondMesh.position.copy(start).lerp(end, 0.5);
-            bondMesh.scale.set(8 * scaleFactor, 8 * scaleFactor, start.distanceTo(end));
-            bondMesh.lookAt(end);
-            root.add(bondMesh);
+                new THREE.MeshStandardMaterial({
+                  color: 0xffffff,
+                  metalness: 0.1,
+                  roughness: 0.3,
+                })
+              );
+              bondMesh.position.copy(start).lerp(end, 0.5);
+              bondMesh.scale.set(8, 8, start.distanceTo(end));
+              bondMesh.lookAt(end);
+              root.add(bondMesh);
+            }
+
+            // Compute bounding box and adjust camera
+            recenterRoot();
+            fitCameraToMolecule();
+
+            URL.revokeObjectURL(pdbUrl);
+
+            // Store reference
+            moleculeGroup = root;
+          },
+          undefined,
+          error => {
+            console.error('Error loading PDB:', error);
+          }
+        );
+      }
+
+      function recenterRoot() {
+        const box = new THREE.Box3().setFromObject(root);
+        const center = box.getCenter(new THREE.Vector3());
+        root.children.forEach(child => child.position.sub(center));
+        controls.target.set(0, 0, 0);
+        controls.update();
+      }
+
+      function fitCameraToMolecule(margin = 1.15) {
+        if (!root) return;
+
+        controls.reset();
+        camera.zoom = 1;
+        camera.updateProjectionMatrix();
+        root.rotation.set(0, 0, 0);
+
+        const sphere = new THREE.Sphere();
+        new THREE.Box3().setFromObject(root).getBoundingSphere(sphere);
+        const { center, radius } = sphere;
+
+        root.position.sub(center);
+
+        const fov = (camera.fov * Math.PI) / 180;
+        const dist = (radius * margin) / Math.sin(fov / 2);
+
+        camera.position.set(0, 0, dist);
+        camera.near = dist * 0.01;
+        camera.far = dist * 10;
+        camera.updateProjectionMatrix();
+
+        controls.target.set(0, 0, 0);
+        controls.minDistance = dist * 0.2;
+        controls.maxDistance = dist * 5;
+        controls.update();
+        controls.saveState();
+
+        alignToCentralAtom(); // NEW – retarget to central atom
+      }
+
+      function initializePresentation() {
+        // Convert script data to steps with numeric timecodes
+        steps = scriptData.content.map(s => ({
+          time: timeStringToSeconds(s.timecode),
+          atoms: s.atoms,
+          caption: s.caption,
+        }));
+
+        if (steps.length > 0) {
+          lastStepTime = steps[steps.length - 1].time;
+          updateCaption(steps[0].caption);
         }
 
-        URL.revokeObjectURL(pdbUrl);
-        fitCameraToMolecule();
+        // Set document title
+        document.title = scriptData.title;
 
-        // Initialize script steps
-        initScript();
-        
-        // Notify that molecule is ready for A-Frame injection
-        document.dispatchEvent(new CustomEvent('molecule-ready'));
-    });
-    
-    // Set up A-Frame VR mode listeners
-    setupVRListeners();
-}
+        scriptStart = Date.now();
+      }
 
-/**
- * Set up listeners for A-Frame VR mode changes
- */
-function setupVRListeners() {
-    aframeScene.addEventListener('enter-vr', () => {
-        inVRMode = true;
-        document.getElementById('container').style.display = 'none'; // hide Three.js canvas
-        aframeScene.style.display = 'block'; // show A-Frame
-    });
-    
-    aframeScene.addEventListener('exit-vr', () => {
-        inVRMode = false;
-        document.getElementById('container').style.display = 'block'; // show Three.js canvas
-        aframeScene.style.display = 'none'; // hide A-Frame
-    });
-    
-    // Auto-enter VR if headset is connected
-    aframeScene.addEventListener('loaded', () => {
-        if (AFRAME.utils.device.checkHeadsetConnected()) {
-            aframeScene.style.display = 'block';
-            aframeScene.enterVR();
+      function onWindowResize() {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        labelRenderer.setSize(window.innerWidth, window.innerHeight);
+      }
+
+      function animate() {
+        requestAnimationFrame(animate);
+
+        // Update presentation
+        if (isPlaying && steps.length > 0) {
+          currentTime = (Date.now() - scriptStart) / 1000;
+          updateTimeDisplay();
+
+          if (currentTime > lastStepTime) {
+            isPlaying = false;
+            updatePlayButton();
+            if (!presentationEnded) {
+              presentationEnded = true;
+              updateCaption(scriptData.title);
+            }
+          }
+
+          if (isPlaying) {
+            // Find current step
+            for (let i = 0; i < steps.length; i++) {
+              if (
+                currentTime >= steps[i].time &&
+                (i === steps.length - 1 || currentTime < steps[i + 1].time)
+              ) {
+                if (i !== currentStepIndex) {
+                  currentStepIndex = i;
+                  highlightAtoms(steps[i].atoms);
+                  updateCaption(steps[i].caption);
+                }
+                break;
+              }
+            }
+          }
         }
-    });
-}
 
-/**
- * Animates the `emissive` color + intensity from one value to another over "duration" ms.
- */
-function animateEmissiveTransition(atom, fromEmissive, toEmissive, fromIntensity, toIntensity, duration) {
-    const startTime = performance.now();
+        controls.update();
+        renderer.render(scene, camera);
+        labelRenderer.render(scene, camera);
+      }
 
-    function tick(now) {
-        const elapsed = now - startTime;
-        const t = Math.min(1, elapsed / duration);
+      // Start the application
+      init();
+      animate();
+      updatePlayButton();
 
-        const er = fromEmissive.r + (toEmissive.r - fromEmissive.r) * t;
-        const eg = fromEmissive.g + (toEmissive.g - fromEmissive.g) * t;
-        const eb = fromEmissive.b + (toEmissive.b - fromEmissive.b) * t;
-        atom.material.emissive.setRGB(er, eg, eb);
+      /* ---------- progress‑bar & HUD ---------- */
+      const hud = document.getElementById('presentation-controls');
+      const label = document.getElementById('molecule-label');
+      let hudTimer = null;
 
-        const intensity = fromIntensity + (toIntensity - fromIntensity) * t;
-        atom.material.emissiveIntensity = intensity;
+      function showHUD() {
+        clearTimeout(hudTimer);
+        hud.classList.remove('hud-hidden');
+        hudTimer = setTimeout(() => {
+          hud.classList.add('hud-hidden');
+        }, 4000);
+      }
+      ['mousemove', 'mousedown', 'touchstart', 'keydown'].forEach(e =>
+        window.addEventListener(e, showHUD)
+      );
+      showHUD(); // initial reveal
 
-        if (t < 1) requestAnimationFrame(tick);
-    }
-    requestAnimationFrame(tick);
-}
-
-/**
- * Highlight: fade emissive from current to highlightColor & set highlightIntensity
- */
-function highlightAtoms(indices, duration = 500) {
-    indices.forEach(i => {
-        const atom = atomMeshes[i];
-        if (atom) {
-            const fromEmissive = atom.material.emissive.clone();
-            const toEmissive = highlightColor.clone();
-            const fromIntensity = atom.material.emissiveIntensity;
-            const toIntensity = highlightIntensity;
-
-            animateEmissiveTransition(atom, fromEmissive, toEmissive, fromIntensity, toIntensity, duration);
+      function updateProgress() {
+        if (steps.length) {
+          const pct = Math.min(currentTime / lastStepTime, 1);
+          document.getElementById('progress').style.width = `${pct * 100}%`;
         }
-    });
-}
+      }
 
-/**
- * Unhighlight: fade emissive back to original color/intensity
- */
-function unhighlightAtoms(indices, duration = 500) {
-    indices.forEach(i => {
-        const atom = atomMeshes[i];
-        if (atom) {
-            const fromEmissive = atom.material.emissive.clone();
-            const toEmissive = atom.userData.originalEmissive.clone(); // typically black
-            const fromIntensity = atom.material.emissiveIntensity;
-            const toIntensity = atom.userData.originalEmissiveIntensity;
+      /* existing animate() — insert one line just before controls.update(); */
+      updateProgress();
 
-            animateEmissiveTransition(atom, fromEmissive, toEmissive, fromIntensity, toIntensity, duration);
+      /* ---------- keyboard shortcuts ---------- */
+      window.addEventListener('keydown', e => {
+        if (e.code === 'Space') {
+          togglePlayback();
+          e.preventDefault();
+        } else if (e.code === 'ArrowRight') {
+          nextStep();
+          e.preventDefault();
+        } else if (e.code === 'ArrowLeft') {
+          previousStep();
+          e.preventDefault();
         }
-    });
-}
-
-/**
- * Unhighlight all atoms
- */
-function unhighlightAll(duration = 500) {
-    const indices = Array.from(atomMeshes.keys());
-    unhighlightAtoms(indices, duration);
-}
-
-// Add a button for entering VR and controlling rotation
-function addVRButton() {
-    const controls = document.createElement('div');
-    controls.id = 'controls';
-    controls.innerHTML = `
-        <button id="pause-rotation">Pause Rotation</button>
-        <button id="vr-button">Enter VR</button>
-    `;
-    document.body.appendChild(controls);
-    
-    const pauseRotationButton = document.getElementById('pause-rotation');
-    const vrButton = document.getElementById('vr-button');
-
-    // Add pause rotation functionality
-    pauseRotationButton.addEventListener('click', () => {
-        const isRotating = toggleAutoRotate();
-        pauseRotationButton.textContent = isRotating ? 'Pause Rotation' : 'Resume Rotation';
-    });
-    
-    vrButton.addEventListener('click', () => {
-        aframeScene.style.display = 'block';
-        aframeScene.enterVR();
-    });
-}
-
-setupKeyboardControls();
-init();
-animate();
-addVRButton();
-</script>
-</body>
+      });
+    </script>
+  </body>
 </html>

@@ -166,7 +166,10 @@ export default function MoleculeViewer({
     };
 
     // Helper to load an HDRI environment map for realistic reflections
-    const addEnvironment = async (renderer: THREE.WebGLRenderer, scene: THREE.Scene): Promise<void> => {
+    const addEnvironment = async (
+      renderer: THREE.WebGLRenderer,
+      scene: THREE.Scene
+    ): Promise<void> => {
       return new Promise((resolve, reject) => {
         new RGBELoader().load(
           'https://cdn.jsdelivr.net/gh/pmndrs/drei-assets@master/hdri/venice_sunset_1k.hdr',
@@ -248,7 +251,9 @@ export default function MoleculeViewer({
       try {
         await addEnvironment(renderer, scene);
       } catch (err) {
-        console.warn('Failed to load environment map, continuing with basic lighting');
+        if (process.env.NODE_ENV !== 'production') {
+          console.warn('Failed to load environment map, continuing with basic lighting');
+        }
       }
 
       composer = new EffectComposer(renderer);
@@ -289,6 +294,7 @@ export default function MoleculeViewer({
       controls.maxDistance = 1200;
       controls.enableDamping = true;
       controls.dampingFactor = 0.05;
+      controls.enablePan = false; // Disable panning to prevent off-center dragging
 
       // Setup resize observer
       resizeObserver = new ResizeObserver(_entries => {
@@ -635,7 +641,7 @@ export default function MoleculeViewer({
             });
           }
 
-          recenterRoot();          // <-- NEW
+          recenterRoot(); // <-- NEW
           fitCameraToMolecule();
           labelsGroup.visible = config.enableAnnotations;
           setStats(null);
@@ -810,7 +816,7 @@ export default function MoleculeViewer({
           labelsGroup.visible = config.enableAnnotations;
 
           // Fit camera to the molecule after loading
-          recenterRoot();          // <-- NEW
+          recenterRoot(); // <-- NEW
           fitCameraToMolecule();
         }
       );
@@ -818,7 +824,7 @@ export default function MoleculeViewer({
 
     /** Move the geometric centre of `root` to (0,0,0) and keep OrbitControls happy */
     const recenterRoot = () => {
-      const box   = new THREE.Box3().setFromObject(root);
+      const box = new THREE.Box3().setFromObject(root);
       const center = box.getCenter(new THREE.Vector3());
 
       // Shift every child back so that the overall centre sits on the world origin
@@ -850,14 +856,14 @@ export default function MoleculeViewer({
       const { center, radius } = sphere;
 
       /* ---------- move everything so that centre sits on (0,0,0) ---------- */
-      root.position.sub(center);          // translate children instead of camera
+      root.position.sub(center); // translate children instead of camera
 
       /* ---------- place camera ---------- */
-      const fov   = (camera.fov * Math.PI) / 180;          // vertical FOV in rad
-      const dist  = (radius * margin) / Math.sin(fov / 2); // basic geometry
+      const fov = (camera.fov * Math.PI) / 180; // vertical FOV in rad
+      const dist = (radius * margin) / Math.sin(fov / 2); // basic geometry
       camera.position.set(0, 0, dist);
       camera.near = dist * 0.01;
-      camera.far  = dist * 10;
+      camera.far = dist * 10;
       camera.updateProjectionMatrix();
 
       /* ---------- orbit controls ---------- */
@@ -865,7 +871,7 @@ export default function MoleculeViewer({
       controls.minDistance = dist * 0.2;
       controls.maxDistance = dist * 5;
       controls.update();
-      controls.saveState();               // new baseline
+      controls.saveState(); // new baseline
     };
 
     // Animation loop
@@ -940,23 +946,18 @@ export default function MoleculeViewer({
 
       // Store ref values at the start of cleanup
       const currentContainerRef = containerRef.current;
-      const currentRendererRef = rendererRef.current;
       const currentLabelContainerRef = labelContainerRef.current;
-      const currentLabelRendererRef = labelRendererRef.current;
 
       // Safely remove renderer elements
-      if (
-        currentRendererRef?.domElement &&
-        currentContainerRef?.contains(currentRendererRef.domElement)
-      ) {
-        currentContainerRef.removeChild(currentRendererRef.domElement);
+      if (renderer?.domElement && currentContainerRef?.contains(renderer.domElement)) {
+        currentContainerRef.removeChild(renderer.domElement);
       }
       if (
         showAnnotationsRef.current &&
-        currentLabelRendererRef?.domElement &&
-        currentLabelContainerRef?.contains(currentLabelRendererRef.domElement)
+        labelRenderer?.domElement &&
+        currentLabelContainerRef?.contains(labelRenderer.domElement)
       ) {
-        currentLabelContainerRef.removeChild(currentLabelRendererRef.domElement);
+        currentLabelContainerRef.removeChild(labelRenderer.domElement);
       }
 
       if (renderer) {
@@ -987,7 +988,7 @@ export default function MoleculeViewer({
       outlinePassRef.current = null;
       setStats(null);
     }; // eslint-disable-line react-hooks/exhaustive-deps
-  }, [isLoading, pdbData, sdfData, enableRibbonOverlay]); // Removed isPaused and showAnnotations to prevent scene rebuilds
+  }, [isLoading, pdbData, sdfData, enableRibbonOverlay, showAnnotations]); // Added showAnnotations back
 
   const toggleFullscreen = async () => {
     if (!wrapperRef.current) return;
@@ -1028,15 +1029,19 @@ export default function MoleculeViewer({
     };
   }, []);
   useEffect(() => {
-    if (!containerRef.current) return;
-    const container = containerRef.current;
-    container.querySelectorAll('.molecule').forEach(el => {
+    if (!wrapperRef.current) return;
+    const wrapper = wrapperRef.current;
+
+    // Hide any existing molecule elements
+    wrapper.querySelectorAll('.molecule').forEach(el => {
       (el as HTMLElement).style.display = 'none';
     });
+
+    // Create or update the molecule title
     if (!captionRef.current) {
       const c = document.createElement('div');
       c.className = 'molecule-title';
-      container.appendChild(c);
+      wrapper.appendChild(c);
       captionRef.current = c;
     }
     captionRef.current!.textContent = title;

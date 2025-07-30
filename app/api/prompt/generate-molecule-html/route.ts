@@ -6,6 +6,6 @@ export async function POST(req: NextRequest) {
   if (!molecule_data) {
     return NextResponse.json({ error: 'Missing molecule data' }, { status: 400 });
   }
-  const html = moleculeHTML(molecule_data);
+  const html = await moleculeHTML(molecule_data);
   return NextResponse.json({ html });
 }

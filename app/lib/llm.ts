@@ -14,10 +14,7 @@ export async function callLLM(prompt: string): Promise<string> {
   return completion.choices[0]?.message?.content ?? '';
 }
 
-export async function structuredLLMResponse<T>(
-  prompt: string,
-  schema: z.ZodSchema<T>
-): Promise<T> {
+export async function structuredLLMResponse<T>(prompt: string, schema: z.ZodSchema<T>): Promise<T> {
   if (!openai) throw new Error('LLM not configured');
   const completion = await openai.chat.completions.create({
     model: 'o3-mini',
@@ -55,14 +52,17 @@ export async function classifyPrompt(prompt: string): Promise<PromptClassificati
 
 User input: "${prompt}"`;
 
-  const result = await structuredLLMResponse(question, z.object({
-    type: z.enum(['small molecule', 'macromolecule', 'unknown']),
-    name: z.string().nullable()
-  }));
+  const result = await structuredLLMResponse(
+    question,
+    z.object({
+      type: z.enum(['small molecule', 'macromolecule', 'unknown']),
+      name: z.string().nullable(),
+    })
+  );
   // Sanitize the name to ASCII before returning
   return {
     type: result.type,
-    name: result.name ? sanitizeName(result.name) : null
+    name: result.name ? sanitizeName(result.name) : null,
   };
 }
 
@@ -112,4 +112,123 @@ Output:`;
     throw new Error(`Could not identify a specific molecule from the query: "${userInput}"`);
   }
   return moleculeName.trim();
+}
+
+export interface PresentationStep {
+  timecode: string;
+  atoms: string[];
+  caption: string;
+}
+
+export interface PresentationScript {
+  title: string;
+  content: PresentationStep[];
+}
+
+/**
+ * Generate a presentation script for a molecule based on its data and structure
+ */
+export async function generatePresentationScript(moleculeData: {
+  name: string;
+  formula?: string;
+  info?: unknown;
+  pdb_data?: string;
+  sdf?: string;
+}): Promise<PresentationScript> {
+  if (!openai) {
+    throw new Error('LLM not configured for presentation generation');
+  }
+
+  // Extract basic information about the molecule
+  const { name, formula, info } = moleculeData;
+
+  // Build context about the molecule
+  let moleculeContext = `Molecule: ${name}`;
+  if (formula) moleculeContext += `\nFormula: ${formula}`;
+  if (info && typeof info === 'object' && 'canonical_smiles' in info)
+    moleculeContext += `\nSMILES: ${(info as any).canonical_smiles}`;
+  if (
+    info &&
+    typeof info === 'object' &&
+    'synonyms' in info &&
+    Array.isArray((info as any).synonyms)
+  )
+    moleculeContext += `\nSynonyms: ${(info as any).synonyms.slice(0, 3).join(', ')}`;
+  if (info && typeof info === 'object' && 'formula_weight' in info)
+    moleculeContext += `\nMolecular Weight: ${(info as any).formula_weight} g/mol`;
+  if (info && typeof info === 'object' && 'experimental_method' in info)
+    moleculeContext += `\nExperimental Method: ${(info as any).experimental_method}`;
+  if (info && typeof info === 'object' && 'resolution' in info)
+    moleculeContext += `\nResolution: ${(info as any).resolution} Å`;
+
+  const prompt = `You are creating an educational presentation script for a 3D molecular visualization. Generate a presentation script that highlights different parts of the molecule over time with educational captions.
+
+${moleculeContext}
+
+Create a presentation script with 4-6 steps that:
+1. Introduces the molecule and its significance
+2. Highlights different structural features or functional groups
+3. Explains key properties or biological/chemical importance
+4. Concludes with applications or interesting facts
+
+Each step should:
+- Have a timecode in "MM:SS" format (starting at 00:00, incrementing by 5-10 seconds)
+- Specify which atoms to highlight (use atom indices as strings, e.g., ["0", "1", "2"])
+- Include an educational caption (1-2 sentences, under 120 characters)
+
+For atom indices:
+- Use empty array [] for general introduction
+- Use specific atom indices to highlight structural features
+- For small molecules, typically have 5-20 atoms (indices 0-19)
+- For larger molecules, focus on key functional groups or active sites
+
+EXAMPLE for glucose (C6H12O6):
+{
+  "title": "Glucose: Essential Sugar Molecule",
+  "content": [
+    {
+      "timecode": "00:00",
+      "atoms": [],
+      "caption": "Glucose is a simple sugar and primary energy source for living cells."
+    },
+    {
+      "timecode": "00:05",
+      "atoms": ["0", "1", "2", "3", "4", "5"],
+      "caption": "The six-carbon backbone forms a ring structure in aqueous solution."
+    },
+    {
+      "timecode": "00:10",
+      "atoms": ["6", "7", "8", "9", "10"],
+      "caption": "Five hydroxyl groups make glucose highly water-soluble."
+    },
+    {
+      "timecode": "00:15",
+      "atoms": ["11"],
+      "caption": "The aldehyde group can form hemiacetal bonds, creating ring structures."
+    },
+    {
+      "timecode": "00:20",
+      "atoms": ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11"],
+      "caption": "Glucose is metabolized through glycolysis to produce cellular energy (ATP)."
+    }
+  ]
+}
+
+Now generate a similar script for ${name}. Respond ONLY with JSON in the exact format shown above:`;
+
+  const result = await structuredLLMResponse(
+    prompt,
+    z.object({
+      title: z.string(),
+      content: z.array(
+        z.object({
+          timecode: z.string(),
+          atoms: z.array(z.string()),
+          caption: z.string(),
+        })
+      ),
+    })
+  );
+
+  return result;
 }
