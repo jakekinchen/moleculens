@@ -11,6 +11,17 @@ The MoleculeLens server provides four main capabilities:
 3. **Protein Structure Database** - Access to RCSB PDB and AlphaFold structures
 4. **Molecular Prompt Processing** - Natural language to molecular data conversion
 
+## 🏗️ Architecture Decision
+
+**MoleculeViewer Focus**: The MoleculeViewer component is optimized for real-time 3D molecular visualization using Three.js with PDB data. It does not include 2D PNG overlays to maintain performance and simplicity.
+
+**Separate Graphics Page**: 2D molecular graphics, diagrams, and PNG generation will be handled on a dedicated graphics page using the MoleculeLens API service directly. This separation ensures:
+
+- Clean component responsibilities
+- Optimal performance for 3D visualization
+- Flexible 2D graphics capabilities
+- Better maintainability
+
 ## 📁 Project Structure
 
 ```
@@ -76,9 +87,9 @@ const load3DMolecule = async (moleculeName: string, scene: THREE.Scene) => {
 };
 ```
 
-### 3. Enhanced MoleculeViewer with PyMOL
+### 3. Enhanced MoleculeViewer
 
-The enhanced MoleculeViewer now supports PyMOL overlays:
+The enhanced MoleculeViewer focuses on 3D molecular visualization with performance optimizations:
 
 ```tsx
 import MoleculeViewer from '@/components/panels/MoleculeViewer';
@@ -86,14 +97,8 @@ import MoleculeViewer from '@/components/panels/MoleculeViewer';
 <MoleculeViewer
   pdbData={pdbData}
   title="Caffeine"
-  enablePyMOLRendering={true}
-  pymolOptions={{
-    representation: 'cartoon',
-    quality: 'high',
-    transparent_background: true,
-  }}
-  enableAnimation={true}
-  animationType="rotation"
+  showAnnotations={true}
+  enableRibbonOverlay={false}
 />;
 ```
 
@@ -184,39 +189,40 @@ The MoleculeViewer now includes intelligent performance scaling:
 - **5k-20k atoms**: GPU instanced rendering for better performance
 - **>20k atoms**: Point cloud rendering for massive structures
 
-### PyMOL Integration
+### Core Features
 
-#### 2D Overlay Support
+#### 3D Molecular Visualization
 
-- High-quality transparent PNG overlays
-- Ray-traced rendering with publication quality
-- Automatic blend modes for optimal visual integration
+- Real-time Three.js rendering with WebGL acceleration
+- Interactive controls with orbit, zoom, and pan
+- Automatic camera positioning and molecule centering
+- Support for both PDB and SDF molecular formats
 
-#### Animation Support
+#### Performance Features
 
-- Rotation animations
-- Morphing between conformations
-- Trajectory playback
+- GPU instanced rendering for medium-sized molecules
+- Point cloud fallback for massive macromolecules
+- Intelligent label management to prevent performance issues
+- Memory cleanup and disposal management
 
-#### Advanced Rendering Options
+#### Visual Enhancements
 
-- Multiple representation types (cartoon, surface, stick, ribbon)
-- Quality levels (fast, high, publication)
-- Transparent backgrounds for UI integration
+- PBR (Physically Based Rendering) materials
+- Environment mapping for realistic reflections
+- Post-processing effects with outline support
+- Ribbon/cartoon overlay for protein structures
 
-### New Props
+### Props Interface
 
 ```typescript
 interface MoleculeViewerProps {
-  // ... existing props
-  enablePyMOLRendering?: boolean;
-  pymolOptions?: {
-    representation?: 'cartoon' | 'surface' | 'stick' | 'ribbon';
-    quality?: 'fast' | 'high' | 'publication';
-    transparent_background?: boolean;
-  };
-  enableAnimation?: boolean;
-  animationType?: 'rotation' | 'morph' | 'trajectory';
+  isLoading?: boolean;
+  pdbData: string;
+  sdfData?: string;
+  title: string;
+  showAnnotations?: boolean;
+  moleculeInfo?: MoleculeInfo | null;
+  enableRibbonOverlay?: boolean;
 }
 ```
 
@@ -265,71 +271,80 @@ const results = await getBatchMolecules(['caffeine', 'aspirin', 'glucose'], {
 
 ## 🔄 Integration Patterns
 
-### 1. Hybrid Rendering
+### 1. Performance-Optimized Rendering
 
-Combine Three.js real-time rendering with PyMOL high-quality overlays:
+Use the MoleculeViewer for real-time 3D visualization:
 
 ```typescript
-const HybridMoleculeViewer = ({ moleculeName }) => {
-  const [showPyMOL, setShowPyMOL] = useState(false);
-
+const OptimizedMoleculeViewer = ({ moleculeName, pdbData }) => {
   return (
     <MoleculeViewer
       pdbData={pdbData}
       title={moleculeName}
-      enablePyMOLRendering={showPyMOL}
-      pymolOptions={{
-        quality: 'publication',
-        transparent_background: true
-      }}
+      showAnnotations={true}
+      enableRibbonOverlay={false}
     />
   );
 };
 ```
 
-### 2. Progressive Enhancement
+### 2. Separate Graphics Page
 
-Start with basic rendering, enhance with PyMOL:
-
-```typescript
-const ProgressiveMoleculeViewer = ({ moleculeName }) => {
-  const [enhancementLevel, setEnhancementLevel] = useState('basic');
-
-  useEffect(() => {
-    // Upgrade to PyMOL after initial load
-    setTimeout(() => setEnhancementLevel('pymol'), 1000);
-  }, []);
-
-  return (
-    <MoleculeViewer
-      pdbData={pdbData}
-      title={moleculeName}
-      enablePyMOLRendering={enhancementLevel === 'pymol'}
-    />
-  );
-};
-```
-
-### 3. Fallback Strategy
-
-Graceful degradation when API is unavailable:
+For 2D graphics and diagrams, use the API service directly on a separate page:
 
 ```typescript
-const RobustMoleculeViewer = ({ moleculeName }) => {
-  const [apiAvailable, setApiAvailable] = useState(true);
+const GraphicsPage = () => {
+  const [diagram, setDiagram] = useState(null);
 
-  const handleAPIError = (error: Error) => {
-    if (error.message.includes('timeout') || error.message.includes('500')) {
-      setApiAvailable(false);
-    }
+  const generateDiagram = async () => {
+    const result = await safeGenerateGraphic({
+      brief: "Show the glycolysis pathway",
+      width: 1200,
+      height: 800
+    });
+    setDiagram(result.svg_content);
   };
 
   return (
+    <div>
+      <button onClick={generateDiagram}>Generate Diagram</button>
+      {diagram && <div dangerouslySetInnerHTML={{ __html: diagram }} />}
+    </div>
+  );
+};
+```
+
+### 3. API Integration for External Data
+
+Use the API service to fetch PDB data for the MoleculeViewer:
+
+```typescript
+const APIIntegratedViewer = ({ moleculeName }) => {
+  const [pdbData, setPdbData] = useState('');
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchMolecule = async () => {
+      try {
+        const data = await safeGet3DPDBData(moleculeName);
+        setPdbData(data);
+      } catch (error) {
+        console.error('Failed to fetch PDB data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchMolecule();
+  }, [moleculeName]);
+
+  if (loading) return <div>Loading...</div>;
+
+  return (
     <MoleculeViewer
       pdbData={pdbData}
       title={moleculeName}
-      enablePyMOLRendering={apiAvailable}
-      onError={handleAPIError}
+      isLoading={loading}
     />
   );
 };
