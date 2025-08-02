@@ -1,10 +1,10 @@
 const CHEMISTRY_TOPICS = [
     // Keep some fundamental structures
     "Teach me about water molecules and their 3D structure",
-    "Teach me about carbon hybridization and sp3 bonding",
+    "Teach me about glucose and its 3D structure",
     "Teach me about benzene's aromatic structure",
     "Teach me about tetrahedral carbon geometry",
-    "Teach me about cyclohexane chair conformations",
+    "Teach me about cyclohexane's chair conformations",
     
     // Add new advanced structures
     "Teach me about diborane's bridging hydrogen bonds",
