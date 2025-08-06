@@ -46,10 +46,17 @@ END`;
     synonyms: ['Propane', 'n-Propane', 'Dimethylmethane'],
   });
 
-  const handleVisualizationUpdate = (pdb: string, htmlContent?: string, vizTitle?: string) => {
+  const handleVisualizationUpdate = (
+    pdb: string,
+    htmlContent?: string,
+    vizTitle?: string,
+    sdf?: string
+  ) => {
     setPdbData(pdb);
-    // Heuristic: treat data as SDF if it contains 'V2000' marker
-    if (/V2000|M {2}END/.test(pdb)) {
+    // Use explicit SDF data if provided, otherwise use heuristic
+    if (sdf && sdf.trim().length > 0) {
+      setSdfData(sdf);
+    } else if (/V2000|M {2}END/.test(pdb)) {
       setSdfData(pdb);
     } else {
       setSdfData(null);

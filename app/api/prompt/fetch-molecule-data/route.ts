@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { fetchMoleculeData } from '@/lib/pubchem';
+import { fetchMoleculeDataEnhanced } from '@/lib/pubchem';
 import { classifyPrompt } from '@/lib/llm';
 
 export async function POST(req: NextRequest) {
@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const data = await fetchMoleculeData(moleculeQuery, moleculeType);
+    const data = await fetchMoleculeDataEnhanced(moleculeQuery, moleculeType);
 
     // Return full molecule data expected by the frontend
     return NextResponse.json({
@@ -41,6 +41,8 @@ export async function POST(req: NextRequest) {
       cid: data.cid,
       formula: data.formula,
       info: data.info,
+      // Include SMILES data from the info object for 2D rendering
+      smiles: data.info?.canonical_smiles || data.info?.isomeric_smiles,
     });
   } catch (err: unknown) {
     const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';

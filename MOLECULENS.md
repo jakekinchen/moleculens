@@ -1,4 +1,4 @@
-# MolecuLens: Molecular Visualization AI
+# MolecuLens: Molecular Visualization AI Client
 
 MolecuLens is a sophisticated web application that provides interactive 3D molecular visualization powered by AI. It combines advanced molecular data retrieval, intelligent prompt processing, and high-performance 3D rendering to create an educational and research tool for exploring molecular structures.
 

@@ -75,6 +75,7 @@ export default function MoleculeViewer({
   const [isPaused, setIsPaused] = useState(false);
   const [isInfoOpen, setIsInfoOpen] = useState(false);
   const [stats, setStats] = useState<MoleculeStats | null>(null);
+  const [isHovered, setIsHovered] = useState(false);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const labelRendererRef = useRef<CSS2DRenderer | null>(null);
   const rotationRef = useRef<number>(0);
@@ -84,6 +85,7 @@ export default function MoleculeViewer({
 
   // Use refs to prevent scene rebuilds on pause/play and annotation toggle
   const isPausedRef = useRef(false);
+  const isHoveredRef = useRef(false);
   const showAnnotationsRef = useRef(showAnnotations);
 
   const composerRef = useRef<EffectComposer | null>(null);
@@ -519,6 +521,9 @@ export default function MoleculeViewer({
       const sdfAvailable = sdfData && sdfData.trim().length > 0;
 
       if (sdfAvailable) {
+        console.log('=== ATTEMPTING SDF LOADING ===');
+        console.log('SDF data available:', !!sdfData);
+        console.log('SDF data length:', sdfData?.length);
         try {
           // Use enhanced SDF loading with three-center bond detection for diborane-like molecules
           const mol = loadSDF(sdfData!, {
@@ -530,40 +535,62 @@ export default function MoleculeViewer({
             attachProperties: true,
           });
 
+          // Count atoms and bonds for debugging and fallback detection
+          let atomCount = 0;
+          let bondCount = 0;
+          const atomTypes: string[] = [];
+          const bondTypes: string[] = [];
+
+          mol.traverse((obj: THREE.Object3D) => {
+            if (
+              (obj as THREE.Mesh).isMesh &&
+              (obj as THREE.Mesh).geometry?.type === 'SphereGeometry'
+            ) {
+              atomCount++;
+              if ((obj as THREE.Mesh).userData?.atom?.symbol) {
+                atomTypes.push((obj as THREE.Mesh).userData.atom.symbol);
+              }
+            }
+            // Count all bond-related objects: LineSegments, Lines, and Cylinder meshes
+            if (
+              (obj as THREE.LineSegments).isLineSegments ||
+              (obj as THREE.Line).isLine ||
+              ((obj as THREE.Mesh).isMesh &&
+                ((obj as THREE.Mesh).geometry?.type === 'CylinderGeometry' ||
+                  (obj as THREE.Mesh).geometry?.type === 'BufferGeometry'))
+            ) {
+              bondCount++;
+              // Track what type of bond objects we're finding
+              if ((obj as THREE.LineSegments).isLineSegments) {
+                bondTypes.push('LineSegments');
+              } else if ((obj as THREE.Line).isLine) {
+                bondTypes.push('Line');
+              } else if ((obj as THREE.Mesh).isMesh) {
+                bondTypes.push(`Mesh(${(obj as THREE.Mesh).geometry?.type})`);
+              }
+            }
+          });
           // Log layout detection and molecule structure for debugging
           if (process.env.NODE_ENV !== 'production') {
             console.log('=== SDF LAYOUT DETECTION ===');
             console.log('Layout mode:', mol.userData.layoutMode);
             console.log('Properties:', mol.userData.properties);
-
-            // Count atoms and bonds for debugging
-            let atomCount = 0;
-            let bondCount = 0;
-            const atomTypes: string[] = [];
-
-            mol.traverse((obj: THREE.Object3D) => {
-              if (
-                (obj as THREE.Mesh).isMesh &&
-                (obj as THREE.Mesh).geometry?.type === 'SphereGeometry'
-              ) {
-                atomCount++;
-                if ((obj as THREE.Mesh).userData?.atom?.symbol) {
-                  atomTypes.push((obj as THREE.Mesh).userData.atom.symbol);
-                }
-              }
-              if (
-                (obj as THREE.LineSegments).isLineSegments ||
-                ((obj as THREE.Mesh).isMesh &&
-                  (obj as THREE.Mesh).geometry?.type === 'CylinderGeometry')
-              ) {
-                bondCount++;
-              }
-            });
-
             console.log('Atoms found:', atomCount);
             console.log('Atom types:', atomTypes);
             console.log('Bonds found:', bondCount);
+            console.log('Bond types:', bondTypes);
+            console.log('Total children in mol:', mol.children.length);
             console.log('============================');
+          }
+
+          // Check if SDF parsing failed to create bonds - fallback to PDB if so
+          if (atomCount > 1 && bondCount === 0) {
+            if (process.env.NODE_ENV !== 'production') {
+              console.warn('SDF parsing found atoms but no bonds - falling back to PDB format');
+            }
+            // Clear the failed SDF attempt and fall through to PDB loading
+            root.clear();
+            throw new Error('SDF bonds missing - fallback to PDB');
           }
 
           // Upgrade materials for PBR & reflections
@@ -645,11 +672,14 @@ export default function MoleculeViewer({
           fitCameraToMolecule();
           labelsGroup.visible = config.enableAnnotations;
           setStats(null);
+          ensureTitleVisible(); // Ensure title is visible after SDF loading
           return; // done
         } catch (e) {
-          if (process.env.NODE_ENV !== 'production') {
-            console.error('Failed to load SDF molecule:', e);
-          }
+          console.error('Failed to load SDF molecule:', e);
+          console.error('SDF data length:', sdfData?.length);
+          console.error('SDF data preview:', sdfData?.substring(0, 200));
+          // Clear any partial SDF loading attempt
+          root.clear();
         }
       }
 
@@ -818,8 +848,18 @@ export default function MoleculeViewer({
           // Fit camera to the molecule after loading
           recenterRoot(); // <-- NEW
           fitCameraToMolecule();
+          ensureTitleVisible(); // Ensure title is visible after PDB loading
         }
       );
+    };
+
+    /** Ensure the molecule title is visible */
+    const ensureTitleVisible = () => {
+      if (captionRef.current) {
+        captionRef.current.style.display = '';
+        captionRef.current.style.opacity = '1';
+        captionRef.current.style.visibility = 'visible';
+      }
     };
 
     /** Move the geometric centre of `root` to (0,0,0) and keep OrbitControls happy */
@@ -882,7 +922,8 @@ export default function MoleculeViewer({
         const delta = clockRef.current.getDelta();
 
         // Update rotation speed with smooth interpolation
-        targetRotationSpeedRef.current = isPausedRef.current ? 0 : ROTATION_SPEED;
+        targetRotationSpeedRef.current =
+          isPausedRef.current || isHoveredRef.current ? 0 : ROTATION_SPEED;
         currentRotationSpeedRef.current +=
           (targetRotationSpeedRef.current - currentRotationSpeedRef.current) * PAUSE_SMOOTHING;
 
@@ -1017,6 +1058,16 @@ export default function MoleculeViewer({
     setIsInfoOpen(!isInfoOpen);
   };
 
+  const handleMouseEnter = () => {
+    isHoveredRef.current = true;
+    setIsHovered(true);
+  };
+
+  const handleMouseLeave = () => {
+    isHoveredRef.current = false;
+    setIsHovered(false);
+  };
+
   useEffect(() => {
     const handleFullscreenChange = () => {
       setIsFullscreen(!!document.fullscreenElement);
@@ -1045,13 +1096,21 @@ export default function MoleculeViewer({
       captionRef.current = c;
     }
     captionRef.current!.textContent = title;
-  }, [title]);
+
+    // Ensure title is visible after molecule loads
+    if (!isLoading && captionRef.current) {
+      captionRef.current.style.display = '';
+      captionRef.current.style.opacity = '1';
+    }
+  }, [title, isLoading]);
 
   // The outer wrapper helps position the label absolutely
   return (
     <div
       ref={wrapperRef}
       className="relative w-full h-full rounded-xl overflow-hidden bg-[#050505] flex flex-col"
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
     >
       {/* Loading Facts overlay */}
       <LoadingFacts isVisible={isLoading} showFacts={true} />
@@ -1161,7 +1220,7 @@ export default function MoleculeViewer({
             >
               {/* Common fields */}
               {moleculeInfo.formula && <div className="mb-1">Formula: {moleculeInfo.formula}</div>}
-              {moleculeInfo.formula_weight && (
+              {moleculeInfo.formula_weight && typeof moleculeInfo.formula_weight === 'number' && (
                 <div className="mb-1">MW: {moleculeInfo.formula_weight.toFixed(2)} kDa</div>
               )}
 
@@ -1180,7 +1239,7 @@ export default function MoleculeViewer({
               {moleculeInfo.full_description && (
                 <div className="mb-1">Description: {moleculeInfo.full_description}</div>
               )}
-              {moleculeInfo.resolution && (
+              {moleculeInfo.resolution && typeof moleculeInfo.resolution === 'number' && (
                 <div className="mb-1">Resolution: {moleculeInfo.resolution.toFixed(1)} Å</div>
               )}
               {moleculeInfo.experimental_method && (

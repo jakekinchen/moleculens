@@ -14,7 +14,7 @@ const VIS_BARS = 8; // Number of audio visualization bars
 // Note: VisualizationData interface removed as it's not used in this component
 
 interface InputPanelProps {
-  onVisualizationUpdate: (pdbData: string, html?: string, title?: string) => void;
+  onVisualizationUpdate: (pdbData: string, html?: string, title?: string, sdfData?: string) => void;
   onLoadingChange: (isLoading: boolean) => void;
   currentPrompt: string;
   onPromptChange: (prompt: string) => void;
@@ -599,21 +599,23 @@ export const InputPanel: React.FC<InputPanelProps> = ({
     try {
       const response = await fetchMoleculeData(currentPrompt);
 
-      const moleculeDataString = response.pdb_data || response.sdf;
+      // Extract both PDB and SDF data if available
+      const pdbData = response.pdb_data;
+      const sdfData = response.sdf;
+      const moleculeDataString = pdbData || sdfData;
 
       if (moleculeDataString) {
-        const pdbData = moleculeDataString;
         const name = response.name;
-
         const info = response.info;
 
         // Store the complete molecule data for presentation generation
         setCurrentMoleculeData(response);
-        setCurrentScript(pdbData);
+        setCurrentScript(moleculeDataString);
         setTitle(name);
-        onVisualizationUpdate(pdbData, undefined, name ?? undefined);
+        // Pass both formats to allow the viewer to choose the best one
+        onVisualizationUpdate(pdbData || '', undefined, name ?? undefined, sdfData);
         if (onInfoUpdate) onInfoUpdate(info);
-        onPromptSubmit(currentPrompt, { pdb_data: pdbData, html: '', title: name });
+        onPromptSubmit(currentPrompt, { pdb_data: moleculeDataString, html: '', title: name });
         setIsLoading(false);
         onLoadingChange(false);
       } else {

@@ -2,6 +2,12 @@ import fetch from 'node-fetch';
 import fs from 'fs';
 import path from 'path';
 import { MoleculeInfo } from '@/types';
+import {
+  searchMoleculeByName,
+  getMoleculeDataByCID,
+  convertSDFToPDB,
+  toMoleculeInfo,
+} from '@/services/molecular';
 
 interface RCSBSearchHit {
   identifier: string;
@@ -828,6 +834,85 @@ export function extractPubChemInfo(record: unknown): MoleculeInfo {
     })
     .filter((s): s is string => Boolean(s));
   return info;
+}
+
+/**
+ * Enhanced molecule fetching using client-side molecular service
+ * This replaces the need for PyMOL server API calls
+ */
+export async function fetchMoleculeDataEnhanced(
+  query: string,
+  type: 'small molecule' | 'macromolecule'
+): Promise<MoleculeData> {
+  if (type === 'macromolecule') {
+    // Use existing RCSB functionality for proteins
+    const { pdb_data, title, info } = await generateFromRCSB({ prompt: query });
+    return { pdb_data, name: title ?? query, cid: 0, formula: '', info, sdf: '' };
+  }
+
+  // For small molecules, use our new client-side service
+  try {
+    const result = await searchMoleculeByName(query);
+    if (!result) {
+      throw new Error(`Molecule not found: ${query}`);
+    }
+
+    // Convert SDF to PDB if we have SDF data
+    let pdb_data = '';
+    if (result.sdf_data) {
+      try {
+        pdb_data = await convertSDFToPDB(result.sdf_data);
+      } catch (error) {
+        console.warn('Failed to convert SDF to PDB:', error);
+        // Fall back to existing method
+        return await fetchMoleculeData(query, type);
+      }
+    }
+
+    return {
+      pdb_data,
+      sdf: result.sdf_data || '',
+      name: result.name,
+      cid: result.cid || 0,
+      formula: result.formula || '',
+      info: toMoleculeInfo(result),
+    };
+  } catch (error) {
+    console.warn('Enhanced fetch failed, falling back to original method:', error);
+    // Fall back to existing implementation
+    return await fetchMoleculeData(query, type);
+  }
+}
+
+/**
+ * Get molecule data by PubChem CID using enhanced service
+ */
+export async function getMoleculeDataByCIDEnhanced(cid: number): Promise<MoleculeData> {
+  try {
+    const result = await getMoleculeDataByCID(cid);
+
+    // Convert SDF to PDB if we have SDF data
+    let pdb_data = '';
+    if (result.sdf_data) {
+      try {
+        pdb_data = await convertSDFToPDB(result.sdf_data);
+      } catch (error) {
+        console.warn('Failed to convert SDF to PDB:', error);
+      }
+    }
+
+    return {
+      pdb_data,
+      sdf: result.sdf_data || '',
+      name: result.name,
+      cid: result.cid || 0,
+      formula: result.formula || '',
+      info: toMoleculeInfo(result),
+    };
+  } catch (error) {
+    console.error('Enhanced CID fetch failed:', error);
+    throw error;
+  }
 }
 
 export { cidByExact, cidByAutocomplete, cidByClassSearch };
