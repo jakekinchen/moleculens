@@ -32,6 +32,7 @@ export default function HomePage() {
   );
 
   // Load caffeine by default using API
+  /*
   useEffect(() => {
     const loadDefaultMolecule = async () => {
       setIsLoading(true);
@@ -98,6 +99,7 @@ END`;
 
     loadDefaultMolecule();
   }, []);
+  */
 
   const handleVisualizationUpdate = (
     pdb: string,
