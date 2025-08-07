@@ -172,16 +172,21 @@ export function pruneIsolatedIons(root: THREE.Group, cutoff = 4): void {
  */
 export const extractAtomPositions = (object: THREE.Object3D): Float32Array | null => {
   const positions: number[] = [];
+  // Ensure world matrices are up to date so we capture any parent scale/rotation/translation
+  object.updateMatrixWorld(true);
+  const worldPos = new THREE.Vector3();
 
   object.traverse((obj: THREE.Object3D) => {
     if ((obj as THREE.Mesh).isMesh) {
       const mesh = obj as THREE.Mesh;
+      const isAtomByUserData = !!((mesh.userData as { atom?: unknown } | undefined)?.atom);
       const geoType = mesh.geometry?.type;
+      const isAtomByGeometry = geoType === 'SphereGeometry' || geoType === 'IcosahedronGeometry';
 
-      // Look for sphere geometries (atoms)
-      if (geoType === 'SphereGeometry' || geoType === 'IcosahedronGeometry') {
-        const pos = mesh.position;
-        positions.push(pos.x, pos.y, pos.z);
+      // Prefer userData.atom to identify atoms; fall back to geometry heuristic
+      if (isAtomByUserData || isAtomByGeometry) {
+        mesh.getWorldPosition(worldPos);
+        positions.push(worldPos.x, worldPos.y, worldPos.z);
       }
     }
   });
@@ -745,30 +750,22 @@ export function has3DCoordinates(data: string): boolean {
  * @returns true if the SDF data appears valid
  */
 export function isValidSDF(sdfData: string): boolean {
-  if (!sdfData || !sdfData.trim()) return false;
+  if (!sdfData?.trim()) return false;
+  const lines = sdfData.split(/\r?\n/);
 
-  const lines = sdfData.split('\n');
-  let atomCount = 0;
-
-  // Look for the counts line (line 4 in SDF format)
-  for (let i = 0; i < Math.min(lines.length, 10); i++) {
-    const line = lines[i].trim();
-    if (line.includes('V2000')) {
-      // Previous line should contain atom and bond counts
-      if (i > 0) {
-        const countsLine = lines[i - 1].trim();
-        const parts = countsLine.split(/\s+/);
-        if (parts.length >= 2) {
-          atomCount = parseInt(parts[0]) || 0;
-          // bondCount = parseInt(parts[1]) || 0; // Not used in validation
-        }
-      }
-      break;
-    }
+  // V3000: "M  V30 COUNTS <atoms> <bonds> ..."
+  for (const l of lines) {
+    const m = l.match(/M\s+V30\s+COUNTS\s+(\d+)\s+(\d+)/i);
+    if (m) return parseInt(m[1], 10) > 0;
   }
 
-  // Valid SDF should have atoms, bonds are optional for single atoms
-  return atomCount > 0;
+  // V2000 (or generic counts line): first 10 lines usually contain counts; line may end with "V2000"
+  for (let i = 0; i < Math.min(lines.length, 10); i++) {
+    const m = lines[i].match(/^\s*(\d+)\s+(\d+)(?:\s|$)/);
+    if (m) return parseInt(m[1], 10) > 0;
+  }
+
+  return false;
 }
 
 /**
@@ -790,38 +787,14 @@ export function selectOptimalFormat(
   const hasPDB = pdbData && pdbData.trim().length > 0;
   const hasSDF = sdfData && sdfData.trim().length > 0;
 
-  // For macromolecules, always prefer PDB
-  if (moleculeType === 'macromolecule') {
-    return hasPDB ? 'PDB' : 'SDF'; // Fallback to SDF if no PDB
-  }
+  // Macromolecules → PDB preferred
+  if (moleculeType === 'macromolecule') return hasPDB ? 'PDB' : 'SDF';
 
-  // For small molecules, implement the hierarchy
-  if (moleculeType === 'small molecule') {
-    // 1st priority: 3D SDF if available and valid
-    if (hasSDF && isValidSDF(sdfData!) && has3DCoordinates(sdfData!)) {
-      return 'SDF';
-    }
+  // Small molecules → always prefer SDF when present (preserve bond multiplicities)
+  if (moleculeType === 'small molecule') return hasSDF ? 'SDF' : hasPDB ? 'PDB' : 'PDB';
 
-    // 2nd priority: 3D PDB (will be converted to SDF)
-    if (hasPDB && has3DCoordinates(pdbData!)) {
-      return 'SDF'; // Signal to convert PDB to SDF
-    }
-
-    // 3rd priority: 2D SDF as fallback
-    if (hasSDF && isValidSDF(sdfData!)) {
-      return 'SDF';
-    }
-
-    // Last resort: Use PDB even for small molecules
-    if (hasPDB) {
-      return 'PDB';
-    }
-  }
-
-  // Default fallback: use whatever is available
+  // Fallbacks
   if (hasSDF) return 'SDF';
   if (hasPDB) return 'PDB';
-
-  // Should not reach here, but return PDB as ultimate fallback
   return 'PDB';
 }

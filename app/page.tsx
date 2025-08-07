@@ -5,9 +5,16 @@ import { Header } from './components/layout/Header';
 import { Footer } from './components/layout/Footer';
 import { InputPanel } from './components/panels/InputPanel';
 import MoleculeViewer from './components/panels/MoleculeViewer';
+import dynamic from 'next/dynamic';
+const MacromoleculeViewer3DMol = dynamic(
+  () => import('@/components/panels/MacromoleculeViewer3DMol'),
+  { ssr: false }
+);
 import { VisualizationOutput, HistoryEntry, MoleculeInfo } from './types';
 import { LayoutWrapper } from './components/layout/LayoutWrapper';
 import { TimeMachinePanel } from './components/panels/TimeMachinePanel';
+import { loadSampleMolecules, getDefaultMolecule, getMoleculeByKey } from './lib/sampleMolecules';
+import { fetchMoleculeData } from './services/api';
 import {
   saveHistoryToSession,
   loadHistoryFromSession,
@@ -30,76 +37,65 @@ export default function HomePage() {
   const [moleculeType, setMoleculeType] = useState<'small molecule' | 'macromolecule' | undefined>(
     undefined
   );
+  const [viewerKey, setViewerKey] = useState(0);
 
-  // Load caffeine by default using API
-  /*
+  // Load default sample molecule (from public/sample-molecules.json) on startup
   useEffect(() => {
-    const loadDefaultMolecule = async () => {
+    let cancelled = false;
+    const loadDefaultFromSamples = async () => {
       setIsLoading(true);
       try {
-        console.log('[Default Load] Fetching caffeine via API...');
-        const response = await fetch('/api/prompt/fetch-molecule-data', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ query: 'caffeine' }),
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          console.log('[Default Load] Caffeine data received:', data);
-          
-          setPdbData(data.pdb_data);
-          setSdfData(data.sdf);
-          setTitle(data.name);
-          setMoleculeType('small molecule');
-          setMoleculeInfo(data.info || {
-            formula: data.formula,
-            formula_weight: 194.19,
-            canonical_smiles: data.smiles,
-          });
-        } else {
-          console.error('[Default Load] API response not ok:', response.status);
-          throw new Error('Failed to fetch caffeine data');
+        if (process.env.NODE_ENV !== 'production') {
+          console.log('[HomePage] Loading default sample molecules');
         }
-      } catch (error) {
-        console.error('[Default Load] Error loading caffeine:', error);
-        
-        // Fallback to hardcoded propane data if API loading fails
-        const fallbackPdbData = `COMPND    6334
-HETATM    1  C1  UNL     1       2.872  -0.474   0.000  1.00  0.00           C  
-HETATM    2  C2  UNL     1       4.171   0.269   0.000  1.00  0.00           C  
-HETATM    3  C3  UNL     1       1.558   0.243   0.000  1.00  0.00           C  
-HETATM    4  H1  UNL     1       2.314  -1.434   0.000  1.00  0.00           H  
-HETATM    5  H2  UNL     1       3.448  -1.423   0.000  1.00  0.00           H  
-HETATM    6  H3  UNL     1       5.021  -0.413   0.000  1.00  0.00           H  
-HETATM    7  H4  UNL     1       4.946   1.061   0.000  1.00  0.00           H  
-HETATM    8  H5  UNL     1       3.747   1.272   0.000  1.00  0.00           H  
-HETATM    9  H6  UNL     1       1.962   1.254   0.000  1.00  0.00           H  
-HETATM   10  H7  UNL     1       0.767   1.019   0.000  1.00  0.00           H  
-HETATM   11  H8  UNL     1       0.722  -0.455   0.000  1.00  0.00           H  
-CONECT    1    2    3    4    5
-CONECT    2    6    7    8
-CONECT    3    9   10   11
-END`;
-        setPdbData(fallbackPdbData);
-        setTitle('Propane (C3H8)');
-        setMoleculeType('small molecule');
-        setMoleculeInfo({
-          formula: 'C3H8',
-          formula_weight: 44.1,
-          canonical_smiles: 'CCC',
-          synonyms: ['Propane', 'n-Propane', 'Dimethylmethane'],
-        });
-      } finally {
+        const data = await loadSampleMolecules();
+        if (!data) return;
+        const sample = getDefaultMolecule(data) || getMoleculeByKey(data, 'caffeine');
+        if (!sample) return;
+        if (cancelled) return;
+        // Mount immediately with bundled sample; viewer will prefer SDF
+        setPdbData(sample.pdbData || null);
+        setSdfData(sample.sdfData || null);
+        setTitle(sample.name);
+        setMoleculeType(sample.type);
+        setMoleculeInfo(sample.moleculeInfo as MoleculeInfo);
         setIsLoading(false);
+
+        // In the background, optionally refresh from backend only if sample lacks SDF/PDB
+        const sampleHasSDF = !!(sample.sdfData && sample.sdfData.trim().length > 0);
+        const sampleHasPDB = !!(sample.pdbData && sample.pdbData.trim().length > 0);
+        const shouldRefresh = !sampleHasSDF || !sampleHasPDB;
+        const query = sample.apiSource?.query || sample.name;
+        if (shouldRefresh && query) {
+          fetchMoleculeData(query)
+            .then(result => {
+              if (cancelled || !result) return;
+              if (process.env.NODE_ENV !== 'production') {
+                console.log('[HomePage] Startup backend refresh complete');
+              }
+              setPdbData(result.pdb_data && result.pdb_data.trim().length > 0 ? result.pdb_data : sample.pdbData || null);
+              setSdfData(result.sdf && result.sdf.trim().length > 0 ? result.sdf : sample.sdfData || null);
+              setTitle(result.name || sample.name);
+              setMoleculeType(result.moleculeType || sample.type);
+              setMoleculeInfo((result.info as MoleculeInfo) || (sample.moleculeInfo as MoleculeInfo));
+            })
+            .catch(err => {
+              if (process.env.NODE_ENV !== 'production') {
+                console.warn('[HomePage] Backend fetch for default sample failed (ignored)', err);
+              }
+            });
+        }
+      } catch (e) {
+        console.error('Failed to load default sample molecule:', e);
+      } finally {
+        // isLoading is already set to false after mounting sample
       }
     };
-
-    loadDefaultMolecule();
+    loadDefaultFromSamples();
+    return () => {
+      cancelled = true;
+    };
   }, []);
-  */
 
   const handleVisualizationUpdate = (
     pdb: string,
@@ -108,20 +104,18 @@ END`;
     sdf?: string,
     moleculeTypeFromAPI?: 'small molecule' | 'macromolecule'
   ) => {
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('[HomePage] Visualization update', {
+        hasPDB: !!pdb,
+        hasSDF: !!sdf,
+        moleculeTypeFromAPI,
+      });
+    }
     setPdbData(pdb);
     setMoleculeType(moleculeTypeFromAPI);
-
-    // Smart SDF data handling based on molecule type
-    if (sdf && sdf.trim().length > 0) {
-      // Explicit SDF data provided
-      setSdfData(sdf);
-    } else if (moleculeTypeFromAPI === 'small molecule' && /V2000|M {2}END/.test(pdb)) {
-      // Only convert PDB to SDF for small molecules when it contains SDF markers
-      setSdfData(pdb);
-    } else {
-      // For macromolecules or when no SDF markers, don't set SDF data
-      setSdfData(null);
-    }
+    // Only use explicit SDF data if provided; do not attempt PDB→SDF conversion
+    if (sdf && sdf.trim().length > 0) setSdfData(sdf);
+    else setSdfData(null);
     setHtml(htmlContent ?? null);
     setTitle(vizTitle ?? null);
   };
@@ -220,20 +214,29 @@ END`;
             </div>
 
             <div className="molecule-viewer-container">
-              {pdbData && title && (
-                <MoleculeViewer
-                  isLoading={isLoading}
-                  pdbData={pdbData}
-                  {...(sdfData && { sdfData })}
-                  title={title}
-                  {...(moleculeInfo && { moleculeInfo })}
-                  {...(moleculeType && { moleculeType })}
-                  enableRibbonOverlay={false}
-                  enableHoverPause={false}
-                  enableHoverGlow={false}
-                  showHoverDebug={false}
-                  showDebugWireframe={false}
-                />
+              {!isLoading && pdbData && title && (
+                moleculeType === 'macromolecule' ? (
+                  <MacromoleculeViewer3DMol
+                    key={viewerKey}
+                    pdbData={pdbData}
+                    title={title}
+                  />
+                ) : (
+                  <MoleculeViewer
+                    key={viewerKey}
+                    isLoading={isLoading}
+                    pdbData={pdbData}
+                    {...(sdfData && { sdfData })}
+                    title={title}
+                    {...(moleculeInfo && { moleculeInfo })}
+                    {...(moleculeType && { moleculeType })}
+                    enableRibbonOverlay={false}
+                    enableHoverPause={false}
+                    enableHoverGlow={false}
+                    showHoverDebug={false}
+                    showDebugWireframe={false}
+                  />
+                )
               )}
             </div>
           </div>

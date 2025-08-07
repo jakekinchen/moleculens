@@ -12,10 +12,9 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass';
 // @ts-expect-error - Three.js examples module not properly typed but works correctly
 import { OutlinePass } from 'three/examples/jsm/postprocessing/OutlinePass';
-// @ts-expect-error - Three.js examples module not properly typed but works correctly
-import { RGBELoader } from 'three/examples/jsm/loaders/RGBELoader';
 // @ts-expect-error - three-sdf-loader lacks types
 import { loadSDF } from 'three-sdf-loader';
+import { addEnvironment, deepDispose } from './threeHelpers';
 import { LoadingFacts } from './LoadingFacts';
 import { MoleculeInfo, MoleculeType } from '@/types';
 import {
@@ -32,12 +31,13 @@ import {
   buildRibbonOverlay,
   pruneIsolatedIons,
   selectOptimalFormat,
-  has3DCoordinates,
 } from './moleculeUtils';
 
 // Constants for animation
 const ROTATION_SPEED = 0.1; // Rotations per second
 const PAUSE_SMOOTHING = 0.15; // Smoothing factor for pause/play transitions
+// Scene scaling to keep SDF and PDB render paths consistent
+const POSITION_SCALE = 120; // Å → scene units
 
 interface MoleculeViewerProps {
   isLoading?: boolean;
@@ -106,6 +106,7 @@ export default function MoleculeViewer({
 
   const composerRef = useRef<EffectComposer | null>(null);
   const outlinePassRef = useRef<OutlinePass | null>(null);
+  const isSceneReadyRef = useRef<boolean>(false);
 
   // Smart format selection replaces manual toggle
   // REMOVED: bothFormatsAvailable and manual format preference
@@ -158,6 +159,10 @@ export default function MoleculeViewer({
       const width = rect.width;
       const height = rect.height;
 
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('[MoleculeViewer] onResize', { width, height });
+      }
+
       camera.aspect = width / height;
       camera.updateProjectionMatrix();
 
@@ -187,36 +192,36 @@ export default function MoleculeViewer({
       }
     };
 
-    // Helper to load an HDRI environment map for realistic reflections
-    const addEnvironment = async (
-      renderer: THREE.WebGLRenderer,
-      scene: THREE.Scene
-    ): Promise<void> => {
-      return new Promise((resolve, reject) => {
-        new RGBELoader().load(
-          'https://cdn.jsdelivr.net/gh/pmndrs/drei-assets@master/hdri/venice_sunset_1k.hdr',
-          (hdr: THREE.Texture) => {
-            const pmrem = new THREE.PMREMGenerator(renderer);
-            const envMap = pmrem.fromEquirectangular(hdr).texture;
-            scene.environment = envMap;
-            hdr.dispose();
-            pmrem.dispose();
-            resolve();
-          },
-          undefined,
-          (err: unknown) => {
-            if (process.env.NODE_ENV !== 'production') {
-              console.error('Failed to load HDRI environment', err);
-            }
-            reject(err);
-          }
-        );
-      });
+    // Helper: force one render/update to ensure controls responsiveness after fit
+    const forceRender = () => {
+      if (!renderer || !scene || !camera) return;
+      controls?.update();
+      if (composer) composer.render();
+      else renderer.render(scene, camera);
+      if (showAnnotationsRef.current && labelRenderer) labelRenderer.render(scene, camera);
     };
 
     // Initialization
     const init = async () => {
-      if (!containerRef.current || !labelContainerRef.current || !wrapperRef.current) return;
+      const containerEl = containerRef.current;
+      const labelEl = labelContainerRef.current;
+      const wrapperEl = wrapperRef.current;
+      if (!containerEl || !labelEl || !wrapperEl) return;
+
+      // Ensure the wrapper has a non-zero size before initializing
+      const rect0 = wrapperEl.getBoundingClientRect();
+      if (rect0.width < 2 || rect0.height < 2) {
+        await new Promise<void>(resolve => {
+          const ro = new ResizeObserver(entries => {
+            const r = entries[0]?.contentRect;
+            if (r && r.width >= 2 && r.height >= 2) {
+              ro.disconnect();
+              resolve();
+            }
+          });
+          ro.observe(wrapperEl);
+        });
+      }
 
       // Initialize clock
       clockRef.current = new THREE.Clock();
@@ -227,7 +232,7 @@ export default function MoleculeViewer({
       sceneRef.current = scene;
 
       // Camera
-      const rect = wrapperRef.current.getBoundingClientRect();
+      const rect = wrapperEl.getBoundingClientRect();
       camera = new THREE.PerspectiveCamera(50, rect.width / rect.height, 1, 5000);
       camera.position.z = 800;
       cameraRef.current = camera;
@@ -269,24 +274,48 @@ export default function MoleculeViewer({
       ).physicallyCorrectLights = true;
 
       renderer.setPixelRatio(window.devicePixelRatio);
-      renderer.setSize(containerRef.current.clientWidth, containerRef.current.clientHeight);
-      containerRef.current.appendChild(renderer.domElement);
+      try {
+        renderer.setSize(containerEl.clientWidth, containerEl.clientHeight);
+      } catch {
+        /* noop */
+      }
+      try {
+        // Ensure only a single canvas exists
+        while (containerEl.firstChild) containerEl.removeChild(containerEl.firstChild);
+        containerEl.appendChild(renderer.domElement);
+      } catch {
+        /* noop */
+      }
+
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('[MoleculeViewer] Renderer initialized', {
+          size: {
+            w: containerEl.clientWidth,
+            h: containerEl.clientHeight,
+          },
+          dpr: window.devicePixelRatio,
+        });
+      }
 
       // Add environment reflections
-      try {
-        await addEnvironment(renderer, scene);
-      } catch (err) {
+      // Load environment map non-blocking so first render isn't delayed by network
+      addEnvironment(renderer, scene).catch(() => {
         if (process.env.NODE_ENV !== 'production') {
           console.warn('Failed to load environment map, continuing with basic lighting');
         }
-      }
+      });
+      // forceRender uses outer scope variables; nothing else here
 
       composer = new EffectComposer(renderer);
-      composer.setSize(containerRef.current.clientWidth, containerRef.current.clientHeight);
+      try {
+        composer.setSize(containerEl.clientWidth, containerEl.clientHeight);
+      } catch {
+        /* noop */
+      }
       const renderPass = new RenderPass(scene, camera);
       composer.addPass(renderPass);
       outlinePass = new OutlinePass(
-        new THREE.Vector2(containerRef.current.clientWidth, containerRef.current.clientHeight),
+        new THREE.Vector2(containerEl.clientWidth, containerEl.clientHeight),
         scene,
         camera
       );
@@ -303,14 +332,19 @@ export default function MoleculeViewer({
       // CSS2D renderer
       if (showAnnotationsRef.current) {
         labelRenderer = new CSS2DRenderer();
-        labelRenderer.setSize(
-          labelContainerRef.current.clientWidth,
-          labelContainerRef.current.clientHeight
-        );
+        try {
+          labelRenderer.setSize(labelEl.clientWidth, labelEl.clientHeight);
+        } catch {
+          /* noop */
+        }
         labelRenderer.domElement.style.position = 'absolute';
         labelRenderer.domElement.style.top = '0px';
         labelRenderer.domElement.style.pointerEvents = 'none';
-        labelContainerRef.current.appendChild(labelRenderer.domElement);
+        try {
+          labelEl.appendChild(labelRenderer.domElement);
+        } catch {
+          /* noop */
+        }
       }
 
       // Controls
@@ -321,6 +355,16 @@ export default function MoleculeViewer({
       controls.dampingFactor = 0.05;
       controls.enablePan = false; // Disable panning to prevent off-center dragging
 
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('[MoleculeViewer] OrbitControls configured', {
+          minDistance: controls.minDistance,
+          maxDistance: controls.maxDistance,
+          enableDamping: controls.enableDamping,
+          dampingFactor: controls.dampingFactor,
+          enablePan: controls.enablePan,
+        });
+      }
+
       // Setup resize observer
       resizeObserver = new ResizeObserver(_entries => {
         // Use RAF to avoid multiple resize calls
@@ -328,10 +372,60 @@ export default function MoleculeViewer({
           onResize();
         });
       });
-      resizeObserver.observe(wrapperRef.current);
+      resizeObserver.observe(wrapperEl);
 
       // Initial size
       onResize();
+
+      // Hide canvas until molecule is fitted to avoid a pre-fit flicker frame
+      try {
+        renderer.domElement.style.visibility = 'hidden';
+      } catch (e) {
+        /* noop */
+      }
+
+      // Dev-only: pointer event reachability logging
+      if (process.env.NODE_ENV !== 'production') {
+        const logEvt = (type: string) => () => console.log(`[MoleculeViewer] ${type} event`);
+        const el = renderer.domElement as HTMLElement & {
+          __ml_evt_handlers__?: { [k: string]: EventListener };
+        };
+        const handlers: { [k: string]: EventListener } = {
+          pointerdown: logEvt('pointerdown'),
+          pointermove: logEvt('pointermove'),
+          wheel: logEvt('wheel'),
+        };
+        el.addEventListener('pointerdown', handlers.pointerdown);
+        el.addEventListener('pointermove', handlers.pointermove);
+        el.addEventListener('wheel', handlers.wheel);
+        el.__ml_evt_handlers__ = handlers;
+      }
+
+      // Guard against overlays intercepting first frames of interaction
+      try {
+        const wrapperEl = wrapperRef.current as HTMLDivElement;
+        const originalPe = wrapperEl.style.pointerEvents;
+        if (process.env.NODE_ENV !== 'production') {
+          console.log('[MoleculeViewer] PointerEvents guard start', {
+            originalPe,
+          });
+        }
+        wrapperEl.style.pointerEvents = 'none';
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            wrapperEl.style.pointerEvents = 'auto';
+            if (process.env.NODE_ENV !== 'production') {
+              console.log('[MoleculeViewer] PointerEvents guard end', {
+                restoredPe: wrapperEl.style.pointerEvents,
+              });
+            }
+          });
+        });
+      } catch (err) {
+        if (process.env.NODE_ENV !== 'production') {
+          console.warn('pointer-events guard failed', err);
+        }
+      }
 
       // Load molecule depending on format
       loadMolecule();
@@ -350,6 +444,8 @@ export default function MoleculeViewer({
         root.position.set(0, 0, 0); // reset any translation left by a prior model
         root.rotation.set(0, 0, 0);
       }
+      // Mark scene as not ready to render until we finish camera fitting
+      isSceneReadyRef.current = false;
       controls.reset();
       setOptimizedBounds(null); // drop bounds from the previous molecule
       optimizedBoundsRef.current = null;
@@ -366,12 +462,7 @@ export default function MoleculeViewer({
       console.log('Selected format:', optimalFormat);
 
       // For small molecules using PDB→SDF conversion, ensure we have proper SDF data
-      const needsPDBToSDFConversion =
-        moleculeType === 'small molecule' &&
-        shouldUseSDF &&
-        !sdfAvailable &&
-        pdbAvailable &&
-        has3DCoordinates(pdbData);
+      const needsPDBToSDFConversion = false; // no implicit PDB→SDF conversion
 
       if (shouldUseSDF) {
         console.log('=== ATTEMPTING SDF LOADING ===');
@@ -391,7 +482,7 @@ export default function MoleculeViewer({
         console.log('SDF data length:', sdfToUse?.length);
 
         try {
-          // Use enhanced SDF loading with three-center bond detection for diborane-like molecules
+          // Use enhanced SDF loading
           const mol = loadSDF(sdfToUse!, {
             showHydrogen: true, // Show hydrogens for better molecular structure understanding
             addThreeCenterBonds: false, // Enable three-center bond detection (helps with diborane)
@@ -504,7 +595,7 @@ export default function MoleculeViewer({
 
           // Labels
           if (showAnnotations) {
-            const atomSymbols: string[] = [];
+          const atomSymbols: string[] = [];
             mol.traverse((o: THREE.Object3D) => {
               if ((o as THREE.Mesh).isMesh && (o as THREE.Mesh).userData?.atom?.symbol) {
                 atomSymbols.push((o as THREE.Mesh).userData.atom.symbol);
@@ -514,8 +605,9 @@ export default function MoleculeViewer({
             let atomIndex = 0;
             mol.traverse((obj: THREE.Object3D) => {
               if (!(obj as THREE.Mesh).isMesh) return;
-              const geoType = (obj as THREE.Mesh).geometry?.type;
-              if (geoType !== 'SphereGeometry' && geoType !== 'IcosahedronGeometry') return;
+              const mesh = obj as THREE.Mesh;
+              const isAtom = !!((mesh.userData as { atom?: unknown } | undefined)?.atom);
+              if (!isAtom) return;
 
               const symbol = atomSymbols[atomIndex++] ?? '';
               if (!symbol) return;
@@ -545,34 +637,62 @@ export default function MoleculeViewer({
             console.log('=== SDF GEOMETRY DEBUG ===');
             mol.traverse((obj: THREE.Object3D) => {
               if ((obj as THREE.Mesh).isMesh) {
-                const mesh = obj as THREE.Mesh;
-                console.log('Found mesh with geometry type:', mesh.geometry?.type);
+                // const mesh = obj as THREE.Mesh;
+               // console.log('Found mesh with geometry type:', mesh.geometry?.type);
               }
+             // const asMesh = obj as THREE.Mesh;
+             // const hasAtom = !!((asMesh.userData as { atom?: unknown } | undefined)?.atom);
+              // if (hasAtom) {
+              //   console.log('Atom mesh detected via userData.atom');
+              // }
+              // if ((obj as THREE.LineSegments).isLineSegments) {
+              //   console.log('Found LineSegments (bond)');
+              // }
+              // if ((obj as THREE.Line).isLine) {
+              //   console.log('Found Line (bond)');
+              // }
             });
+            console.log('Mol children:', mol.children.length);
             console.log('========================');
           }
 
-          const atomPositions = extractAtomPositions(mol);
-          if (atomPositions && atomPositions.length > 0) {
-            if (process.env.NODE_ENV !== 'production') {
-              //   console.log('=== OPTIMIZED BOUNDING CALCULATION (SDF) ===');
-              console.log('Atom count:', atomPositions.length / 3);
-              //  console.log('AABB min:', bounds.min);
-              //  console.log('AABB max:', bounds.max);
-              //  console.log('Sphere center:', bounds.c);
-              //  console.log('Sphere radius:', bounds.r.toFixed(2));
-              //  console.log('============================================');
-            }
+          // Bring SDF to scene scale by uniformly scaling the parent group
+          molGroup.scale.setScalar(POSITION_SCALE);
+          molGroup.updateMatrixWorld(true);
 
-            // Use optimized camera fitting
-            fitCameraToMoleculeOptimized(atomPositions);
-          } else {
-            if (process.env.NODE_ENV !== 'production') {
-              console.log('SDF: No atom positions extracted, using fallback method');
-            }
-            // Fallback to standard method
-            fitCameraToMolecule();
+          // Extract atom positions in world space after scaling
+          const atomPositions = extractAtomPositions(molGroup);
+          if (process.env.NODE_ENV !== 'production') {
+            console.log('[MoleculeViewer] SDF atomPositions length:', atomPositions?.length);
           }
+          const doFit = () => {
+            if (atomPositions && atomPositions.length > 0) {
+              if (process.env.NODE_ENV !== 'production') {
+                console.log('Atom count:', atomPositions.length / 3);
+              }
+              fitCameraToMoleculeOptimized(atomPositions);
+            } else {
+              if (process.env.NODE_ENV !== 'production') {
+                console.log('SDF: No atom positions extracted, using fallback method');
+              }
+              fitCameraToMolecule();
+            }
+          };
+          // Ensure matrices are fully settled before fitting (double RAF)
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              molGroup.updateMatrixWorld(true);
+              doFit();
+              // Reveal canvas and mark scene as ready only after fitting
+              try {
+                renderer.domElement.style.visibility = '';
+              } catch (e) {
+                /* noop */
+              }
+              isSceneReadyRef.current = true;
+              forceRender();
+            });
+          });
 
           labelsGroup.visible = config.enableAnnotations;
           setStats(null);
@@ -599,6 +719,9 @@ export default function MoleculeViewer({
           geometryBonds: THREE.BufferGeometry;
           json: PDBData;
         }) => {
+          if (process.env.NODE_ENV !== 'production') {
+            console.log('[MoleculeViewer] PDB loaded');
+          }
           const { geometryAtoms, geometryBonds, json } = pdb;
           const boxGeometry = new THREE.BoxGeometry(1, 1, 1);
           const sphereGeometry = new THREE.IcosahedronGeometry(1, 3);
@@ -781,6 +904,14 @@ export default function MoleculeViewer({
           // Use optimized camera fitting
           fitCameraToMoleculeOptimized(posArray);
           ensureTitleVisible(); // Ensure title is visible after PDB loading
+          // Reveal canvas and mark scene as ready
+          try {
+            renderer.domElement.style.visibility = '';
+          } catch (e) {
+            /* noop */
+          }
+          isSceneReadyRef.current = true;
+          forceRender();
         }
       );
     };
@@ -805,7 +936,6 @@ export default function MoleculeViewer({
     ) => {
       if (!root || atomPositions.length < 3) return;
 
-      /* ---------- reset rotation / zoom inherited from previous model ---------- */
       controls.reset();
       camera.zoom = 1;
       camera.updateProjectionMatrix();
@@ -813,30 +943,25 @@ export default function MoleculeViewer({
       currentRotationSpeedRef.current = 0;
       root.rotation.set(0, 0, 0);
 
-      /* ---------- compute optimized bounding volumes ---------- */
       const bounds = boundingVolumes(atomPositions, vdwRadii);
       const center = new THREE.Vector3(...bounds.c);
       const radius = bounds.r;
 
-      /* ---------- re–centre children (pivot = molecule centre) ---------- */
-      root.children.forEach(child => child.position.sub(center)); // ← was root.position.sub(center)
+      root.children.forEach(child => child.position.sub(center));
 
-      /* ---------- place camera ---------- */
-      const fov = (camera.fov * Math.PI) / 180; // vertical FOV in rad
-      const dist = (radius * margin) / Math.sin(fov / 2); // basic geometry
+      const fov = (camera.fov * Math.PI) / 180;
+      const dist = (radius * margin) / Math.sin(fov / 2);
       camera.position.set(0, 0, dist);
       camera.near = dist * 0.01;
       camera.far = dist * 10;
       camera.updateProjectionMatrix();
 
-      /* ---------- orbit controls ---------- */
       controls.target.set(0, 0, 0);
       controls.minDistance = dist * 0.2;
       controls.maxDistance = dist * 5;
       controls.update();
-      controls.saveState(); // new baseline
+      controls.saveState();
 
-      /* ---------- adjusted bounds for hover‑pause ---------- */
       const centredBounds: Bounds = {
         min: bounds.min.map((v, i) => v - bounds.c[i]) as Vec3,
         max: bounds.max.map((v, i) => v - bounds.c[i]) as Vec3,
@@ -845,6 +970,10 @@ export default function MoleculeViewer({
       };
       setOptimizedBounds(centredBounds);
       optimizedBoundsRef.current = centredBounds;
+
+      // Ensure an immediate render so controls feel responsive after fit
+      forceRender();
+
       return centredBounds;
     };
 
@@ -853,10 +982,9 @@ export default function MoleculeViewer({
      * Works for both Å-scale (small ligands) and 100 Å proteins without manual tweaks.
      * Fallback method using Three.js built-in bounding calculation
      */
-    const fitCameraToMolecule = (margin = 1.15 /* > 1 adds visual breathing room */) => {
+    const fitCameraToMolecule = (margin = 1.15) => {
       if (!root) return;
 
-      /* ---------- reset rotation / zoom inherited from previous model ---------- */
       controls.reset();
       camera.zoom = 1;
       camera.updateProjectionMatrix();
@@ -864,28 +992,27 @@ export default function MoleculeViewer({
       currentRotationSpeedRef.current = 0;
       root.rotation.set(0, 0, 0);
 
-      /* ---------- compute bounding-sphere ---------- */
       const sphere = new THREE.Sphere();
       new THREE.Box3().setFromObject(root).getBoundingSphere(sphere);
       const { center, radius } = sphere;
 
-      /* ---------- re–centre children (pivot = molecule centre) ---------- */
-      root.children.forEach(child => child.position.sub(center)); // ← pivot fix
+      root.children.forEach(child => child.position.sub(center));
 
-      /* ---------- place camera ---------- */
-      const fov = (camera.fov * Math.PI) / 180; // vertical FOV in rad
-      const dist = (radius * margin) / Math.sin(fov / 2); // basic geometry
+      const fov = (camera.fov * Math.PI) / 180;
+      const dist = (radius * margin) / Math.sin(fov / 2);
       camera.position.set(0, 0, dist);
       camera.near = dist * 0.01;
       camera.far = dist * 10;
       camera.updateProjectionMatrix();
 
-      /* ---------- orbit controls ---------- */
       controls.target.set(0, 0, 0);
       controls.minDistance = dist * 0.2;
       controls.maxDistance = dist * 5;
       controls.update();
-      controls.saveState(); // new baseline
+      controls.saveState();
+
+      // Immediate render to confirm control state
+      forceRender();
     };
 
     // Animation loop
@@ -954,6 +1081,11 @@ export default function MoleculeViewer({
 
       // Always update controls and render the scene
       controls.update();
+      // Only render frames after the scene is ready (prevents pre-fit flicker)
+      if (!isSceneReadyRef.current) {
+        // Skip rendering until camera fit completed to avoid flicker
+        return;
+      }
       if (composer) {
         composer.render();
       } else {
@@ -979,89 +1111,65 @@ export default function MoleculeViewer({
 
     window.addEventListener('request-fit-camera-function', handleRequestFitCameraFunction);
 
-    // Cleanup on unmount
-    return () => {
+      // Cleanup on unmount
+      // Capture refs at cleanup time start
+      const cleanupContainer = containerRef.current;
+      const cleanupLabel = labelContainerRef.current;
+      const cleanupWrapper = wrapperRef.current;
+
+      return () => {
       cancelAnimationFrame(animationId);
-      if (resizeObserver) {
-        resizeObserver.disconnect();
-      }
-
-      /* ---------- added: deep disposal ---------- */
-      if (root) {
-        root.traverse(obj => {
-          if ((obj as THREE.Mesh).isMesh) {
-            const mesh = obj as THREE.Mesh;
-            mesh.geometry?.dispose();
-            if (Array.isArray(mesh.material)) {
-              mesh.material.forEach(m => m.dispose());
-            } else {
-              (mesh.material as THREE.Material)?.dispose();
-            }
-          }
-        });
-      }
-      /* ------------------------------------------ */
-
-      // Store ref values at the start of cleanup
-      const currentContainer = containerRef.current;
-      const currentLabelContainer = labelContainerRef.current;
-
-      // Safely remove renderer elements
-      if (renderer?.domElement && currentContainer?.contains(renderer.domElement)) {
-        currentContainer.removeChild(renderer.domElement);
+      resizeObserver?.disconnect();
+      if (root) deepDispose(root);
+        // detach canvases / CSS2D layer
+        if (renderer?.domElement && cleanupContainer?.contains(renderer.domElement)) {
+          cleanupContainer.removeChild(renderer.domElement);
       }
       if (
         showAnnotationsRef.current &&
         labelRenderer?.domElement &&
-        currentLabelContainer?.contains(labelRenderer.domElement)
+          cleanupLabel?.contains(labelRenderer.domElement)
       ) {
-        currentLabelContainer.removeChild(labelRenderer.domElement);
+          cleanupLabel.removeChild(labelRenderer.domElement);
       }
-
-      if (renderer) {
-        renderer.dispose();
-      }
-      if (composer) {
-        composer.dispose();
-      }
-      if (controls) {
-        controls.dispose();
-      }
-      if (scene) {
-        // Dispose environment map
-        if (scene.environment?.dispose) {
-          scene.environment.dispose();
-        }
-        scene.environment = null;
-        scene.clear();
-      }
-
-      // Remove event listener
+      renderer?.dispose();
+      composer?.dispose();
+      controls?.dispose();
+      if (scene?.environment?.dispose) scene.environment.dispose();
+      scene && (scene.environment = null);
+      scene?.clear();
       window.removeEventListener('request-fit-camera-function', handleRequestFitCameraFunction);
-
-      // Clear refs
-      rendererRef.current = null;
-      labelRendererRef.current = null;
-      composerRef.current = null;
-      outlinePassRef.current = null;
-      cameraRef.current = null;
-      sceneRef.current = null;
-      rootRef.current = null;
-
-      // Clean up debug sphere
-      if (debugSphereRef.current) {
-        debugSphereRef.current.geometry.dispose();
-        (debugSphereRef.current.material as THREE.Material).dispose();
-        debugSphereRef.current = null;
-      }
-
-      // Clean up debug wireframe
-      if (debugWireframeRef.current) {
-        debugWireframeRef.current.geometry.dispose();
-        (debugWireframeRef.current.material as THREE.Material).dispose();
-        debugWireframeRef.current = null;
-      }
-
+      rendererRef.current =
+        labelRendererRef.current =
+        composerRef.current =
+        outlinePassRef.current =
+        cameraRef.current =
+        sceneRef.current =
+        rootRef.current =
+          null;
+      debugSphereRef.current?.geometry.dispose();
+      (debugSphereRef.current?.material as THREE.Material)?.dispose();
+      debugSphereRef.current = null;
+      debugWireframeRef.current?.geometry.dispose();
+      (debugWireframeRef.current?.material as THREE.Material)?.dispose();
+      debugWireframeRef.current = null;
+        // Reset pointer-events to ensure no lingering blocking state
+        if (cleanupWrapper) {
+          cleanupWrapper.style.pointerEvents = 'auto';
+        }
+        // Remove dev-only event listeners
+        if (renderer?.domElement) {
+          const el = renderer.domElement as HTMLElement & {
+            __ml_evt_handlers__?: { [k: string]: EventListener };
+          };
+          const handlers = el.__ml_evt_handlers__;
+          if (handlers) {
+            el.removeEventListener('pointerdown', handlers.pointerdown);
+            el.removeEventListener('pointermove', handlers.pointermove);
+            el.removeEventListener('wheel', handlers.wheel);
+            delete el.__ml_evt_handlers__;
+          }
+        }
       setStats(null);
     }; // eslint-disable-line react-hooks/exhaustive-deps
   }, [
@@ -1278,6 +1386,18 @@ export default function MoleculeViewer({
     }
   }, [title, isLoading]);
 
+  // Hide the floating bottom-left title when extra info panel is open
+  useEffect(() => {
+    if (!captionRef.current) return;
+    if (isInfoOpen) {
+      captionRef.current.style.opacity = '0';
+      captionRef.current.style.visibility = 'hidden';
+    } else {
+      captionRef.current.style.visibility = 'visible';
+      captionRef.current.style.opacity = '1';
+    }
+  }, [isInfoOpen]);
+
   // The outer wrapper helps position the label absolutely
   return (
     <div
@@ -1402,50 +1522,79 @@ export default function MoleculeViewer({
           </div>
           {moleculeInfo && (
             <div
-              className={`absolute left-0 right-0 bottom-0 bg-gray-800 bg-opacity-90 text-white text-xs p-3 transition-transform duration-300 ${isInfoOpen ? 'translate-y-0' : 'translate-y-full'}`}
+              className={`absolute z-20 left-4 right-4 bottom-4 rounded-xl bg-black/60 backdrop-blur-md border border-white/10 shadow-2xl text-white text-sm sm:text-[13px] p-4 sm:p-5 transform-gpu transition-all duration-500 ease-out ${isInfoOpen ? 'translate-y-0 opacity-100 pointer-events-auto' : 'translate-y-4 opacity-0 pointer-events-none'}`}
             >
+              {/* Title inside panel */}
+              <div className="mb-2">
+                <div className="text-[11px] uppercase tracking-[0.12em] text-white/60">Molecule</div>
+                <div className="text-base sm:text-lg font-semibold leading-tight">{title}</div>
+              </div>
+              <div className="h-px bg-white/10 my-3" />
+
               {/* Common fields */}
-              {moleculeInfo.formula && <div className="mb-1">Formula: {moleculeInfo.formula}</div>}
+              {moleculeInfo.formula && (
+                <div className="mb-1">
+                  <span className="text-white/60">Formula:</span> {moleculeInfo.formula}
+                </div>
+              )}
               {moleculeInfo.formula_weight && typeof moleculeInfo.formula_weight === 'number' && (
-                <div className="mb-1">MW: {moleculeInfo.formula_weight.toFixed(2)} kDa</div>
+                <div className="mb-1">
+                  <span className="text-white/60">MW:</span> {moleculeInfo.formula_weight.toFixed(2)} kDa
+                </div>
               )}
 
               {/* Small molecule specific fields */}
               {moleculeInfo.canonical_smiles && (
-                <div className="mb-1 break-all">SMILES: {moleculeInfo.canonical_smiles}</div>
+                <div className="mb-1 break-all">
+                  <span className="text-white/60">SMILES:</span> {moleculeInfo.canonical_smiles}
+                </div>
               )}
               {moleculeInfo.inchi && (
-                <div className="mb-1 break-all">InChI: {moleculeInfo.inchi}</div>
+                <div className="mb-1 break-all">
+                  <span className="text-white/60">InChI:</span> {moleculeInfo.inchi}
+                </div>
               )}
               {moleculeInfo.synonyms && moleculeInfo.synonyms.length > 0 && (
-                <div className="mb-1">Synonyms: {moleculeInfo.synonyms.slice(0, 3).join(', ')}</div>
+                <div className="mb-1">
+                  <span className="text-white/60">Synonyms:</span> {moleculeInfo.synonyms.slice(0, 3).join(', ')}
+                </div>
               )}
 
               {/* Macromolecule specific fields */}
               {moleculeInfo.full_description && (
-                <div className="mb-1">Description: {moleculeInfo.full_description}</div>
+                <div className="mb-1">
+                  <span className="text-white/60">Description:</span> {moleculeInfo.full_description}
+                </div>
               )}
               {moleculeInfo.resolution && typeof moleculeInfo.resolution === 'number' && (
-                <div className="mb-1">Resolution: {moleculeInfo.resolution.toFixed(1)} Å</div>
+                <div className="mb-1">
+                  <span className="text-white/60">Resolution:</span> {moleculeInfo.resolution.toFixed(1)} Å
+                </div>
               )}
               {moleculeInfo.experimental_method && (
-                <div className="mb-1">Method: {moleculeInfo.experimental_method}</div>
+                <div className="mb-1">
+                  <span className="text-white/60">Method:</span> {moleculeInfo.experimental_method}
+                </div>
               )}
               {moleculeInfo.chain_count && (
-                <div className="mb-1">Chains: {moleculeInfo.chain_count}</div>
+                <div className="mb-1">
+                  <span className="text-white/60">Chains:</span> {moleculeInfo.chain_count}
+                </div>
               )}
               {moleculeInfo.organism_scientific && (
                 <div className="mb-1">
-                  Source: {moleculeInfo.organism_scientific}
+                  <span className="text-white/60">Source:</span> {moleculeInfo.organism_scientific}
                   {moleculeInfo.organism_common && ` (${moleculeInfo.organism_common})`}
                 </div>
               )}
               {moleculeInfo.keywords && moleculeInfo.keywords.length > 0 && (
-                <div className="mb-1">Keywords: {moleculeInfo.keywords.join(', ')}</div>
+                <div className="mb-1">
+                  <span className="text-white/60">Keywords:</span> {moleculeInfo.keywords.join(', ')}
+                </div>
               )}
               {moleculeInfo.publication_year && (
                 <div className="mb-1">
-                  Published: {moleculeInfo.publication_year}
+                  <span className="text-white/60">Published:</span> {moleculeInfo.publication_year}
                   {moleculeInfo.publication_doi && (
                     <a
                       href={`https://doi.org/${moleculeInfo.publication_doi}`}
