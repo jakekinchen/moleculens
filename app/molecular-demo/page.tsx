@@ -168,8 +168,8 @@ export default function MolecularDemoPage() {
               <MoleculeCard2D
                 smiles={searchResult.smiles}
                 name={searchResult.name}
-                formula={searchResult.formula}
-                molecularWeight={searchResult.molecular_weight}
+                {...(searchResult.formula && { formula: searchResult.formula })}
+                {...(searchResult.molecular_weight && { molecularWeight: searchResult.molecular_weight })}
                 onViewDetails={() => handleMoleculeSelect(searchResult)}
               />
             </div>

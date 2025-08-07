@@ -416,32 +416,54 @@ function extractRCSBInfo(meta: RCSBMetadata): MoleculeInfo {
 
   try {
     // Store the full description
-    info.full_description = meta?.struct?.title;
+    if (meta?.struct?.title) {
+      info.full_description = meta.struct.title;
+    }
 
     // Basic structure info
-    info.structure_title = meta?.struct?.title;
-    info.resolution = meta?.rcsb_entry_info?.resolution_combined?.[0];
-    info.experimental_method = meta?.rcsb_entry_info?.experimental_method;
-    info.formula_weight = meta?.rcsb_entry_info?.molecular_weight;
+    if (meta?.struct?.title) {
+      info.structure_title = meta.struct.title;
+    }
+    if (meta?.rcsb_entry_info?.resolution_combined?.[0] !== undefined) {
+      info.resolution = meta.rcsb_entry_info.resolution_combined[0];
+    }
+    if (meta?.rcsb_entry_info?.experimental_method) {
+      info.experimental_method = meta.rcsb_entry_info.experimental_method;
+    }
+    if (meta?.rcsb_entry_info?.molecular_weight !== undefined) {
+      info.formula_weight = meta.rcsb_entry_info.molecular_weight;
+    }
 
     // Chain info
-    info.chain_count = meta?.rcsb_entry_info?.deposited_polymer_entity_instance_count;
+    if (meta?.rcsb_entry_info?.deposited_polymer_entity_instance_count !== undefined) {
+      info.chain_count = meta.rcsb_entry_info.deposited_polymer_entity_instance_count;
+    }
 
     // Publication info
-    info.publication_year = meta?.rcsb_primary_citation?.year;
-    info.publication_doi = meta?.rcsb_primary_citation?.pdbx_database_id_doi;
+    if (meta?.rcsb_primary_citation?.year !== undefined) {
+      info.publication_year = meta.rcsb_primary_citation.year;
+    }
+    if (meta?.rcsb_primary_citation?.pdbx_database_id_doi) {
+      info.publication_doi = meta.rcsb_primary_citation.pdbx_database_id_doi;
+    }
 
     // Keywords and classification
     info.keywords =
       meta?.struct_keywords?.pdbx_keywords?.split(',').map((k: string) => k.trim()) || [];
 
     // Source organism
-    const source = meta?.rcsb_entity_source_organism?.[0] || {};
-    info.organism_scientific = source?.ncbi_scientific_name;
-    info.organism_common = source?.ncbi_common_name;
+    const source = meta?.rcsb_entity_source_organism?.[0];
+    if (source?.ncbi_scientific_name) {
+      info.organism_scientific = source.ncbi_scientific_name;
+    }
+    if (source?.ncbi_common_name) {
+      info.organism_common = source.ncbi_common_name;
+    }
 
     // Dates
-    info.deposition_date = meta?.rcsb_accession_info?.initial_release_date;
+    if (meta?.rcsb_accession_info?.initial_release_date) {
+      info.deposition_date = meta.rcsb_accession_info.initial_release_date;
+    }
   } catch (error) {
     console.error('[PubChemService] Error extracting RCSB info:', error);
   }
@@ -803,22 +825,32 @@ export function extractPubChemInfo(record: unknown): MoleculeInfo {
   };
 
   const formula = getProp('Molecular Formula');
-  info.formula = typeof formula === 'string' ? formula : undefined;
+  if (typeof formula === 'string') {
+    info.formula = formula;
+  }
 
   const mw = getProp('Molecular Weight');
   if (mw !== undefined) info.formula_weight = parseFloat(String(mw));
 
   const canonicalSmiles = getProp('Canonical SMILES');
-  info.canonical_smiles = typeof canonicalSmiles === 'string' ? canonicalSmiles : undefined;
+  if (typeof canonicalSmiles === 'string') {
+    info.canonical_smiles = canonicalSmiles;
+  }
 
   const isomericSmiles = getProp('Isomeric SMILES');
-  info.isomeric_smiles = typeof isomericSmiles === 'string' ? isomericSmiles : undefined;
+  if (typeof isomericSmiles === 'string') {
+    info.isomeric_smiles = isomericSmiles;
+  }
 
   const inchi = getProp('InChI');
-  info.inchi = typeof inchi === 'string' ? inchi : undefined;
+  if (typeof inchi === 'string') {
+    info.inchi = inchi;
+  }
 
   const inchikey = getProp('InChIKey');
-  info.inchikey = typeof inchikey === 'string' ? inchikey : undefined;
+  if (typeof inchikey === 'string') {
+    info.inchikey = inchikey;
+  }
 
   const fc = getProp('Formal Charge');
   if (fc !== undefined) info.formal_charge = parseInt(String(fc), 10);

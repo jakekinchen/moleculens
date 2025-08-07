@@ -15,9 +15,9 @@ export function createJob(initial: Partial<JobInfo> = {}): JobInfo {
   const job: JobInfo = {
     id,
     status: initial.status ?? 'processing',
-    progress: initial.progress,
+    ...(initial.progress !== undefined && { progress: initial.progress }),
     result: initial.result,
-    error: initial.error,
+    ...(initial.error && { error: initial.error }),
   };
   jobMap.set(id, job);
   return job;

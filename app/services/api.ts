@@ -73,6 +73,7 @@ export const fetchMoleculeData = async (
   cid: number;
   formula: string;
   info: any;
+  moleculeType?: 'small molecule' | 'macromolecule';
 }> => {
   const endpoint = `${API_BASE_URL}/prompt/fetch-molecule-data/`;
 

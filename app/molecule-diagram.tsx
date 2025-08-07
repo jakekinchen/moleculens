@@ -31,11 +31,13 @@ export default function MoleculeDiagram() {
               />
             </div>
             <div className="molecule-viewer-container">
-              <DiagramViewer
-                isLoading={isLoading}
-                diagramImage={diagramImage ?? undefined}
-                diagramPlan={diagramPlan ?? undefined}
-              />
+              {diagramPlan && (
+                <DiagramViewer
+                  isLoading={isLoading}
+                  diagramImage={diagramImage || ''}
+                  diagramPlan={diagramPlan}
+                />
+              )}
             </div>
           </div>
         </LayoutWrapper>

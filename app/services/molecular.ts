@@ -723,25 +723,18 @@ export async function calculateMolecularProperties(smiles: string) {
  * Convert our molecular search result to the existing MoleculeInfo type
  */
 export function toMoleculeInfo(result: MolecularSearchResult): MoleculeInfo {
-  return {
-    // Small molecule fields
-    canonical_smiles: result.smiles,
-    inchi: result.inchi,
-    formula: result.formula,
-    formula_weight: result.molecular_weight,
+  const info: MoleculeInfo = {
     synonyms: result.synonyms || [],
-
-    // Macromolecule fields (not applicable for small molecules)
-    full_description: undefined,
-    resolution: undefined,
-    experimental_method: undefined,
-    chain_count: undefined,
-    organism_scientific: undefined,
-    organism_common: undefined,
     keywords: [],
-    publication_year: undefined,
-    publication_doi: undefined,
   };
+
+  // Only assign properties that have values
+  if (result.smiles) info.canonical_smiles = result.smiles;
+  if (result.inchi) info.inchi = result.inchi;
+  if (result.formula) info.formula = result.formula;
+  if (result.molecular_weight) info.formula_weight = result.molecular_weight;
+
+  return info;
 }
 
 /**
@@ -813,12 +806,22 @@ export async function processMoleculeBatch(
             }
           }
 
-          return {
+          const returnObj: {
+            name: string;
+            data: MolecularSearchResult;
+            info: MoleculeInfo;
+            image2D?: Molecule2DResult;
+          } = {
             name,
             data: result.data,
             info: result.info,
-            image2D,
           };
+          
+          if (image2D) {
+            returnObj.image2D = image2D;
+          }
+          
+          return returnObj;
         } catch (error) {
           return {
             name,

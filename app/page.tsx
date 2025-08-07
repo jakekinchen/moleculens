@@ -8,11 +8,65 @@ import MoleculeViewer from './components/panels/MoleculeViewer';
 import { VisualizationOutput, HistoryEntry, MoleculeInfo } from './types';
 import { LayoutWrapper } from './components/layout/LayoutWrapper';
 import { TimeMachinePanel } from './components/panels/TimeMachinePanel';
-import { saveHistoryToSession, loadHistoryFromSession, recreateVisualizationFromHistory } from './lib/utils';
+import {
+  saveHistoryToSession,
+  loadHistoryFromSession,
+  recreateVisualizationFromHistory,
+} from './lib/utils';
+// import { loadSampleMolecules, getDefaultMolecule } from './lib/sampleMolecules';
 
 export default function HomePage() {
-  // Default molecule data (Propane)
-  const DEFAULT_PDB_DATA = `COMPND    6334
+  const [pdbData, setPdbData] = useState<string | null>(null);
+  const [sdfData, setSdfData] = useState<string | null>(null);
+  const [html, setHtml] = useState<string | null>(null);
+  const [title, setTitle] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [prompt, setPrompt] = useState('');
+  const [model, setModel] = useState<string | null>(null);
+  const [isInteractive, setIsInteractive] = useState(false);
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [isTimeMachineOpen, setIsTimeMachineOpen] = useState(false);
+  const [moleculeInfo, setMoleculeInfo] = useState<MoleculeInfo | null>(null);
+  const [moleculeType, setMoleculeType] = useState<'small molecule' | 'macromolecule' | undefined>(
+    undefined
+  );
+
+  // Load caffeine by default using API
+  useEffect(() => {
+    const loadDefaultMolecule = async () => {
+      setIsLoading(true);
+      try {
+        console.log('[Default Load] Fetching caffeine via API...');
+        const response = await fetch('/api/prompt/fetch-molecule-data', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ query: 'caffeine' }),
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          console.log('[Default Load] Caffeine data received:', data);
+          
+          setPdbData(data.pdb_data);
+          setSdfData(data.sdf);
+          setTitle(data.name);
+          setMoleculeType('small molecule');
+          setMoleculeInfo(data.info || {
+            formula: data.formula,
+            formula_weight: 194.19,
+            canonical_smiles: data.smiles,
+          });
+        } else {
+          console.error('[Default Load] API response not ok:', response.status);
+          throw new Error('Failed to fetch caffeine data');
+        }
+      } catch (error) {
+        console.error('[Default Load] Error loading caffeine:', error);
+        
+        // Fallback to hardcoded propane data if API loading fails
+        const fallbackPdbData = `COMPND    6334
 HETATM    1  C1  UNL     1       2.872  -0.474   0.000  1.00  0.00           C  
 HETATM    2  C2  UNL     1       4.171   0.269   0.000  1.00  0.00           C  
 HETATM    3  C3  UNL     1       1.558   0.243   0.000  1.00  0.00           C  
@@ -28,37 +82,42 @@ CONECT    1    2    3    4    5
 CONECT    2    6    7    8
 CONECT    3    9   10   11
 END`;
+        setPdbData(fallbackPdbData);
+        setTitle('Propane (C3H8)');
+        setMoleculeType('small molecule');
+        setMoleculeInfo({
+          formula: 'C3H8',
+          formula_weight: 44.1,
+          canonical_smiles: 'CCC',
+          synonyms: ['Propane', 'n-Propane', 'Dimethylmethane'],
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
 
-  const [pdbData, setPdbData] = useState<string | null>(DEFAULT_PDB_DATA);
-  const [sdfData, setSdfData] = useState<string | null>(null);
-  const [html, setHtml] = useState<string | null>(null);
-  const [title, setTitle] = useState<string | null>('Propane (C3H8)');
-  const [isLoading, setIsLoading] = useState(false);
-  const [prompt, setPrompt] = useState('');
-  const [model, setModel] = useState<string | null>(null);
-  const [isInteractive, setIsInteractive] = useState(false);
-  const [history, setHistory] = useState<HistoryEntry[]>([]);
-  const [isTimeMachineOpen, setIsTimeMachineOpen] = useState(false);
-  const [moleculeInfo, setMoleculeInfo] = useState<MoleculeInfo | null>({
-    formula: 'C3H8',
-    formula_weight: 44.1,
-    canonical_smiles: 'CCC',
-    synonyms: ['Propane', 'n-Propane', 'Dimethylmethane'],
-  });
+    loadDefaultMolecule();
+  }, []);
 
   const handleVisualizationUpdate = (
     pdb: string,
     htmlContent?: string,
     vizTitle?: string,
-    sdf?: string
+    sdf?: string,
+    moleculeTypeFromAPI?: 'small molecule' | 'macromolecule'
   ) => {
     setPdbData(pdb);
-    // Use explicit SDF data if provided, otherwise use heuristic
+    setMoleculeType(moleculeTypeFromAPI);
+
+    // Smart SDF data handling based on molecule type
     if (sdf && sdf.trim().length > 0) {
+      // Explicit SDF data provided
       setSdfData(sdf);
-    } else if (/V2000|M {2}END/.test(pdb)) {
+    } else if (moleculeTypeFromAPI === 'small molecule' && /V2000|M {2}END/.test(pdb)) {
+      // Only convert PDB to SDF for small molecules when it contains SDF markers
       setSdfData(pdb);
     } else {
+      // For macromolecules or when no SDF markers, don't set SDF data
       setSdfData(null);
     }
     setHtml(htmlContent ?? null);
@@ -77,13 +136,13 @@ END`;
     const entry: HistoryEntry = {
       prompt: promptText,
       timestamp: new Date(),
-      visualization,
-      title: visualization?.title,
+      ...(visualization && { visualization }),
+      ...(visualization?.title && { title: visualization.title }),
       // Store API parameters to recreate this visualization
       apiParams: {
         endpoint: '/api/prompt/fetch-molecule-data',
         query: promptText,
-        model: model || undefined,
+        ...(model && { model }),
         interactive: isInteractive,
         pubchem: true, // Currently always true in this app
       },
@@ -151,26 +210,29 @@ END`;
                 model={model}
                 isInteractive={isInteractive}
                 usePubChem={true}
-                currentHtml={html ?? undefined}
-                currentTitle={title ?? undefined}
+                {...(html && { currentHtml: html })}
+                {...(title && { currentTitle: title })}
                 onInfoUpdate={(info: unknown) => setMoleculeInfo(info as MoleculeInfo)}
-                _moleculeInfo={moleculeInfo ?? undefined}
+                {...(moleculeInfo && { _moleculeInfo: moleculeInfo })}
               />
             </div>
 
             <div className="molecule-viewer-container">
-              <MoleculeViewer
-                isLoading={isLoading}
-                pdbData={pdbData!}
-                sdfData={sdfData ?? undefined}
-                title={title!}
-                moleculeInfo={moleculeInfo ?? undefined}
-                enableRibbonOverlay={false}
-                enableHoverPause={false}
-                enableHoverGlow={false}
-                showHoverDebug={false}
-                showDebugWireframe={false}
-              />{' '}
+              {pdbData && title && (
+                <MoleculeViewer
+                  isLoading={isLoading}
+                  pdbData={pdbData}
+                  {...(sdfData && { sdfData })}
+                  title={title}
+                  {...(moleculeInfo && { moleculeInfo })}
+                  {...(moleculeType && { moleculeType })}
+                  enableRibbonOverlay={false}
+                  enableHoverPause={false}
+                  enableHoverGlow={false}
+                  showHoverDebug={false}
+                  showDebugWireframe={false}
+                />
+              )}
             </div>
           </div>
         </LayoutWrapper>

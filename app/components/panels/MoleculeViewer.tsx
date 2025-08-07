@@ -17,7 +17,23 @@ import { RGBELoader } from 'three/examples/jsm/loaders/RGBELoader';
 // @ts-expect-error - three-sdf-loader lacks types
 import { loadSDF } from 'three-sdf-loader';
 import { LoadingFacts } from './LoadingFacts';
-import { MoleculeInfo } from '@/types';
+import { MoleculeInfo, MoleculeType } from '@/types';
+import {
+  MoleculeStats,
+  PDBData,
+  Vec3,
+  Bounds,
+  boundingVolumes,
+  extractAtomPositions,
+  applyBoundsToGeometry,
+  computeStatsFromGeometry,
+  buildInstancedAtoms,
+  buildMacromoleculeVisualization,
+  buildRibbonOverlay,
+  pruneIsolatedIons,
+  selectOptimalFormat,
+  has3DCoordinates,
+} from './moleculeUtils';
 
 // Constants for animation
 const ROTATION_SPEED = 0.1; // Rotations per second
@@ -27,7 +43,7 @@ interface MoleculeViewerProps {
   isLoading?: boolean;
   pdbData: string;
   /** If provided, SDF format will be used instead of PDB */
-  sdfData?: string;
+  sdfData?: string | undefined;
   title: string;
   /**
    * Whether atom symbol labels should be rendered.  For macromolecules we
@@ -45,34 +61,8 @@ interface MoleculeViewerProps {
   showHoverDebug?: boolean;
   /** Show persistent debug wireframe of bounding sphere */
   showDebugWireframe?: boolean;
-}
-
-interface MoleculeStats {
-  atomCount: number;
-  bondCount: number;
-  averageBondLength?: number;
-  averageBondAngle?: number;
-}
-
-interface PDBAtom {
-  0: number; // x
-  1: number; // y
-  2: number; // z
-  3: number; // color index
-  4: string; // element symbol
-}
-
-interface PDBData {
-  atoms: PDBAtom[];
-}
-
-type Vec3 = [number, number, number];
-
-interface Bounds {
-  min: Vec3; // AABB min corner
-  max: Vec3; // AABB max corner
-  c: Vec3; // sphere centre
-  r: number; // sphere radius
+  /** Molecule classification from LLM for smart format selection */
+  moleculeType?: MoleculeType;
 }
 
 export default function MoleculeViewer({
@@ -87,6 +77,7 @@ export default function MoleculeViewer({
   enableHoverGlow = false,
   showHoverDebug = false,
   showDebugWireframe = false,
+  moleculeType,
 }: MoleculeViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const captionRef = useRef<HTMLDivElement | null>(null);
@@ -99,7 +90,8 @@ export default function MoleculeViewer({
   const [isHovered, setIsHovered] = useState(false);
   const [optimizedBounds, setOptimizedBounds] = useState<Bounds | null>(null);
   const optimizedBoundsRef = useRef<Bounds | null>(null);
-  const [currentFormat, setCurrentFormat] = useState<'PDB' | 'SDF'>('SDF'); // Default to SDF if available
+  // REMOVED: Manual format toggle - now uses smart automatic selection
+  // const [currentFormat, setCurrentFormat] = useState<'PDB' | 'SDF'>('SDF');
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const labelRendererRef = useRef<CSS2DRenderer | null>(null);
   const rotationRef = useRef<number>(0);
@@ -115,22 +107,9 @@ export default function MoleculeViewer({
   const composerRef = useRef<EffectComposer | null>(null);
   const outlinePassRef = useRef<OutlinePass | null>(null);
 
-  // Determine if both formats are available and set initial format
-  const bothFormatsAvailable = !!(
-    pdbData &&
-    pdbData.trim().length > 0 &&
-    sdfData &&
-    sdfData.trim().length > 0
-  );
-
-  // Set initial format preference (SDF if available, otherwise PDB)
-  useEffect(() => {
-    if (sdfData && sdfData.trim().length > 0) {
-      setCurrentFormat('SDF');
-    } else {
-      setCurrentFormat('PDB');
-    }
-  }, [pdbData, sdfData]);
+  // Smart format selection replaces manual toggle
+  // REMOVED: bothFormatsAvailable and manual format preference
+  // Format is now determined automatically by selectOptimalFormat()
 
   // Sync showAnnotations prop with ref
   useEffect(() => {
@@ -362,203 +341,6 @@ export default function MoleculeViewer({
       labelRendererRef.current = labelRenderer;
     };
 
-    const buildInstancedAtoms = (
-      sphereGeometry: THREE.IcosahedronGeometry,
-      positions: THREE.BufferAttribute,
-      colors: THREE.BufferAttribute,
-      json: PDBData,
-      enableLabels: boolean
-    ) => {
-      const material = new THREE.MeshStandardMaterial({
-        vertexColors: true,
-        metalness: 0.3,
-        roughness: 0.25,
-        envMapIntensity: 1.0,
-      });
-      const mesh = new THREE.InstancedMesh(sphereGeometry, material, positions.count);
-
-      const dummy = new THREE.Object3D();
-      const color = new THREE.Color();
-
-      for (let i = 0; i < positions.count; i++) {
-        dummy.position
-          .set(positions.getX(i), positions.getY(i), positions.getZ(i))
-          .multiplyScalar(120);
-        dummy.scale.setScalar(40);
-        dummy.updateMatrix();
-        mesh.setMatrixAt(i, dummy.matrix);
-
-        color.setRGB(colors.getX(i), colors.getY(i), colors.getZ(i));
-        mesh.setColorAt(i, color);
-
-        if (enableLabels && json.atoms[i]) {
-          const atomSymbol = json.atoms[i][4];
-          if (atomSymbol) {
-            const text = document.createElement('div');
-            text.className = 'atom-label';
-            text.textContent = atomSymbol;
-            const lum = 0.2126 * color.r + 0.7152 * color.g + 0.0722 * color.b;
-            const txtColor = lum > 0.45 ? '#000' : '#fff';
-            text.style.color = txtColor;
-            text.style.textShadow = `0 0 4px ${txtColor === '#000' ? '#fff' : '#000'}`;
-            text.style.fontSize = '14px';
-            text.style.pointerEvents = 'none';
-
-            const label = new CSS2DObject(text);
-            label.position.copy(dummy.position);
-            labelsGroup.add(label);
-          }
-        }
-      }
-
-      mesh.instanceMatrix.needsUpdate = true;
-      if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
-      root.add(mesh);
-    };
-
-    const buildPointsCloud = (positions: THREE.BufferAttribute, colors: THREE.BufferAttribute) => {
-      const geometry = new THREE.BufferGeometry();
-      geometry.setAttribute('position', positions.clone());
-      geometry.setAttribute('color', colors.clone());
-      geometry.scale(120, 120, 120);
-      const sprite = document.createElement('canvas');
-      sprite.width = sprite.height = 64;
-      const ctx = sprite.getContext('2d')!;
-      const gradient = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
-      gradient.addColorStop(0, '#ffffff');
-      gradient.addColorStop(1, '#000000');
-      ctx.fillStyle = gradient;
-      ctx.fillRect(0, 0, 64, 64);
-
-      const texture = new THREE.CanvasTexture(sprite);
-
-      const material = new THREE.PointsMaterial({
-        size: 40,
-        vertexColors: true,
-        map: texture,
-        transparent: true,
-        opacity: 0.75,
-        alphaTest: 0.1,
-        sizeAttenuation: true,
-      });
-      const points = new THREE.Points(geometry, material);
-      root.add(points);
-      if (outlinePass) {
-        outlinePass.selectedObjects = [points];
-      }
-      return points;
-    };
-
-    const buildRibbonOverlay = (pdbText: string) => {
-      const chains = new Map<string, THREE.Vector3[]>();
-      pdbText.split('\n').forEach(line => {
-        if (line.startsWith('ATOM') && line.substr(12, 4).trim() === 'CA') {
-          const chainId = line.charAt(21).trim();
-          const x = parseFloat(line.substr(30, 8));
-          const y = parseFloat(line.substr(38, 8));
-          const z = parseFloat(line.substr(46, 8));
-          if (!chains.has(chainId)) chains.set(chainId, []);
-          chains.get(chainId)!.push(new THREE.Vector3(x, y, z));
-        }
-      });
-
-      let h = 0;
-      chains.forEach(pts => {
-        if (pts.length < 4) return;
-        const curve = new THREE.CatmullRomCurve3(
-          pts.map(p => p.clone().multiplyScalar(120)),
-          false,
-          'centripetal',
-          0.5
-        );
-        const geometry = new THREE.TubeGeometry(curve, pts.length * 4, 12, 6, false);
-        const color = new THREE.Color().setHSL(h, 0.6, 0.5);
-        h += 0.3;
-        const material = new THREE.MeshStandardMaterial({
-          color,
-          transparent: true,
-          opacity: 0.6,
-          metalness: 0.0,
-          roughness: 0.5,
-          envMapIntensity: 1.0,
-        });
-        const mesh = new THREE.Mesh(geometry, material);
-        root.add(mesh);
-      });
-    };
-
-    // Helper to compute simple molecule statistics
-    const computeStatsFromGeometry = (
-      atomPositions: THREE.BufferAttribute,
-      bondPositions: THREE.BufferAttribute
-    ): MoleculeStats => {
-      const atomCount = atomPositions.count;
-      const bondCount = Math.floor(bondPositions.count / 2);
-
-      // For huge molecules just return counts
-      const MAX_STATS_ATOMS = 2000;
-      if (atomCount > MAX_STATS_ATOMS) {
-        return { atomCount, bondCount };
-      }
-
-      const atoms: THREE.Vector3[] = [];
-      const idxMap = new Map<string, number>();
-      for (let i = 0; i < atomCount; i++) {
-        const x = atomPositions.getX(i);
-        const y = atomPositions.getY(i);
-        const z = atomPositions.getZ(i);
-        atoms.push(new THREE.Vector3(x, y, z));
-        idxMap.set(`${x.toFixed(3)},${y.toFixed(3)},${z.toFixed(3)}`, i);
-      }
-
-      const neighbors: number[][] = Array.from({ length: atomCount }, () => []);
-      let totalLength = 0;
-
-      for (let i = 0; i < bondPositions.count; i += 2) {
-        const sx = bondPositions.getX(i);
-        const sy = bondPositions.getY(i);
-        const sz = bondPositions.getZ(i);
-        const ex = bondPositions.getX(i + 1);
-        const ey = bondPositions.getY(i + 1);
-        const ez = bondPositions.getZ(i + 1);
-
-        const start = new THREE.Vector3(sx, sy, sz);
-        const end = new THREE.Vector3(ex, ey, ez);
-        totalLength += start.distanceTo(end);
-
-        const si = idxMap.get(`${sx.toFixed(3)},${sy.toFixed(3)},${sz.toFixed(3)}`);
-        const ei = idxMap.get(`${ex.toFixed(3)},${ey.toFixed(3)},${ez.toFixed(3)}`);
-        if (si !== undefined && ei !== undefined) {
-          neighbors[si].push(ei);
-          neighbors[ei].push(si);
-        }
-      }
-
-      const averageBondLength = bondCount ? totalLength / bondCount : undefined;
-
-      let angleSum = 0;
-      let angleCount = 0;
-      for (let i = 0; i < atomCount; i++) {
-        const nbs = neighbors[i];
-        if (nbs.length < 2) continue;
-        for (let a = 0; a < nbs.length; a++) {
-          for (let b = a + 1; b < nbs.length; b++) {
-            const va = atoms[nbs[a]].clone().sub(atoms[i]);
-            const vb = atoms[nbs[b]].clone().sub(atoms[i]);
-            const ang = va.angleTo(vb);
-            if (!isNaN(ang)) {
-              angleSum += ang;
-              angleCount++;
-            }
-          }
-        }
-      }
-
-      const averageBondAngle = angleCount ? (angleSum / angleCount) * (180 / Math.PI) : undefined;
-
-      return { atomCount, bondCount, averageBondLength, averageBondAngle };
-    };
-
     // PDB loader
     const loadMolecule = () => {
       // Clear any existing molecule from the scene and reset transformations
@@ -571,25 +353,56 @@ export default function MoleculeViewer({
       controls.reset();
       setOptimizedBounds(null); // drop bounds from the previous molecule
       optimizedBoundsRef.current = null;
-      // Use the selected format if both are available, otherwise use what's available
+      // Use smart format selection based on molecule type and data quality
       const sdfAvailable = sdfData && sdfData.trim().length > 0;
       const pdbAvailable = pdbData && pdbData.trim().length > 0;
-      const shouldUseSDF = sdfAvailable && (currentFormat === 'SDF' || !pdbAvailable);
+      const optimalFormat = selectOptimalFormat(pdbData, sdfData, moleculeType);
+      const shouldUseSDF = optimalFormat === 'SDF';
+
+      console.log('=== SMART FORMAT SELECTION ===');
+      console.log('Molecule type:', moleculeType);
+      console.log('PDB available:', pdbAvailable);
+      console.log('SDF available:', sdfAvailable);
+      console.log('Selected format:', optimalFormat);
+
+      // For small molecules using PDB→SDF conversion, ensure we have proper SDF data
+      const needsPDBToSDFConversion =
+        moleculeType === 'small molecule' &&
+        shouldUseSDF &&
+        !sdfAvailable &&
+        pdbAvailable &&
+        has3DCoordinates(pdbData);
 
       if (shouldUseSDF) {
         console.log('=== ATTEMPTING SDF LOADING ===');
-        console.log('SDF data available:', !!sdfData);
-        console.log('SDF data length:', sdfData?.length);
+
+        // Determine which SDF data to use
+        let sdfToUse = sdfData;
+        if (needsPDBToSDFConversion) {
+          console.log('Converting 3D PDB to SDF format for small molecule');
+          sdfToUse = pdbData; // Use PDB data as SDF (when it contains V2000 markers)
+        }
+
+        console.log(
+          'SDF data source:',
+          needsPDBToSDFConversion ? 'PDB→SDF conversion' : 'Direct SDF'
+        );
+        console.log('SDF data available:', !!sdfToUse);
+        console.log('SDF data length:', sdfToUse?.length);
+
         try {
           // Use enhanced SDF loading with three-center bond detection for diborane-like molecules
-          const mol = loadSDF(sdfData!, {
+          const mol = loadSDF(sdfToUse!, {
             showHydrogen: true, // Show hydrogens for better molecular structure understanding
-            addThreeCenterBonds: true, // Enable three-center bond detection (helps with diborane)
+            addThreeCenterBonds: false, // Enable three-center bond detection (helps with diborane)
             layout: 'auto', // Auto-detect 2D vs 3D layout
             renderMultipleBonds: true,
             attachAtomData: true,
             attachProperties: true,
           });
+
+          // Remove isolated ions after loading
+          pruneIsolatedIons(mol);
 
           // Count atoms and bonds for debugging and fallback detection
           let atomCount = 0;
@@ -741,16 +554,14 @@ export default function MoleculeViewer({
 
           const atomPositions = extractAtomPositions(mol);
           if (atomPositions && atomPositions.length > 0) {
-            const bounds = boundingVolumes(atomPositions);
-
             if (process.env.NODE_ENV !== 'production') {
-           //   console.log('=== OPTIMIZED BOUNDING CALCULATION (SDF) ===');
+              //   console.log('=== OPTIMIZED BOUNDING CALCULATION (SDF) ===');
               console.log('Atom count:', atomPositions.length / 3);
-            //  console.log('AABB min:', bounds.min);
-            //  console.log('AABB max:', bounds.max);
-            //  console.log('Sphere center:', bounds.c);
-            //  console.log('Sphere radius:', bounds.r.toFixed(2));
-            //  console.log('============================================');
+              //  console.log('AABB min:', bounds.min);
+              //  console.log('AABB max:', bounds.max);
+              //  console.log('Sphere center:', bounds.c);
+              //  console.log('Sphere radius:', bounds.r.toFixed(2));
+              //  console.log('============================================');
             }
 
             // Use optimized camera fitting
@@ -883,7 +694,9 @@ export default function MoleculeViewer({
               positions as THREE.BufferAttribute,
               colors as THREE.BufferAttribute,
               json,
-              enableLabelsThisModel
+              enableLabelsThisModel,
+              labelsGroup,
+              root
             );
 
             // Bonds for instanced meshes
@@ -914,13 +727,20 @@ export default function MoleculeViewer({
               root.add(bondMesh);
             }
           } else {
-            buildPointsCloud(positions as THREE.BufferAttribute, colors as THREE.BufferAttribute);
+            // Use enhanced macromolecule visualization for very large structures
+            buildMacromoleculeVisualization(
+              positions as THREE.BufferAttribute,
+              colors as THREE.BufferAttribute,
+              pdbData,
+              root,
+              outlinePassRef.current
+            );
           }
 
           // Only draw ribbon overlay for large macromolecules (heuristic)
           const MIN_ATOMS_FOR_RIBBON = 500;
           if (enableRibbonOverlay && positions.count > MIN_ATOMS_FOR_RIBBON) {
-            buildRibbonOverlay(pdbData);
+            buildRibbonOverlay(pdbData, root);
           }
 
           // Compute basic statistics for info panel
@@ -958,144 +778,11 @@ export default function MoleculeViewer({
           const bounds = boundingVolumes(posArray);
           applyBoundsToGeometry(geometryAtoms, bounds);
 
-
-
           // Use optimized camera fitting
           fitCameraToMoleculeOptimized(posArray);
           ensureTitleVisible(); // Ensure title is visible after PDB loading
         }
       );
-    };
-
-    /**
-     * Optimized O(N) bounding volume calculation using Ritter's algorithm
-     * Calculates both AABB and near-minimal bounding sphere in a single pass
-     */
-    const boundingVolumes = (pos: Float32Array, vdwRadius?: Float32Array): Bounds => {
-      if (pos.length < 3) {
-        return { min: [0, 0, 0], max: [0, 0, 0], c: [0, 0, 0], r: 0 };
-      }
-
-      // Initialize with first atom
-      let minX = pos[0],
-        minY = pos[1],
-        minZ = pos[2];
-      let maxX = pos[0],
-        maxY = pos[1],
-        maxZ = pos[2];
-
-      // Ritter seed: p = first atom, find q farthest from p
-      let qIdx = 0,
-        maxD = 0;
-      for (let i = 3; i < pos.length; i += 3) {
-        const dx = pos[i] - pos[0],
-          dy = pos[i + 1] - pos[1],
-          dz = pos[i + 2] - pos[2],
-          d2 = dx * dx + dy * dy + dz * dz;
-        if (d2 > maxD) {
-          maxD = d2;
-          qIdx = i;
-        }
-      }
-
-      // r = farthest from q
-      let rIdx = 0;
-      maxD = 0;
-      const qx = pos[qIdx],
-        qy = pos[qIdx + 1],
-        qz = pos[qIdx + 2];
-      for (let i = 0; i < pos.length; i += 3) {
-        const dx = pos[i] - qx,
-          dy = pos[i + 1] - qy,
-          dz = pos[i + 2] - qz,
-          d2 = dx * dx + dy * dy + dz * dz;
-        if (d2 > maxD) {
-          maxD = d2;
-          rIdx = i;
-        }
-      }
-
-      // Initial sphere
-      let cx = (qx + pos[rIdx]) * 0.5,
-        cy = (qy + pos[rIdx + 1]) * 0.5,
-        cz = (qz + pos[rIdx + 2]) * 0.5,
-        r = Math.sqrt(maxD) * 0.5;
-
-      // Single pass – update AABB and, if needed, expand the sphere
-      for (let i = 0; i < pos.length; i += 3) {
-        const x = pos[i],
-          y = pos[i + 1],
-          z = pos[i + 2];
-
-        // Update AABB
-        if (x < minX) minX = x;
-        if (y < minY) minY = y;
-        if (z < minZ) minZ = z;
-        if (x > maxX) maxX = x;
-        if (y > maxY) maxY = y;
-        if (z > maxZ) maxZ = z;
-
-        // Expand sphere only when outside. Δ = position – centre
-        const dx = x - cx,
-          dy = y - cy,
-          dz = z - cz;
-        const dist = Math.hypot(dx, dy, dz);
-        let atomR = 0;
-        if (vdwRadius) atomR = vdwRadius[i / 3]; // optional van‑der‑Waals padding
-
-        if (dist + atomR > r) {
-          // shift centre towards point, enlarge radius
-          const newR = (r + dist + atomR) * 0.5;
-          const k = (newR - r) / dist;
-          cx += dx * k;
-          cy += dy * k;
-          cz += dz * k;
-          r = newR;
-        }
-      }
-
-      return {
-        min: [minX, minY, minZ],
-        max: [maxX, maxY, maxZ],
-        c: [cx, cy, cz],
-        r,
-      };
-    };
-
-    /**
-     * Extract atom positions from a Three.js object hierarchy
-     * Used for SDF molecules where positions are embedded in mesh objects
-     */
-    const extractAtomPositions = (object: THREE.Object3D): Float32Array | null => {
-      const positions: number[] = [];
-
-      object.traverse((obj: THREE.Object3D) => {
-        if ((obj as THREE.Mesh).isMesh) {
-          const mesh = obj as THREE.Mesh;
-          const geoType = mesh.geometry?.type;
-
-          // Look for sphere geometries (atoms)
-          if (geoType === 'SphereGeometry' || geoType === 'IcosahedronGeometry') {
-            const pos = mesh.position;
-            positions.push(pos.x, pos.y, pos.z);
-          }
-        }
-      });
-
-      return positions.length > 0 ? new Float32Array(positions) : null;
-    };
-
-    /**
-     * Apply optimized bounding volumes to Three.js BufferGeometry
-     * This enables faster raycasting and collision detection
-     */
-    const applyBoundsToGeometry = (geometry: THREE.BufferGeometry, bounds: Bounds) => {
-      // Assign for internal ray‑caster pruning
-      geometry.boundingBox = new THREE.Box3(
-        new THREE.Vector3(...bounds.min),
-        new THREE.Vector3(...bounds.max)
-      );
-      geometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(...bounds.c), bounds.r);
     };
 
     /** Ensure the molecule title is visible */
@@ -1231,7 +918,7 @@ export default function MoleculeViewer({
 
         // Ensure the world matrix is up to date
         root.updateMatrixWorld(true);
-        
+
         // Apply the molecule's current world transformation to the sphere
         sphere.applyMatrix4(root.matrixWorld);
 
@@ -1381,12 +1068,12 @@ export default function MoleculeViewer({
     isLoading,
     pdbData,
     sdfData,
+    moleculeType,
     enableRibbonOverlay,
     showAnnotations,
     enableHoverPause,
     enableHoverGlow,
     showDebugWireframe,
-    currentFormat,
   ]); // Dependencies for useEffect
 
   const toggleFullscreen = async () => {
@@ -1416,11 +1103,8 @@ export default function MoleculeViewer({
     setIsInfoOpen(!isInfoOpen);
   };
 
-  const toggleFormat = () => {
-    if (bothFormatsAvailable) {
-      setCurrentFormat(currentFormat === 'PDB' ? 'SDF' : 'PDB');
-    }
-  };
+  // REMOVED: Manual format toggle - now handled automatically
+  // const toggleFormat = () => { ... }
 
   // Store camera and scene references for hover detection
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
@@ -1490,7 +1174,10 @@ export default function MoleculeViewer({
       if (process.env.NODE_ENV !== 'production') {
         console.log('=== HOVER DEBUG INFO ===');
         console.log('Rotation (Y):', rootRef.current.rotation.y.toFixed(3));
-        console.log('Sphere center:', sphere.center.toArray().map(v => v.toFixed(2)));
+        console.log(
+          'Sphere center:',
+          sphere.center.toArray().map(v => v.toFixed(2))
+        );
         console.log('Sphere radius:', sphere.radius.toFixed(2));
         console.log('========================');
       }
@@ -1529,8 +1216,6 @@ export default function MoleculeViewer({
     setIsHovered(false);
   };
 
-
-
   useEffect(() => {
     const handleFullscreenChange = () => {
       setIsFullscreen(!!document.fullscreenElement);
@@ -1549,7 +1234,7 @@ export default function MoleculeViewer({
       // Only handle spacebar if no text input is focused
       if (event.code === 'Space') {
         const activeElement = document.activeElement;
-        const isTextInputFocused = 
+        const isTextInputFocused =
           activeElement instanceof HTMLInputElement ||
           activeElement instanceof HTMLTextAreaElement ||
           activeElement instanceof HTMLSelectElement ||
@@ -1702,8 +1387,9 @@ export default function MoleculeViewer({
                 </svg>
               )}
             </button>
+            {/* REMOVED: Manual format toggle - now uses smart automatic selection */}
             {/* Format toggle button - only show if both PDB and SDF are available */}
-            {bothFormatsAvailable && (
+            {/* {bothFormatsAvailable && (
               <button
                 onClick={toggleFormat}
                 className="p-2 rounded-lg text-white hover:text-gray-300
@@ -1712,7 +1398,7 @@ export default function MoleculeViewer({
               >
                 <div className="text-xs font-mono font-bold">{currentFormat}</div>
               </button>
-            )}
+            )} */}
           </div>
           {moleculeInfo && (
             <div

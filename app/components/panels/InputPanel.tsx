@@ -14,7 +14,13 @@ const VIS_BARS = 8; // Number of audio visualization bars
 // Note: VisualizationData interface removed as it's not used in this component
 
 interface InputPanelProps {
-  onVisualizationUpdate: (pdbData: string, html?: string, title?: string, sdfData?: string) => void;
+  onVisualizationUpdate: (
+    pdbData: string,
+    html?: string,
+    title?: string,
+    sdfData?: string,
+    moleculeType?: 'small molecule' | 'macromolecule'
+  ) => void;
   onLoadingChange: (isLoading: boolean) => void;
   currentPrompt: string;
   onPromptChange: (prompt: string) => void;
@@ -22,7 +28,7 @@ interface InputPanelProps {
   model: string | null;
   isInteractive: boolean;
   usePubChem?: boolean;
-  currentHtml?: string;
+  currentHtml?: string | undefined;
   currentTitle?: string;
   onInfoUpdate?: (info: unknown) => void;
   _moleculeInfo?: MoleculeInfo; // Add molecule info prop
@@ -612,18 +618,21 @@ export const InputPanel: React.FC<InputPanelProps> = ({
         setCurrentMoleculeData(response);
         setCurrentScript(moleculeDataString);
         setTitle(name);
-        // Pass both formats to allow the viewer to choose the best one
-        onVisualizationUpdate(pdbData || '', undefined, name ?? undefined, sdfData);
+        // Pass both formats and molecule type to allow smart format selection
+        onVisualizationUpdate(pdbData || '', undefined, name ?? undefined, sdfData, 'small molecule');
         if (onInfoUpdate) onInfoUpdate(info);
-        
+
         // Create visualization output with API parameters for history
         const visualizationOutput: VisualizationOutput = {
           pdb_data: moleculeDataString,
-          sdf: sdfData,
           html: '',
-          title: name
+          title: name,
         };
-        
+
+        if (sdfData) {
+          visualizationOutput.sdf = sdfData;
+        }
+
         onPromptSubmit(currentPrompt, visualizationOutput);
         setIsLoading(false);
         onLoadingChange(false);

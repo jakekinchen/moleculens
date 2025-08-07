@@ -136,3 +136,6 @@ export interface DiagramResponse {
   job_id?: string;
   error?: string;
 }
+
+export type MoleculeType = 'small molecule' | 'macromolecule';
+export type FormatType = 'PDB' | 'SDF';
