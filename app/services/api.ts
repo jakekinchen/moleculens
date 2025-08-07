@@ -123,7 +123,7 @@ export const fetchMoleculeData = async (
       }
       if (result.pdb_data) {
         console.log('PDB Data Length:', result.pdb_data.length);
-        console.log('PDB Data Preview (first 500 chars):', result.pdb_data.substring(0, 500));
+        console.log('PDB Data Preview (first 1500 chars):', result.pdb_data.substring(0, 1500));
       }
       console.log('Additional Info:', result.info);
       console.log('================================');

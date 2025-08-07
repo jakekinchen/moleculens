@@ -8,7 +8,7 @@ import MoleculeViewer from './components/panels/MoleculeViewer';
 import { VisualizationOutput, HistoryEntry, MoleculeInfo } from './types';
 import { LayoutWrapper } from './components/layout/LayoutWrapper';
 import { TimeMachinePanel } from './components/panels/TimeMachinePanel';
-import { saveHistoryToSession, loadHistoryFromSession } from './lib/utils';
+import { saveHistoryToSession, loadHistoryFromSession, recreateVisualizationFromHistory } from './lib/utils';
 
 export default function HomePage() {
   // Default molecule data (Propane)
@@ -79,18 +79,53 @@ END`;
       timestamp: new Date(),
       visualization,
       title: visualization?.title,
+      // Store API parameters to recreate this visualization
+      apiParams: {
+        endpoint: '/api/prompt/fetch-molecule-data',
+        query: promptText,
+        model: model || undefined,
+        interactive: isInteractive,
+        pubchem: true, // Currently always true in this app
+      },
     };
     setHistory(prev => [entry, ...prev]);
   };
 
-  const handleSelectHistory = (entry: HistoryEntry) => {
-    if (entry.visualization) {
-      setPdbData(entry.visualization.pdb_data);
-      setHtml(entry.visualization.html);
-      setTitle(entry.visualization.title ?? null);
-    }
-    setPrompt(entry.prompt);
+  const handleSelectHistory = async (entry: HistoryEntry) => {
     setIsTimeMachineOpen(false);
+    setPrompt(entry.prompt);
+    setIsLoading(true);
+
+    try {
+      // Try to recreate visualization from API parameters first
+      if (entry.apiParams) {
+        const recreatedEntry = await recreateVisualizationFromHistory(entry);
+        if (recreatedEntry?.visualization) {
+          setPdbData(recreatedEntry.visualization.pdb_data);
+          setHtml(recreatedEntry.visualization.html);
+          setTitle(recreatedEntry.visualization.title ?? null);
+          setIsLoading(false);
+          return;
+        }
+      }
+
+      // Fallback to stored visualization data if recreation fails
+      if (entry.visualization) {
+        setPdbData(entry.visualization.pdb_data);
+        setHtml(entry.visualization.html);
+        setTitle(entry.visualization.title ?? null);
+      }
+    } catch (error) {
+      console.error('Failed to recreate visualization:', error);
+      // Fallback to stored data
+      if (entry.visualization) {
+        setPdbData(entry.visualization.pdb_data);
+        setHtml(entry.visualization.html);
+        setTitle(entry.visualization.title ?? null);
+      }
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -131,7 +166,11 @@ END`;
                 title={title!}
                 moleculeInfo={moleculeInfo ?? undefined}
                 enableRibbonOverlay={false}
-              />
+                enableHoverPause={false}
+                enableHoverGlow={false}
+                showHoverDebug={false}
+                showDebugWireframe={false}
+              />{' '}
             </div>
           </div>
         </LayoutWrapper>

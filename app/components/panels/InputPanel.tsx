@@ -79,7 +79,7 @@ export const InputPanel: React.FC<InputPanelProps> = ({
   // Ref for smooth audio visualization
   const prevAudioValuesRef = useRef<number[]>([]);
 
-  const [_mimeType, setMimeType] = useState<string>('audio/webm');
+  const [, setMimeType] = useState<string>('audio/webm');
 
   // Function to properly resize textarea accounting for padding
   const resizeTextarea = () => {
@@ -615,7 +615,16 @@ export const InputPanel: React.FC<InputPanelProps> = ({
         // Pass both formats to allow the viewer to choose the best one
         onVisualizationUpdate(pdbData || '', undefined, name ?? undefined, sdfData);
         if (onInfoUpdate) onInfoUpdate(info);
-        onPromptSubmit(currentPrompt, { pdb_data: moleculeDataString, html: '', title: name });
+        
+        // Create visualization output with API parameters for history
+        const visualizationOutput: VisualizationOutput = {
+          pdb_data: moleculeDataString,
+          sdf: sdfData,
+          html: '',
+          title: name
+        };
+        
+        onPromptSubmit(currentPrompt, visualizationOutput);
         setIsLoading(false);
         onLoadingChange(false);
       } else {

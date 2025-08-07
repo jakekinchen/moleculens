@@ -64,6 +64,114 @@ export interface Molecule2DResult {
 
 const PUBCHEM_BASE = 'https://pubchem.ncbi.nlm.nih.gov/rest/pug';
 const PUBCHEM_COMPOUND = `${PUBCHEM_BASE}/compound`;
+const NIST_CGI = 'https://webbook.nist.gov/cgi/cbook.cgi';
+const CAS_RE = /^\d{2,7}-\d{2}-\d$/;
+
+// ============================================================================
+// 3D STRUCTURE FETCHING HELPERS
+// ============================================================================
+
+/**
+ * Check if SDF data contains 3D coordinates
+ */
+function isSdf3D(text: string): boolean {
+  const head = text.slice(0, 400).toUpperCase();
+  if (head.includes(' 2D')) return false;
+  if (head.includes(' 3D') || head.includes(' V3000')) return true;
+
+  // look at first ~25 atom lines to check for non-zero Z coordinates
+  return text
+    .split(/\n/)
+    .slice(4, 30)
+    .some(l => {
+      const z = parseFloat(l.slice(20, 30)); // correct V2000 Z column
+      return !Number.isNaN(z) && Math.abs(z) > 1e-3;
+    });
+}
+
+/**
+ * Try to fetch 3D SDF from NCI/CACTUS
+ */
+async function cactus3d(id: number | string): Promise<string | null> {
+  const idPath =
+    typeof id === 'number' || /^\d+$/.test(String(id))
+      ? `cid/${id}`
+      : encodeURIComponent(String(id));
+
+  const tryFetch = async (get3d: boolean): Promise<string | null> => {
+    const suffix = get3d ? '?format=sdf&get3d=true' : '?format=sdf';
+    const url = `https://cactus.nci.nih.gov/chemical/structure/${idPath}/file${suffix}`;
+    
+    console.log(`[3D Fetch] CACTUS attempt: ${url}`);
+    const r = await fetch(url, { headers: { 'User-Agent': 'moleculens/1.0' } });
+    console.log(`[3D Fetch] CACTUS response: ${r.status} ${r.headers.get('content-type')}`);
+    
+    // Only return null on 404 (not found); 500 means try without 3D
+    if (r.status === 404) return null;
+    if (!r.ok && r.status !== 500) return null;
+    const txt = await r.text();
+    return isSdf3D(txt) ? txt : null;
+  };
+
+  // Try with 3D first, then fallback to regular SDF
+  let txt = await tryFetch(true);
+  if (!txt) txt = await tryFetch(false);
+  return txt;
+}
+
+/**
+ * Get CAS number from PubChem
+ */
+async function casFromPubChem(cid: number): Promise<string | null> {
+  const r = await fetch(`${PUBCHEM_COMPOUND}/cid/${cid}/synonyms/JSON`, {
+    headers: { 'User-Agent': 'moleculens/1.0' },
+  });
+  console.log(`[3D Fetch] CAS lookup response: ${r.status}`);
+  if (!r.ok) return null;
+  const syns = (await r.json())?.InformationList?.Information?.[0]?.Synonym as string[] | undefined;
+  return syns?.find(s => CAS_RE.test(s)) ?? null;
+}
+
+/**
+ * Fetch 3D SDF from NIST
+ */
+async function nist3dSdf(cas: string): Promise<string | null> {
+  const res = await fetch(`${NIST_CGI}?Str3File=C${cas.replace(/-/g, '')}`, {
+    headers: { 'User-Agent': 'moleculens/1.0' },
+  });
+  console.log(`[3D Fetch] NIST response: ${res.status} ${res.headers.get('content-type')}`);
+  if (!res.ok) return null;
+  const text = await res.text();
+  return isSdf3D(text) ? text : null;
+}
+
+/**
+ * Get SMILES notation for a compound from PubChem
+ */
+async function getSmiles(cid: number): Promise<string | null> {
+  try {
+    const props = 'CanonicalSMILES,IsomericSMILES,InChI';
+    const r = await fetch(`${PUBCHEM_COMPOUND}/cid/${cid}/property/${props}/JSON`);
+    if (!r.ok) return null;
+
+    const p = (await r.json())?.PropertyTable?.Properties?.[0] ?? {};
+    return p.CanonicalSMILES || p.IsomericSMILES || p.InChI || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Sanitize chemical names for consistent external service queries
+ */
+function sanitizeName(name: string): string {
+  return name
+    .normalize('NFKD') // decompose accents, NB-spaces, etc.
+    .replace(/[\u00AD\u2010-\u2015\u202F]/g, '-') // soft-hyphens & fancy dashes → -
+    .replace(/[^\u0020-\u007F]/g, '') // strip non-ASCII leftovers
+    .replace(/\s+/g, ' ') // collapse whitespace
+    .trim();
+}
 
 /**
  * Search for molecules by name using PubChem
@@ -94,21 +202,26 @@ export async function searchMoleculeByName(name: string): Promise<MolecularSearc
 }
 
 /**
- * Get comprehensive molecule data by PubChem CID
+ * Get comprehensive molecule data by PubChem CID with 3D structure prioritization
  */
 export async function getMoleculeDataByCID(cid: number): Promise<MolecularSearchResult> {
   try {
-    // Get multiple properties in parallel
-    const [propsResponse, sdfResponse, synonymsResponse] = await Promise.all([
+    console.log(`[3D Fetch] Starting enhanced 3D fetch for CID ${cid}`);
+
+    // Get properties and synonyms first (not SDF yet)
+    const [propsResponse, synonymsResponse] = await Promise.all([
       fetch(
         `${PUBCHEM_COMPOUND}/cid/${cid}/property/MolecularFormula,MolecularWeight,CanonicalSMILES,InChI/JSON`
       ),
-      fetch(`${PUBCHEM_COMPOUND}/cid/${cid}/SDF`),
       fetch(`${PUBCHEM_COMPOUND}/cid/${cid}/synonyms/JSON`),
     ]);
 
     const propsData = await propsResponse.json();
-    const sdfData = await sdfResponse.text();
+    const props = propsData.PropertyTable?.Properties?.[0];
+
+    if (!props) {
+      throw new Error('No molecular properties found');
+    }
 
     let synonyms: string[] = [];
     try {
@@ -118,17 +231,133 @@ export async function getMoleculeDataByCID(cid: number): Promise<MolecularSearch
       // Synonyms are optional
     }
 
-    const props = propsData.PropertyTable?.Properties?.[0];
+    const moleculeName = synonyms[0] || `CID ${cid}`;
 
-    if (!props) {
-      throw new Error('No molecular properties found');
+    // ============================================================================
+    // COMPREHENSIVE 3D STRUCTURE FETCHING CASCADE
+    // ============================================================================
+    
+    let sdfData = '';
+    
+    console.log(`[3D Fetch] Step 1: Trying PubChem 3D endpoint for ${moleculeName}`);
+    // 1. PubChem 3D endpoint
+    try {
+      const r = await fetch(`${PUBCHEM_COMPOUND}/cid/${cid}/SDF?record_type=3d`);
+      if (r.ok) {
+        const txt = await r.text();
+        if (isSdf3D(txt)) {
+          console.log(`[3D Fetch] ✓ Got 3D data from PubChem 3D endpoint`);
+          sdfData = txt;
+        } else {
+          console.warn(`[3D Fetch] PubChem returned planar coordinates for ${moleculeName}; trying other sources`);
+        }
+      }
+    } catch (error) {
+      console.warn(`[3D Fetch] PubChem 3D endpoint failed:`, error);
+    }
+
+    // 2. NIST via CAS
+    if (!sdfData) {
+      console.log(`[3D Fetch] Step 2: Trying NIST via CAS for ${moleculeName}`);
+      const cas = await casFromPubChem(cid);
+      if (cas) {
+        const txt = await nist3dSdf(cas);
+        if (txt && isSdf3D(txt)) {
+          console.log(`[3D Fetch] ✓ Got 3D data from NIST (CAS ${cas})`);
+          sdfData = txt;
+        }
+      }
+    }
+
+    // 3. CACTUS via CID
+    if (!sdfData) {
+      console.log(`[3D Fetch] Step 3: Trying CACTUS via CID for ${moleculeName}`);
+      const txt = await cactus3d(cid);
+      if (txt) {
+        console.log(`[3D Fetch] ✓ Got 3D data from CACTUS via CID`);
+        sdfData = txt;
+      }
+    }
+
+    // 4. CACTUS via SMILES
+    if (!sdfData) {
+      console.log(`[3D Fetch] Step 4: Trying CACTUS via SMILES for ${moleculeName}`);
+      const smiles = await getSmiles(cid);
+      if (smiles) {
+        const txt = await cactus3d(smiles);
+        if (txt) {
+          console.log(`[3D Fetch] ✓ Got 3D data from CACTUS via SMILES`);
+          sdfData = txt;
+        }
+      }
+    }
+
+    // 5. CACTUS via molecule name
+    if (!sdfData) {
+      console.log(`[3D Fetch] Step 5: Trying CACTUS via name for ${moleculeName}`);
+      const txt = await cactus3d(sanitizeName(moleculeName));
+      if (txt) {
+        console.log(`[3D Fetch] ✓ Got 3D data from CACTUS via name`);
+        sdfData = txt;
+      }
+    }
+
+    // 6. PubChem computed conformers
+    if (!sdfData) {
+      console.log(`[3D Fetch] Step 6: Trying PubChem computed conformers for ${moleculeName}`);
+      try {
+        const conformerUrl = `${PUBCHEM_COMPOUND}/cid/${cid}/record/SDF?record_type=3d&response_type=save`;
+        const r = await fetch(conformerUrl, { headers: { 'User-Agent': 'moleculens/1.0' } });
+        console.log(`[3D Fetch] Conformer response: ${r.status} ${r.headers.get('content-type')}`);
+        if (r.ok) {
+          const txt = await r.text();
+          console.log(`[3D Fetch] ✓ Got computed 3D from conformer endpoint`);
+          sdfData = txt;
+        }
+      } catch (error) {
+        console.warn(`[3D Fetch] Conformer endpoint failed:`, error);
+      }
+    }
+
+    // 7. PubChem 2D fallback
+    if (!sdfData) {
+      console.log(`[3D Fetch] Step 7: Falling back to PubChem 2D for ${moleculeName}`);
+      try {
+        const r2 = await fetch(`${PUBCHEM_COMPOUND}/cid/${cid}/SDF?record_type=2d`);
+        if (r2.ok) {
+          sdfData = await r2.text();
+          if (!isSdf3D(sdfData)) {
+            console.warn(`[3D Fetch] ⚠️ No 3D structure found for ${moleculeName}. Using 2D representation.`);
+          }
+        } else {
+          // Final fallback - default SDF endpoint
+          const r3 = await fetch(`${PUBCHEM_COMPOUND}/cid/${cid}/SDF`);
+          if (r3.ok) {
+            sdfData = await r3.text();
+            console.warn(`[3D Fetch] ⚠️ Using default SDF endpoint as final fallback`);
+          }
+        }
+      } catch (error) {
+        console.error(`[3D Fetch] All SDF fetch attempts failed:`, error);
+      }
+    }
+
+    if (!sdfData) {
+      throw new Error(`Unable to obtain SDF data for "${moleculeName}" (CID ${cid})`);
+    }
+
+    // Log final result
+    const is3D = isSdf3D(sdfData);
+    console.log(`[3D Fetch] Final result for ${moleculeName}: ${is3D ? '3D' : '2D'} structure`);
+    if (is3D) {
+      console.log(`[3D Fetch] ✓ Successfully obtained 3D coordinates`);
     }
 
     // Convert SDF to PDB using our conversion function
     const pdbData = await convertSDFToPDB(sdfData);
 
     return {
-      name: synonyms[0] || `CID ${cid}`,
+      name: moleculeName,
       cid,
       smiles: props.CanonicalSMILES,
       inchi: props.InChI,
@@ -239,22 +468,26 @@ export async function fetchAlphaFoldModel(uniprotId: string): Promise<StructureD
 // ============================================================================
 
 /**
- * Convert SDF data to PDB format using client-side processing
+ * Convert SDF data to PDB format with proper bond parsing
  */
 export async function convertSDFToPDB(sdfData: string): Promise<string> {
   try {
-    // Simple SDF to PDB conversion - extract coordinates and create basic PDB format
-    const lines = sdfData.split('\n');
+    console.log('[SDF→PDB] Starting enhanced SDF to PDB conversion with bond parsing');
+    
+    const lines = sdfData.split(/\r?\n/); // Handle both \r\n and \n
     let atomCount = 0;
-    // let bondCount = 0; // Not used in current implementation
+    let bondCount = 0;
 
     // Find the counts line (usually line 3)
+    let countsLineIndex = -1;
     for (let i = 0; i < Math.min(5, lines.length); i++) {
       const line = lines[i].trim();
       if (line.match(/^\s*\d+\s+\d+/)) {
         const parts = line.split(/\s+/);
         atomCount = parseInt(parts[0]);
-        // bondCount = parseInt(parts[1]); // Not used in current implementation
+        bondCount = parseInt(parts[1]);
+        countsLineIndex = i;
+        console.log(`[SDF→PDB] Found counts: ${atomCount} atoms, ${bondCount} bonds`);
         break;
       }
     }
@@ -263,26 +496,17 @@ export async function convertSDFToPDB(sdfData: string): Promise<string> {
       throw new Error('No atoms found in SDF data');
     }
 
-    // Convert to PDB format
+    // Convert to PDB format with proper header
     let pdbContent = 'HEADER    MOLECULE CONVERTED FROM SDF\n';
     pdbContent += 'COMPND    UNNAMED\n';
-    pdbContent += 'AUTHOR    MOLECULENS CLIENT-SIDE CONVERTER\n';
+    pdbContent += 'AUTHOR    MOLECULENS CLIENT-SIDE CONVERTER WITH BOND PARSING\n';
 
-    // Find atom block start
-    let atomBlockStart = -1;
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i].trim();
-      if (line.match(/^\s*\d+\s+\d+/) && line.split(/\s+/).length >= 2) {
-        atomBlockStart = i + 1;
-        break;
-      }
-    }
+    // Parse atoms starting from line after counts
+    const atomBlockStart = countsLineIndex + 1;
+    const atoms: Array<{ x: number; y: number; z: number; element: string; atomNum: number }> = [];
 
-    if (atomBlockStart === -1) {
-      throw new Error('Could not find atom block in SDF data');
-    }
-
-    // Parse atoms
+    console.log(`[SDF→PDB] Parsing ${atomCount} atoms starting from line ${atomBlockStart}`);
+    
     for (let i = 0; i < atomCount && atomBlockStart + i < lines.length; i++) {
       const line = lines[atomBlockStart + i].trim();
       const parts = line.split(/\s+/);
@@ -292,8 +516,12 @@ export async function convertSDFToPDB(sdfData: string): Promise<string> {
         const y = parseFloat(parts[1]);
         const z = parseFloat(parts[2]);
         const element = parts[3] || 'C';
+        const atomNum = i + 1;
 
-        const atomNum = (i + 1).toString().padStart(5, ' ');
+        // Store atom info for bond processing
+        atoms.push({ x, y, z, element, atomNum });
+
+        const atomNumStr = atomNum.toString().padStart(5, ' ');
         const atomName = element.padEnd(4, ' ');
         const resName = 'MOL'.padEnd(3, ' ');
         const chainId = 'A';
@@ -305,11 +533,89 @@ export async function convertSDFToPDB(sdfData: string): Promise<string> {
         const tempFactor = '0.00';
         const elementStr = element.padStart(2, ' ');
 
-        pdbContent += `ATOM  ${atomNum} ${atomName} ${resName} ${chainId}${resNum}    ${xStr}${yStr}${zStr}  ${occupancy}  ${tempFactor}          ${elementStr}\n`;
+        pdbContent += `ATOM  ${atomNumStr} ${atomName} ${resName} ${chainId}${resNum}    ${xStr}${yStr}${zStr}  ${occupancy}  ${tempFactor}          ${elementStr}\n`;
       }
     }
 
+    // ============================================================================
+    // PARSE BOND TABLE AND GENERATE CONECT RECORDS
+    // ============================================================================
+    
+    const bondBlockStart = atomBlockStart + atomCount;
+    const connections: Map<number, Set<number>> = new Map();
+    
+    console.log(`[SDF→PDB] Parsing ${bondCount} bonds starting from line ${bondBlockStart}`);
+    
+    // Initialize connection map
+    for (let i = 1; i <= atomCount; i++) {
+      connections.set(i, new Set());
+    }
+
+    let bondsProcessed = 0;
+    for (let i = 0; i < bondCount && bondBlockStart + i < lines.length; i++) {
+      const line = lines[bondBlockStart + i].trim();
+      
+      // Skip empty lines and metadata
+      if (!line || line.startsWith('M ') || line.startsWith('>')) {
+        continue;
+      }
+      
+      const parts = line.split(/\s+/);
+      
+      if (parts.length >= 3) {
+        const atom1 = parseInt(parts[0]);
+        const atom2 = parseInt(parts[1]);
+      //  const bondType = parseInt(parts[2]) || 1; // Default to single bond
+        
+        // Validate atom indices
+        if (atom1 >= 1 && atom1 <= atomCount && atom2 >= 1 && atom2 <= atomCount && atom1 !== atom2) {
+          connections.get(atom1)?.add(atom2);
+          connections.get(atom2)?.add(atom1);
+          bondsProcessed++;
+          
+          // if (bondsProcessed <= 10) { // Log first few bonds for debugging
+          //   const elem1 = atoms[atom1 - 1]?.element || '?';
+          //   const elem2 = atoms[atom2 - 1]?.element || '?';
+          //   console.log(`[SDF→PDB] Bond ${bondsProcessed}: ${elem1}${atom1}-${elem2}${atom2} (type ${bondType})`);
+          // }
+        } else {
+          console.warn(`[SDF→PDB] Invalid bond: ${atom1}-${atom2} (atom count: ${atomCount})`);
+        }
+      }
+    }
+
+    console.log(`[SDF→PDB] Successfully processed ${bondsProcessed} bonds`);
+
+    // Generate CONECT records
+    let conectCount = 0;
+    for (const [atomNum, connectedAtoms] of connections) {
+      if (connectedAtoms.size > 0) {
+        // Convert Set to sorted array for consistent output
+        const sortedConnections = Array.from(connectedAtoms).sort((a, b) => a - b);
+        
+        // PDB CONECT format can handle up to 4 connections per line
+        // If more than 4, create multiple CONECT records
+        for (let i = 0; i < sortedConnections.length; i += 4) {
+          const batch = sortedConnections.slice(i, i + 4);
+          const atomNumStr = atomNum.toString().padStart(5, ' ');
+          
+          let conectLine = `CONECT${atomNumStr}`;
+          for (const connectedAtom of batch) {
+            conectLine += connectedAtom.toString().padStart(5, ' ');
+          }
+          
+          pdbContent += conectLine + '\n';
+          conectCount++;
+        }
+      }
+    }
+
+    console.log(`[SDF→PDB] Generated ${conectCount} CONECT records`);
+
     pdbContent += 'END\n';
+
+    // Log summary
+    console.log(`[SDF→PDB] Conversion complete: ${atomCount} atoms, ${bondsProcessed} bonds, ${conectCount} CONECT records`);
 
     return pdbContent;
   } catch (error) {

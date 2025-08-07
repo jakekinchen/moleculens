@@ -31,6 +31,16 @@ export interface HistoryEntry {
   timestamp: Date;
   visualization?: VisualizationOutput;
   title?: string;
+  // API parameters to recreate the visualization
+  apiParams?: {
+    endpoint: string;
+    query: string;
+    model?: string;
+    interactive?: boolean;
+    pubchem?: boolean;
+    cid?: number;
+    moleculeName?: string;
+  };
 }
 
 export interface QuizQuestion {

@@ -37,6 +37,14 @@ interface MoleculeViewerProps {
   moleculeInfo?: MoleculeInfo | null;
   /** Enable experimental ribbon/cartoon rendering */
   enableRibbonOverlay?: boolean;
+  /** Enable pause rotation on hover over molecule sphere */
+  enableHoverPause?: boolean;
+  /** Enable golden glow effect when hovering over molecule */
+  enableHoverGlow?: boolean;
+  /** Show debug visualization of hover boundary (development only) */
+  showHoverDebug?: boolean;
+  /** Show persistent debug wireframe of bounding sphere */
+  showDebugWireframe?: boolean;
 }
 
 interface MoleculeStats {
@@ -58,6 +66,15 @@ interface PDBData {
   atoms: PDBAtom[];
 }
 
+type Vec3 = [number, number, number];
+
+interface Bounds {
+  min: Vec3; // AABB min corner
+  max: Vec3; // AABB max corner
+  c: Vec3; // sphere centre
+  r: number; // sphere radius
+}
+
 export default function MoleculeViewer({
   isLoading = false,
   pdbData,
@@ -66,6 +83,10 @@ export default function MoleculeViewer({
   showAnnotations = true,
   moleculeInfo,
   enableRibbonOverlay = false,
+  enableHoverPause = true,
+  enableHoverGlow = false,
+  showHoverDebug = false,
+  showDebugWireframe = false,
 }: MoleculeViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const captionRef = useRef<HTMLDivElement | null>(null);
@@ -76,6 +97,9 @@ export default function MoleculeViewer({
   const [isInfoOpen, setIsInfoOpen] = useState(false);
   const [stats, setStats] = useState<MoleculeStats | null>(null);
   const [isHovered, setIsHovered] = useState(false);
+  const [optimizedBounds, setOptimizedBounds] = useState<Bounds | null>(null);
+  const optimizedBoundsRef = useRef<Bounds | null>(null);
+  const [currentFormat, setCurrentFormat] = useState<'PDB' | 'SDF'>('SDF'); // Default to SDF if available
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const labelRendererRef = useRef<CSS2DRenderer | null>(null);
   const rotationRef = useRef<number>(0);
@@ -90,6 +114,23 @@ export default function MoleculeViewer({
 
   const composerRef = useRef<EffectComposer | null>(null);
   const outlinePassRef = useRef<OutlinePass | null>(null);
+
+  // Determine if both formats are available and set initial format
+  const bothFormatsAvailable = !!(
+    pdbData &&
+    pdbData.trim().length > 0 &&
+    sdfData &&
+    sdfData.trim().length > 0
+  );
+
+  // Set initial format preference (SDF if available, otherwise PDB)
+  useEffect(() => {
+    if (sdfData && sdfData.trim().length > 0) {
+      setCurrentFormat('SDF');
+    } else {
+      setCurrentFormat('PDB');
+    }
+  }, [pdbData, sdfData]);
 
   // Sync showAnnotations prop with ref
   useEffect(() => {
@@ -204,11 +245,13 @@ export default function MoleculeViewer({
       // Scene
       scene = new THREE.Scene();
       scene.background = new THREE.Color(0x18223b);
+      sceneRef.current = scene;
 
       // Camera
       const rect = wrapperRef.current.getBoundingClientRect();
       camera = new THREE.PerspectiveCamera(50, rect.width / rect.height, 1, 5000);
       camera.position.z = 800;
+      cameraRef.current = camera;
 
       // Ambient + hemi lights for base illumination
       scene.add(new THREE.AmbientLight(0xffffff, 0.6));
@@ -228,6 +271,7 @@ export default function MoleculeViewer({
       labelsGroup = new THREE.Group();
       root.add(labelsGroup);
       scene.add(root);
+      rootRef.current = root;
 
       // Renderer
       renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -517,10 +561,22 @@ export default function MoleculeViewer({
 
     // PDB loader
     const loadMolecule = () => {
-      // Detect SDF format: if sdfData prop supplied or pdbData doesn't start with 'COMPND'/'HEADER'
+      // Clear any existing molecule from the scene and reset transformations
+      if (root) {
+        root.clear();
+        root.add(labelsGroup);
+        root.position.set(0, 0, 0); // reset any translation left by a prior model
+        root.rotation.set(0, 0, 0);
+      }
+      controls.reset();
+      setOptimizedBounds(null); // drop bounds from the previous molecule
+      optimizedBoundsRef.current = null;
+      // Use the selected format if both are available, otherwise use what's available
       const sdfAvailable = sdfData && sdfData.trim().length > 0;
+      const pdbAvailable = pdbData && pdbData.trim().length > 0;
+      const shouldUseSDF = sdfAvailable && (currentFormat === 'SDF' || !pdbAvailable);
 
-      if (sdfAvailable) {
+      if (shouldUseSDF) {
         console.log('=== ATTEMPTING SDF LOADING ===');
         console.log('SDF data available:', !!sdfData);
         console.log('SDF data length:', sdfData?.length);
@@ -668,8 +724,45 @@ export default function MoleculeViewer({
             });
           }
 
-          recenterRoot(); // <-- NEW
-          fitCameraToMolecule();
+          // recenter is now handled once inside fitCameraToMoleculeOptimized
+
+          // Use optimized bounding calculation for SDF molecules
+          // Debug: log what geometry types the SDF loader created
+          if (process.env.NODE_ENV !== 'production') {
+            console.log('=== SDF GEOMETRY DEBUG ===');
+            mol.traverse((obj: THREE.Object3D) => {
+              if ((obj as THREE.Mesh).isMesh) {
+                const mesh = obj as THREE.Mesh;
+                console.log('Found mesh with geometry type:', mesh.geometry?.type);
+              }
+            });
+            console.log('========================');
+          }
+
+          const atomPositions = extractAtomPositions(mol);
+          if (atomPositions && atomPositions.length > 0) {
+            const bounds = boundingVolumes(atomPositions);
+
+            if (process.env.NODE_ENV !== 'production') {
+           //   console.log('=== OPTIMIZED BOUNDING CALCULATION (SDF) ===');
+              console.log('Atom count:', atomPositions.length / 3);
+            //  console.log('AABB min:', bounds.min);
+            //  console.log('AABB max:', bounds.max);
+            //  console.log('Sphere center:', bounds.c);
+            //  console.log('Sphere radius:', bounds.r.toFixed(2));
+            //  console.log('============================================');
+            }
+
+            // Use optimized camera fitting
+            fitCameraToMoleculeOptimized(atomPositions);
+          } else {
+            if (process.env.NODE_ENV !== 'production') {
+              console.log('SDF: No atom positions extracted, using fallback method');
+            }
+            // Fallback to standard method
+            fitCameraToMolecule();
+          }
+
           labelsGroup.visible = config.enableAnnotations;
           setStats(null);
           ensureTitleVisible(); // Ensure title is visible after SDF loading
@@ -824,7 +917,9 @@ export default function MoleculeViewer({
             buildPointsCloud(positions as THREE.BufferAttribute, colors as THREE.BufferAttribute);
           }
 
-          if (enableRibbonOverlay) {
+          // Only draw ribbon overlay for large macromolecules (heuristic)
+          const MIN_ATOMS_FOR_RIBBON = 500;
+          if (enableRibbonOverlay && positions.count > MIN_ATOMS_FOR_RIBBON) {
             buildRibbonOverlay(pdbData);
           }
 
@@ -845,12 +940,162 @@ export default function MoleculeViewer({
           URL.revokeObjectURL(pdbUrl);
           labelsGroup.visible = config.enableAnnotations;
 
-          // Fit camera to the molecule after loading
-          recenterRoot(); // <-- NEW
-          fitCameraToMolecule();
+          // Fit camera to the molecule after loading using optimized bounds
+          // recenter is now handled once inside fitCameraToMoleculeOptimized
+
+          // Use optimized bounding calculation for better performance
+          const atomPositions = geometryAtoms.getAttribute('position') as THREE.BufferAttribute;
+          const posArray = new Float32Array(atomPositions.array as ArrayLike<number>);
+
+          // CRITICAL: Scale positions by the same factor used for mesh rendering (120x)
+          // Without this, camera fitting calculates bounds on Å-scale data while meshes are 120x larger,
+          // causing camera to be positioned inside the molecule
+          for (let i = 0; i < posArray.length; i++) {
+            posArray[i] *= 120;
+          }
+
+          // Apply optimized bounds to geometry for faster raycasting
+          const bounds = boundingVolumes(posArray);
+          applyBoundsToGeometry(geometryAtoms, bounds);
+
+
+
+          // Use optimized camera fitting
+          fitCameraToMoleculeOptimized(posArray);
           ensureTitleVisible(); // Ensure title is visible after PDB loading
         }
       );
+    };
+
+    /**
+     * Optimized O(N) bounding volume calculation using Ritter's algorithm
+     * Calculates both AABB and near-minimal bounding sphere in a single pass
+     */
+    const boundingVolumes = (pos: Float32Array, vdwRadius?: Float32Array): Bounds => {
+      if (pos.length < 3) {
+        return { min: [0, 0, 0], max: [0, 0, 0], c: [0, 0, 0], r: 0 };
+      }
+
+      // Initialize with first atom
+      let minX = pos[0],
+        minY = pos[1],
+        minZ = pos[2];
+      let maxX = pos[0],
+        maxY = pos[1],
+        maxZ = pos[2];
+
+      // Ritter seed: p = first atom, find q farthest from p
+      let qIdx = 0,
+        maxD = 0;
+      for (let i = 3; i < pos.length; i += 3) {
+        const dx = pos[i] - pos[0],
+          dy = pos[i + 1] - pos[1],
+          dz = pos[i + 2] - pos[2],
+          d2 = dx * dx + dy * dy + dz * dz;
+        if (d2 > maxD) {
+          maxD = d2;
+          qIdx = i;
+        }
+      }
+
+      // r = farthest from q
+      let rIdx = 0;
+      maxD = 0;
+      const qx = pos[qIdx],
+        qy = pos[qIdx + 1],
+        qz = pos[qIdx + 2];
+      for (let i = 0; i < pos.length; i += 3) {
+        const dx = pos[i] - qx,
+          dy = pos[i + 1] - qy,
+          dz = pos[i + 2] - qz,
+          d2 = dx * dx + dy * dy + dz * dz;
+        if (d2 > maxD) {
+          maxD = d2;
+          rIdx = i;
+        }
+      }
+
+      // Initial sphere
+      let cx = (qx + pos[rIdx]) * 0.5,
+        cy = (qy + pos[rIdx + 1]) * 0.5,
+        cz = (qz + pos[rIdx + 2]) * 0.5,
+        r = Math.sqrt(maxD) * 0.5;
+
+      // Single pass – update AABB and, if needed, expand the sphere
+      for (let i = 0; i < pos.length; i += 3) {
+        const x = pos[i],
+          y = pos[i + 1],
+          z = pos[i + 2];
+
+        // Update AABB
+        if (x < minX) minX = x;
+        if (y < minY) minY = y;
+        if (z < minZ) minZ = z;
+        if (x > maxX) maxX = x;
+        if (y > maxY) maxY = y;
+        if (z > maxZ) maxZ = z;
+
+        // Expand sphere only when outside. Δ = position – centre
+        const dx = x - cx,
+          dy = y - cy,
+          dz = z - cz;
+        const dist = Math.hypot(dx, dy, dz);
+        let atomR = 0;
+        if (vdwRadius) atomR = vdwRadius[i / 3]; // optional van‑der‑Waals padding
+
+        if (dist + atomR > r) {
+          // shift centre towards point, enlarge radius
+          const newR = (r + dist + atomR) * 0.5;
+          const k = (newR - r) / dist;
+          cx += dx * k;
+          cy += dy * k;
+          cz += dz * k;
+          r = newR;
+        }
+      }
+
+      return {
+        min: [minX, minY, minZ],
+        max: [maxX, maxY, maxZ],
+        c: [cx, cy, cz],
+        r,
+      };
+    };
+
+    /**
+     * Extract atom positions from a Three.js object hierarchy
+     * Used for SDF molecules where positions are embedded in mesh objects
+     */
+    const extractAtomPositions = (object: THREE.Object3D): Float32Array | null => {
+      const positions: number[] = [];
+
+      object.traverse((obj: THREE.Object3D) => {
+        if ((obj as THREE.Mesh).isMesh) {
+          const mesh = obj as THREE.Mesh;
+          const geoType = mesh.geometry?.type;
+
+          // Look for sphere geometries (atoms)
+          if (geoType === 'SphereGeometry' || geoType === 'IcosahedronGeometry') {
+            const pos = mesh.position;
+            positions.push(pos.x, pos.y, pos.z);
+          }
+        }
+      });
+
+      return positions.length > 0 ? new Float32Array(positions) : null;
+    };
+
+    /**
+     * Apply optimized bounding volumes to Three.js BufferGeometry
+     * This enables faster raycasting and collision detection
+     */
+    const applyBoundsToGeometry = (geometry: THREE.BufferGeometry, bounds: Bounds) => {
+      // Assign for internal ray‑caster pruning
+      geometry.boundingBox = new THREE.Box3(
+        new THREE.Vector3(...bounds.min),
+        new THREE.Vector3(...bounds.max)
+      );
+      geometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(...bounds.c), bounds.r);
     };
 
     /** Ensure the molecule title is visible */
@@ -862,22 +1107,64 @@ export default function MoleculeViewer({
       }
     };
 
-    /** Move the geometric centre of `root` to (0,0,0) and keep OrbitControls happy */
-    const recenterRoot = () => {
-      const box = new THREE.Box3().setFromObject(root);
-      const center = box.getCenter(new THREE.Vector3());
+    /**
+     * Enhanced camera fitting using optimized bounding calculation
+     * Uses atom positions directly for more accurate bounds
+     */
+    const fitCameraToMoleculeOptimized = (
+      atomPositions: Float32Array,
+      margin = 1.15,
+      vdwRadii?: Float32Array
+    ) => {
+      if (!root || atomPositions.length < 3) return;
 
-      // Shift every child back so that the overall centre sits on the world origin
-      root.children.forEach(child => child.position.sub(center));
+      /* ---------- reset rotation / zoom inherited from previous model ---------- */
+      controls.reset();
+      camera.zoom = 1;
+      camera.updateProjectionMatrix();
+      rotationRef.current = 0;
+      currentRotationSpeedRef.current = 0;
+      root.rotation.set(0, 0, 0);
 
-      // Ensure OrbitControls continues to rotate around the new pivot
+      /* ---------- compute optimized bounding volumes ---------- */
+      const bounds = boundingVolumes(atomPositions, vdwRadii);
+      const center = new THREE.Vector3(...bounds.c);
+      const radius = bounds.r;
+
+      /* ---------- re–centre children (pivot = molecule centre) ---------- */
+      root.children.forEach(child => child.position.sub(center)); // ← was root.position.sub(center)
+
+      /* ---------- place camera ---------- */
+      const fov = (camera.fov * Math.PI) / 180; // vertical FOV in rad
+      const dist = (radius * margin) / Math.sin(fov / 2); // basic geometry
+      camera.position.set(0, 0, dist);
+      camera.near = dist * 0.01;
+      camera.far = dist * 10;
+      camera.updateProjectionMatrix();
+
+      /* ---------- orbit controls ---------- */
       controls.target.set(0, 0, 0);
+      controls.minDistance = dist * 0.2;
+      controls.maxDistance = dist * 5;
       controls.update();
+      controls.saveState(); // new baseline
+
+      /* ---------- adjusted bounds for hover‑pause ---------- */
+      const centredBounds: Bounds = {
+        min: bounds.min.map((v, i) => v - bounds.c[i]) as Vec3,
+        max: bounds.max.map((v, i) => v - bounds.c[i]) as Vec3,
+        c: [0, 0, 0],
+        r: bounds.r,
+      };
+      setOptimizedBounds(centredBounds);
+      optimizedBoundsRef.current = centredBounds;
+      return centredBounds;
     };
 
     /**
      * Re-fit camera & controls so the current molecule fully occupies the viewport.
      * Works for both Å-scale (small ligands) and 100 Å proteins without manual tweaks.
+     * Fallback method using Three.js built-in bounding calculation
      */
     const fitCameraToMolecule = (margin = 1.15 /* > 1 adds visual breathing room */) => {
       if (!root) return;
@@ -895,8 +1182,8 @@ export default function MoleculeViewer({
       new THREE.Box3().setFromObject(root).getBoundingSphere(sphere);
       const { center, radius } = sphere;
 
-      /* ---------- move everything so that centre sits on (0,0,0) ---------- */
-      root.position.sub(center); // translate children instead of camera
+      /* ---------- re–centre children (pivot = molecule centre) ---------- */
+      root.children.forEach(child => child.position.sub(center)); // ← pivot fix
 
       /* ---------- place camera ---------- */
       const fov = (camera.fov * Math.PI) / 180; // vertical FOV in rad
@@ -933,6 +1220,49 @@ export default function MoleculeViewer({
 
         // Directly set the root rotation to rotationRef
         root.rotation.y = rotationRef.current;
+      }
+
+      // Update debug wireframe to show current bounding sphere position
+      if (showDebugWireframe && scene && root && optimizedBoundsRef.current) {
+        // Create or update the debug wireframe sphere
+        const sphere = new THREE.Sphere();
+        sphere.center.set(...optimizedBoundsRef.current.c);
+        sphere.radius = optimizedBoundsRef.current.r;
+
+        // Ensure the world matrix is up to date
+        root.updateMatrixWorld(true);
+        
+        // Apply the molecule's current world transformation to the sphere
+        sphere.applyMatrix4(root.matrixWorld);
+
+        if (!debugWireframeRef.current) {
+          // Create new wireframe
+          const geometry = new THREE.SphereGeometry(sphere.radius, 32, 16);
+          const material = new THREE.MeshBasicMaterial({
+            color: 0x00ff00,
+            wireframe: true,
+            transparent: true,
+            opacity: 0.6,
+          });
+          debugWireframeRef.current = new THREE.Mesh(geometry, material);
+          scene.add(debugWireframeRef.current);
+        } else {
+          // Update existing wireframe
+          const geometry = debugWireframeRef.current.geometry as THREE.SphereGeometry;
+          if (Math.abs(geometry.parameters.radius - sphere.radius) > 0.1) {
+            // Radius changed significantly, recreate geometry
+            geometry.dispose();
+            debugWireframeRef.current.geometry = new THREE.SphereGeometry(sphere.radius, 32, 16);
+          }
+          // Update position
+          debugWireframeRef.current.position.copy(sphere.center);
+        }
+      } else if (debugWireframeRef.current && scene) {
+        // Remove wireframe if disabled or no bounds available
+        scene.remove(debugWireframeRef.current);
+        debugWireframeRef.current.geometry.dispose();
+        (debugWireframeRef.current.material as THREE.Material).dispose();
+        debugWireframeRef.current = null;
       }
 
       // Always update controls and render the scene
@@ -986,19 +1316,19 @@ export default function MoleculeViewer({
       /* ------------------------------------------ */
 
       // Store ref values at the start of cleanup
-      const currentContainerRef = containerRef.current;
-      const currentLabelContainerRef = labelContainerRef.current;
+      const currentContainer = containerRef.current;
+      const currentLabelContainer = labelContainerRef.current;
 
       // Safely remove renderer elements
-      if (renderer?.domElement && currentContainerRef?.contains(renderer.domElement)) {
-        currentContainerRef.removeChild(renderer.domElement);
+      if (renderer?.domElement && currentContainer?.contains(renderer.domElement)) {
+        currentContainer.removeChild(renderer.domElement);
       }
       if (
         showAnnotationsRef.current &&
         labelRenderer?.domElement &&
-        currentLabelContainerRef?.contains(labelRenderer.domElement)
+        currentLabelContainer?.contains(labelRenderer.domElement)
       ) {
-        currentLabelContainerRef.removeChild(labelRenderer.domElement);
+        currentLabelContainer.removeChild(labelRenderer.domElement);
       }
 
       if (renderer) {
@@ -1027,9 +1357,37 @@ export default function MoleculeViewer({
       labelRendererRef.current = null;
       composerRef.current = null;
       outlinePassRef.current = null;
+      cameraRef.current = null;
+      sceneRef.current = null;
+      rootRef.current = null;
+
+      // Clean up debug sphere
+      if (debugSphereRef.current) {
+        debugSphereRef.current.geometry.dispose();
+        (debugSphereRef.current.material as THREE.Material).dispose();
+        debugSphereRef.current = null;
+      }
+
+      // Clean up debug wireframe
+      if (debugWireframeRef.current) {
+        debugWireframeRef.current.geometry.dispose();
+        (debugWireframeRef.current.material as THREE.Material).dispose();
+        debugWireframeRef.current = null;
+      }
+
       setStats(null);
     }; // eslint-disable-line react-hooks/exhaustive-deps
-  }, [isLoading, pdbData, sdfData, enableRibbonOverlay, showAnnotations]); // Dependencies for useEffect
+  }, [
+    isLoading,
+    pdbData,
+    sdfData,
+    enableRibbonOverlay,
+    showAnnotations,
+    enableHoverPause,
+    enableHoverGlow,
+    showDebugWireframe,
+    currentFormat,
+  ]); // Dependencies for useEffect
 
   const toggleFullscreen = async () => {
     if (!wrapperRef.current) return;
@@ -1058,15 +1416,120 @@ export default function MoleculeViewer({
     setIsInfoOpen(!isInfoOpen);
   };
 
-  const handleMouseEnter = () => {
-    isHoveredRef.current = true;
-    setIsHovered(true);
+  const toggleFormat = () => {
+    if (bothFormatsAvailable) {
+      setCurrentFormat(currentFormat === 'PDB' ? 'SDF' : 'PDB');
+    }
   };
 
+  // Store camera and scene references for hover detection
+  const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
+  const sceneRef = useRef<THREE.Scene | null>(null);
+  const rootRef = useRef<THREE.Group | null>(null);
+  const debugSphereRef = useRef<THREE.Mesh | null>(null);
+  const debugWireframeRef = useRef<THREE.Mesh | null>(null);
+
+  // Precise molecule hover detection using raycasting
+  const handleMouseMove = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (!enableHoverPause || !containerRef.current || !cameraRef.current || !rootRef.current)
+      return;
+
+    // Safety check: don't run hover detection during loading or if scene isn't ready
+    if (isLoading || !rendererRef.current || rootRef.current.children.length === 0) return;
+
+    const rect = containerRef.current.getBoundingClientRect();
+    const mouse = new THREE.Vector2(
+      ((event.clientX - rect.left) / rect.width) * 2 - 1,
+      -((event.clientY - rect.top) / rect.height) * 2 + 1
+    );
+
+    const raycaster = new THREE.Raycaster();
+    raycaster.setFromCamera(mouse, cameraRef.current);
+
+    const sphere = new THREE.Sphere();
+
+    if (optimizedBounds) {
+      // Create a sphere from the pre-calculated, object-local bounds
+      sphere.center.set(...optimizedBounds.c);
+      sphere.radius = optimizedBounds.r;
+
+      // Ensure the world matrix is up to date before applying transformation
+      // This is critical because we directly modify root.rotation.y in the animation loop
+      rootRef.current.updateMatrixWorld(true);
+
+      // Apply the molecule's current world transformation to the sphere
+      // This ensures the bounding sphere rotates with the molecule
+      sphere.applyMatrix4(rootRef.current.matrixWorld);
+    } else {
+      // Fallback for safety, though it shouldn't be needed
+      new THREE.Box3().setFromObject(rootRef.current).getBoundingSphere(sphere);
+    }
+
+    // Debug: log sphere info and optionally visualize
+    if (showHoverDebug && sceneRef.current) {
+      // Add debug sphere visualization if enabled
+      if (debugSphereRef.current) {
+        sceneRef.current.remove(debugSphereRef.current);
+        debugSphereRef.current.geometry.dispose();
+        (debugSphereRef.current.material as THREE.Material).dispose();
+      }
+
+      // Create new debug sphere that shows the rotated bounding sphere
+      const debugGeometry = new THREE.SphereGeometry(sphere.radius, 32, 32);
+      const debugMaterial = new THREE.MeshBasicMaterial({
+        color: 0xff0000,
+        wireframe: true,
+        transparent: true,
+        opacity: 0.3,
+      });
+      debugSphereRef.current = new THREE.Mesh(debugGeometry, debugMaterial);
+      debugSphereRef.current.position.copy(sphere.center);
+      sceneRef.current.add(debugSphereRef.current);
+
+      // Log debug info about the rotated bounds
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('=== HOVER DEBUG INFO ===');
+        console.log('Rotation (Y):', rootRef.current.rotation.y.toFixed(3));
+        console.log('Sphere center:', sphere.center.toArray().map(v => v.toFixed(2)));
+        console.log('Sphere radius:', sphere.radius.toFixed(2));
+        console.log('========================');
+      }
+    }
+
+    // Check if ray intersects with the bounding sphere
+    const ray = raycaster.ray;
+    const isHoveringMolecule = ray.intersectsSphere(sphere);
+
+    setIsHovered(isHoveringMolecule);
+  };
+
+  useEffect(() => {
+    isHoveredRef.current = isHovered;
+
+    // Apply glow effect if enabled
+    if (enableHoverGlow && outlinePassRef.current) {
+      if (isHovered) {
+        // Add steady golden glow (no pulsing)
+        outlinePassRef.current.selectedObjects = [rootRef.current!];
+        outlinePassRef.current.edgeStrength = 2.5;
+        outlinePassRef.current.edgeGlow = 0.8;
+        outlinePassRef.current.edgeThickness = 1.5;
+        outlinePassRef.current.pulsePeriod = 0; // No pulsing - steady glow
+        outlinePassRef.current.visibleEdgeColor.setHex(0xffd700); // Golden color
+        outlinePassRef.current.hiddenEdgeColor.setHex(0xffa500); // Slightly darker gold for hidden edges
+      } else {
+        // Remove glow
+        outlinePassRef.current.selectedObjects = [];
+      }
+    }
+  }, [isHovered, enableHoverGlow]);
+
   const handleMouseLeave = () => {
-    isHoveredRef.current = false;
+    if (!enableHoverPause) return;
     setIsHovered(false);
   };
+
+
 
   useEffect(() => {
     const handleFullscreenChange = () => {
@@ -1079,6 +1542,32 @@ export default function MoleculeViewer({
       document.removeEventListener('fullscreenchange', handleFullscreenChange);
     };
   }, []);
+
+  // Add spacebar pause/unpause functionality
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Only handle spacebar if no text input is focused
+      if (event.code === 'Space') {
+        const activeElement = document.activeElement;
+        const isTextInputFocused = 
+          activeElement instanceof HTMLInputElement ||
+          activeElement instanceof HTMLTextAreaElement ||
+          activeElement instanceof HTMLSelectElement ||
+          (activeElement && activeElement.getAttribute('contenteditable') === 'true');
+
+        if (!isTextInputFocused) {
+          event.preventDefault(); // Prevent page scroll
+          togglePause();
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []); // Empty dependency array since togglePause doesn't depend on props/state
   useEffect(() => {
     if (!wrapperRef.current) return;
     const wrapper = wrapperRef.current;
@@ -1109,7 +1598,7 @@ export default function MoleculeViewer({
     <div
       ref={wrapperRef}
       className="relative w-full h-full rounded-xl overflow-hidden bg-[#050505] flex flex-col"
-      onMouseEnter={handleMouseEnter}
+      onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
     >
       {/* Loading Facts overlay */}
@@ -1213,6 +1702,17 @@ export default function MoleculeViewer({
                 </svg>
               )}
             </button>
+            {/* Format toggle button - only show if both PDB and SDF are available */}
+            {bothFormatsAvailable && (
+              <button
+                onClick={toggleFormat}
+                className="p-2 rounded-lg text-white hover:text-gray-300
+                          transition-colors duration-200 bg-gray-700 bg-opacity-50"
+                title={`Switch to ${currentFormat === 'PDB' ? 'SDF' : 'PDB'} format`}
+              >
+                <div className="text-xs font-mono font-bold">{currentFormat}</div>
+              </button>
+            )}
           </div>
           {moleculeInfo && (
             <div

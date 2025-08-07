@@ -263,6 +263,8 @@ export default function MolecularDemoPage() {
                         sdfData={selectedMolecule.sdf_data}
                         title={selectedMolecule.name}
                         showAnnotations={true}
+                        enableHoverPause={false}
+                        showDebugWireframe={false}
                       />
                     </div>
                   ) : (
