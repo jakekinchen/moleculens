@@ -28,6 +28,7 @@ interface InputPanelProps {
   model: string | null;
   isInteractive: boolean;
   usePubChem?: boolean;
+  alwaysFindMolecule?: boolean;
   currentHtml?: string | undefined;
   currentTitle?: string;
   onInfoUpdate?: (info: unknown) => void;
@@ -53,6 +54,7 @@ export const InputPanel: React.FC<InputPanelProps> = ({
   model,
   isInteractive,
   usePubChem,
+  alwaysFindMolecule,
   currentHtml: initialHtml,
   currentTitle: initialTitle,
   onInfoUpdate,
@@ -598,12 +600,14 @@ export const InputPanel: React.FC<InputPanelProps> = ({
         'interactive mode:',
         isInteractive,
         'PubChem mode:',
-        usePubChem
+        usePubChem,
+        'Always find molecule:',
+        !!alwaysFindMolecule
       );
     }
 
     try {
-      const response = await fetchMoleculeData(currentPrompt);
+      const response = await fetchMoleculeData(currentPrompt, { alwaysFindMolecule: !!alwaysFindMolecule });
 
       // Extract both PDB and SDF data if available
       const pdbData = response.pdb_data;

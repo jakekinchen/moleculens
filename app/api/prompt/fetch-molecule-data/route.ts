@@ -5,12 +5,13 @@ import { classifyPrompt } from '@/lib/llm';
 export async function POST(req: NextRequest) {
   const body = await req.json();
   const query: string | undefined = body.query ?? body.prompt;
+  const alwaysFindMolecule: boolean = !!body.alwaysFindMolecule;
   if (!query) {
     return NextResponse.json({ error: 'Missing prompt', status: 'failed' }, { status: 400 });
   }
 
   try {
-    const classification = await classifyPrompt(query);
+    const classification = await classifyPrompt(query, alwaysFindMolecule);
     console.log(`[PubChemService] Classification: ${JSON.stringify(classification)}`);
     let moleculeQuery = classification.name ?? '';
     let moleculeType: 'small molecule' | 'macromolecule' = 'small molecule';

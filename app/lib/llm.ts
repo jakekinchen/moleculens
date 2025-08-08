@@ -42,13 +42,17 @@ export interface PromptClassification {
  * treating the prompt as a small molecule and echoing the input
  * as the name so development can proceed without the API key.
  */
-export async function classifyPrompt(prompt: string): Promise<PromptClassification> {
+export async function classifyPrompt(prompt: string, alwaysFindMolecule: boolean = false): Promise<PromptClassification> {
   if (!openai) {
     console.warn('LLM not configured. Defaulting to small molecule classification.');
     return { type: 'small molecule', name: sanitizeName(prompt) };
   }
 
-  const question = `You are a chemical assistant. Classify the following user input as a 'small molecule', 'macromolecule', or 'unknown'. If a specific molecule or macromolecule can be identified, provide its common name. Respond ONLY with JSON in the form {"type":"molecule|macromolecule|unknown","name":"<name>"}. For example if the prompt is "Tell me about the structure of glucose", the response should be {"type":"small molecule","name":"glucose"} or if the prompt is "Tell me about the structure of a protein", the response should be {"type":"macromolecule","name":"leucine", or if the prompt is "Teach me about metal-carbonyl complexes and back-bonding", the response should be {"type":"small molecule","name":"nickel tetracarbonyl" or with "Teach me about metal-metal quadruple bonds in dimolybdenum complexes", the response should be {"type":"small molecule","name":"dimolybdenum tetraacetate"}.
+  const forcingInstruction = alwaysFindMolecule
+    ? `\nCRITICAL OVERRIDE: Always come up with a molecule based on the user's prompt, no matter the prompt. Try to find the closest related molecule to whatever is mentioned. If there is literally nothing even remotely possible, then invent a plausible molecule name as a stand-in.`
+    : '';
+
+  const question = `You are a chemical assistant. Classify the following user input as a 'small molecule', 'macromolecule', or 'unknown'. If a specific molecule or macromolecule can be identified, provide its common name. Respond ONLY with JSON in the form {"type":"molecule|macromolecule|unknown","name":"<name>"}. For example if the prompt is "Tell me about the structure of glucose", the response should be {"type":"small molecule","name":"glucose"} or if the prompt is "Tell me about the structure of a protein", the response should be {"type":"macromolecule","name":"leucine", or if the prompt is "Teach me about metal-carbonyl complexes and back-bonding", the response should be {"type":"small molecule","name":"nickel tetracarbonyl" or with "Teach me about metal-metal quadruple bonds in dimolybdenum complexes", the response should be {"type":"small molecule","name":"dimolybdenum tetraacetate"}.${forcingInstruction}
 
 User input: "${prompt}"`;
 

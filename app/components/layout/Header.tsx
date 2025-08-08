@@ -7,10 +7,11 @@ import { LayoutWrapper } from './LayoutWrapper';
 
 interface HeaderProps {
   onOpenTimeMachine: () => void;
-  onSettingsChange: (settings: { 
+  onSettingsChange: (settings: {
     model: string | null;
     isInteractive: boolean;
     usePubChem: boolean;
+    alwaysFindMolecule: boolean;
   }) => void;
   useConstraints?: boolean;
 }
@@ -20,16 +21,22 @@ export const Header: React.FC<HeaderProps> = ({ onOpenTimeMachine, onSettingsCha
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [model, setModel] = useState<string | null>(null);
   const [isInteractive, setIsInteractive] = useState(false);
+  const [alwaysFindMolecule, setAlwaysFindMolecule] = useState(false);
   const usePubChem = true;
 
   const handleModelChange = (newModel: string | null) => {
     setModel(newModel);
-    onSettingsChange({ model: newModel, isInteractive, usePubChem });
+    onSettingsChange({ model: newModel, isInteractive, usePubChem, alwaysFindMolecule });
   };
 
   const handleInteractiveChange = (newIsInteractive: boolean) => {
     setIsInteractive(newIsInteractive);
-    onSettingsChange({ model, isInteractive: newIsInteractive, usePubChem });
+    onSettingsChange({ model, isInteractive: newIsInteractive, usePubChem, alwaysFindMolecule });
+  };
+
+  const handleAlwaysFindChange = (value: boolean) => {
+    setAlwaysFindMolecule(value);
+    onSettingsChange({ model, isInteractive, usePubChem, alwaysFindMolecule: value });
   };
 
   return (
@@ -77,12 +84,8 @@ export const Header: React.FC<HeaderProps> = ({ onOpenTimeMachine, onSettingsCha
           <SettingsModal
             isOpen={isSettingsOpen}
             onClose={() => setIsSettingsOpen(false)}
-            model={model}
-            setModel={handleModelChange}
-            isInteractive={isInteractive}
-            setIsInteractive={handleInteractiveChange}
-            _usePubChem={usePubChem}
-            _setUsePubChem={() => {}}
+            alwaysFindMolecule={alwaysFindMolecule}
+            setAlwaysFindMolecule={handleAlwaysFindChange}
           />
         </div>
       </LayoutWrapper>

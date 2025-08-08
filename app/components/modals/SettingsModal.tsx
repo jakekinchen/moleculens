@@ -1,121 +1,43 @@
-import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { Switch } from "../ui/switch";
 import { Label } from "../ui/label";
-import { Alert, AlertDescription } from "../ui/alert";
 import { Button } from "../ui/button";
-import { getModels } from '../../services/api';
-
-interface ModelOption {
-  name: string;
-  display_name: string;
-}
 
 interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
-  model: string | null;
-  setModel: (model: string | null) => void;
-  isInteractive: boolean;
-  setIsInteractive: (isInteractive: boolean) => void;
-  _usePubChem: boolean;
-  _setUsePubChem: (usePubChem: boolean) => void;
+  alwaysFindMolecule: boolean;
+  setAlwaysFindMolecule: (value: boolean) => void;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
   isOpen,
   onClose,
-  model,
-  setModel,
-  isInteractive,
-  setIsInteractive,
-  _usePubChem,
-  _setUsePubChem,
+  alwaysFindMolecule,
+  setAlwaysFindMolecule,
 }) => {
-  const [modelOptions, setModelOptions] = useState<ModelOption[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let retryCount = 0;
-    const maxRetries = 3;
-    const retryDelay = 1000; // 1 second
-
-    const fetchModels = async () => {
-      try {
-        setIsLoading(true);
-        setError(null);
-        const models = await getModels();
-        setModelOptions(models);
-      } catch (err: unknown) {
-        console.error('Failed to load model options:', err);
-        if (retryCount < maxRetries) {
-          retryCount++;
-          console.log(`Retrying model fetch (${retryCount}/${maxRetries}) in ${retryDelay * retryCount}ms`);
-          setTimeout(fetchModels, retryDelay * retryCount);
-        } else {
-          setError('Failed to load model options. Please try again later.');
-        }
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    if (isOpen) {
-      fetchModels();
-    }
-  }, [isOpen]);
-
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent>
+      <DialogContent className="sm:max-w-xl bg-[#0B0F1A]/80 backdrop-blur-xl border border-white/10 shadow-2xl sm:rounded-2xl p-6">
         <DialogHeader>
-          <DialogTitle>Settings</DialogTitle>
+          <DialogTitle className="text-xl font-semibold tracking-tight text-white">Settings</DialogTitle>
         </DialogHeader>
         <div className="space-y-6">
-          <div className="space-y-2">
-            <Label>Model Selection</Label>
-            <Select
-              value={model || ''}
-              onValueChange={(value) => setModel(value || null)}
-              disabled={isLoading}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="-- Select a model --" />
-              </SelectTrigger>
-              <SelectContent>
-                {modelOptions.map((option) => (
-                  <SelectItem key={option.name} value={option.name}>
-                    {option.display_name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-sm text-muted-foreground">
-              Select a model to use for generating geometry. This will override the default model.
-            </p>
-          </div>
-
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center justify-between gap-6 p-4 rounded-xl bg-white/[0.06] border border-white/10">
+            <div className="min-w-0">
+              <Label className="block text-white">Always find a molecule for any request</Label>
+              <p className="text-sm text-white/60 mt-1">
+                If enabled, the app will try to find or invent a related molecule even for unrelated prompts.
+              </p>
+            </div>
             <Switch
-              checked={isInteractive}
-              onCheckedChange={setIsInteractive}
+              checked={alwaysFindMolecule}
+              onCheckedChange={setAlwaysFindMolecule}
             />
-            <Label>Interactive Mode</Label>
           </div>
-          <p className="text-sm text-muted-foreground">
-            Enable interactive mode to control the animation playback and camera.
-          </p>
-
-          {error && (
-            <Alert variant="destructive">
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
 
           <div className="flex justify-end">
-            <Button variant="outline" onClick={onClose}>
+            <Button className="bg-[#111827]/80 hover:bg-[#1F2937]/80 text-white border border-white/15 shadow-md focus-visible:ring-2 focus-visible:ring-white/20" onClick={onClose}>
               Close
             </Button>
           </div>
@@ -123,4 +45,4 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       </DialogContent>
     </Dialog>
   );
-}; 
+};

@@ -65,7 +65,8 @@ export const pollJobStatus = async (jobId: string): Promise<JobStatusResponse> =
  * @returns An object containing { pdb_data, name, cid, formula, sdf, etc. }
  */
 export const fetchMoleculeData = async (
-  query: string
+  query: string,
+  options?: { alwaysFindMolecule?: boolean }
 ): Promise<{
   pdb_data?: string;
   sdf?: string;
@@ -91,7 +92,7 @@ export const fetchMoleculeData = async (
         'Content-Type': 'application/json',
       },
       credentials: includeCredentials ? 'include' : 'same-origin',
-      body: JSON.stringify({ query }),
+      body: JSON.stringify({ query, alwaysFindMolecule: !!options?.alwaysFindMolecule }),
     });
     let result: any = {};
     try {

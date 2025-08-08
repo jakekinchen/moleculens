@@ -31,6 +31,7 @@ export default function HomePage() {
   const [prompt, setPrompt] = useState('');
   const [model, setModel] = useState<string | null>(null);
   const [isInteractive, setIsInteractive] = useState(false);
+  const [alwaysFindMolecule, setAlwaysFindMolecule] = useState(false);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [isTimeMachineOpen, setIsTimeMachineOpen] = useState(false);
   const [moleculeInfo, setMoleculeInfo] = useState<MoleculeInfo | null>(null);
@@ -187,9 +188,10 @@ export default function HomePage() {
     <div className="app-container">
       <Header
         onOpenTimeMachine={() => setIsTimeMachineOpen(true)}
-        onSettingsChange={({ model: m, isInteractive: i }) => {
+        onSettingsChange={({ model: m, isInteractive: i, alwaysFindMolecule: af }) => {
           setModel(m);
           setIsInteractive(i);
+          setAlwaysFindMolecule(af);
         }}
         useConstraints={true}
       />
@@ -206,6 +208,7 @@ export default function HomePage() {
                 model={model}
                 isInteractive={isInteractive}
                 usePubChem={true}
+                alwaysFindMolecule={alwaysFindMolecule}
                 {...(html && { currentHtml: html })}
                 {...(title && { currentTitle: title })}
                 onInfoUpdate={(info: unknown) => setMoleculeInfo(info as MoleculeInfo)}
