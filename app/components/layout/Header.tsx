@@ -86,6 +86,8 @@ export const Header: React.FC<HeaderProps> = ({ onOpenTimeMachine, onSettingsCha
             onClose={() => setIsSettingsOpen(false)}
             alwaysFindMolecule={alwaysFindMolecule}
             setAlwaysFindMolecule={handleAlwaysFindChange}
+            isInteractive={isInteractive}
+            setIsInteractive={handleInteractiveChange}
           />
         </div>
       </LayoutWrapper>

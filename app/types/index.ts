@@ -151,3 +151,34 @@ export interface DiagramResponse {
 
 export type MoleculeType = 'small molecule' | 'macromolecule';
 export type FormatType = 'PDB' | 'SDF';
+
+// --- Atom picking & functional group types ---
+export interface AtomMetadata {
+  index: number;
+  element?: string;
+  charge?: number;
+  aromatic?: boolean;
+  x?: number;
+  y?: number;
+  z?: number;
+}
+
+export interface AtomHoverEvent {
+  atomIndex: number;
+  element?: string;
+  worldPosition?: { x: number; y: number; z: number };
+}
+
+export interface FunctionalGroup {
+  id: string;
+  name: string;
+  atoms: number[];
+  bonds?: number[];
+  smarts?: string;
+  description?: string | undefined;
+}
+
+export interface GroupDetectionResult {
+  groups: FunctionalGroup[];
+  atomToGroupIds: Map<number, string[]>;
+}

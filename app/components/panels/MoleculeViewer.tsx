@@ -12,11 +12,11 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass';
 // @ts-expect-error - Three.js examples module not properly typed but works correctly
 import { OutlinePass } from 'three/examples/jsm/postprocessing/OutlinePass';
-// @ts-expect-error - three-sdf-loader lacks types
 import { loadSDF } from 'three-sdf-loader';
 import { addEnvironment, deepDispose } from './threeHelpers';
 import { LoadingFacts } from './LoadingFacts';
-import { MoleculeInfo, MoleculeType } from '@/types';
+import { MoleculeInfo, MoleculeType, GroupDetectionResult, AtomHoverEvent } from '@/types';
+import { detectFunctionalGroupsFromSdf } from '../../lib/chem-groups';
 import {
   MoleculeStats,
   PDBData,
@@ -27,6 +27,8 @@ import {
   applyBoundsToGeometry,
   computeStatsFromGeometry,
   buildInstancedAtoms,
+  setInstancedAtomColor,
+  restoreInstancedAtomColor,
   buildMacromoleculeVisualization,
   buildRibbonOverlay,
   pruneIsolatedIons,
@@ -63,6 +65,11 @@ interface MoleculeViewerProps {
   showDebugWireframe?: boolean;
   /** Molecule classification from LLM for smart format selection */
   moleculeType?: MoleculeType;
+  // New interaction callbacks
+  onHoverAtom?: (e: AtomHoverEvent | null) => void;
+  onSelectAtom?: (indices: number[]) => void;
+  onFirstFrameRendered?: () => void;
+  enableInteraction?: boolean;
 }
 
 export default function MoleculeViewer({
@@ -78,6 +85,10 @@ export default function MoleculeViewer({
   showHoverDebug = false,
   showDebugWireframe = false,
   moleculeType,
+  onHoverAtom,
+  onSelectAtom,
+  onFirstFrameRendered,
+  enableInteraction = true,
 }: MoleculeViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const captionRef = useRef<HTMLDivElement | null>(null);
@@ -107,6 +118,8 @@ export default function MoleculeViewer({
   const composerRef = useRef<EffectComposer | null>(null);
   const outlinePassRef = useRef<OutlinePass | null>(null);
   const isSceneReadyRef = useRef<boolean>(false);
+  const firstFrameFiredRef = useRef<boolean>(false);
+  const onFirstFrameCbRef = useRef<(() => void) | undefined>(undefined);
 
   // Smart format selection replaces manual toggle
   // REMOVED: bothFormatsAvailable and manual format preference
@@ -492,6 +505,42 @@ export default function MoleculeViewer({
             attachProperties: true,
           });
 
+          // Capture loader mappings if available (three-sdf-loader >= 0.4.0)
+          try {
+            const loadResult = (mol as any)?.userData?.loadResult;
+            if (loadResult?.mappings?.instancedAtoms) {
+              const inst = loadResult.mappings.instancedAtoms;
+              sdfMappingsRef.current = {
+                instanced: { mesh: inst.mesh, instanceToAtomIndex: inst.instanceToAtomIndex },
+                atoms: loadResult.chemistry?.atoms || undefined,
+              };
+              if (inst?.mesh) (inst.mesh.userData as any).role = 'atomsInstanced';
+            } else {
+              // Fallback mapping
+              const map = new Map<string, number>();
+              const atomsMeta: Array<{ index: number; element?: string }> = [];
+              let idxCounter = 0;
+              mol.traverse((o: THREE.Object3D) => {
+                const m = o as THREE.Mesh;
+                if (m.isMesh && (m.userData as any)?.atom) {
+                  const idx =
+                    typeof (m.userData as any).atom.index === 'number'
+                      ? (m.userData as any).atom.index
+                      : idxCounter++;
+                  map.set(m.uuid, idx);
+                  atomsMeta[idx] = {
+                    index: idx,
+                    element: (m.userData as any).atom.symbol,
+                  } as any;
+                  (m.userData as any).role = 'atom';
+                }
+              });
+              sdfMappingsRef.current = { meshUuidToAtomIndex: map, atoms: atomsMeta };
+            }
+          } catch {
+            sdfMappingsRef.current = null;
+          }
+
           // Remove isolated ions after loading
           pruneIsolatedIons(mol);
 
@@ -690,6 +739,14 @@ export default function MoleculeViewer({
                 /* noop */
               }
               isSceneReadyRef.current = true;
+              // functional groups (async, best-effort)
+              if (sdfData && sdfData.trim().length > 0) {
+                detectFunctionalGroupsFromSdf(sdfData)
+                  .then((res: GroupDetectionResult) => (groupDetectionRef.current = res))
+                  .catch(() => (groupDetectionRef.current = { groups: [], atomToGroupIds: new Map() }));
+              } else {
+                groupDetectionRef.current = { groups: [], atomToGroupIds: new Map() };
+              }
               forceRender();
             });
           });
@@ -762,6 +819,9 @@ export default function MoleculeViewer({
               const atom = new THREE.Mesh(sphereGeometry, atomMaterial);
               atom.position.copy(position).multiplyScalar(120);
               atom.scale.setScalar(40);
+              // Attach metadata for picking
+              (atom.userData as any).role = 'atom';
+              (atom.userData as any).atom = { index: i, symbol: json.atoms[i]?.[4] };
               root.add(atom);
 
               if (enableLabelsThisModel && json.atoms[i]) {
@@ -812,7 +872,7 @@ export default function MoleculeViewer({
               root.add(bondMesh);
             }
           } else if (positions.count <= POINTS_THRESHOLD) {
-            buildInstancedAtoms(
+            const instanced = buildInstancedAtoms(
               sphereGeometry,
               positions as THREE.BufferAttribute,
               colors as THREE.BufferAttribute,
@@ -821,6 +881,7 @@ export default function MoleculeViewer({
               labelsGroup,
               root
             );
+            pdbInstancedRef.current = { mesh: instanced.mesh, instanceToAtomIndex: instanced.instanceToAtomIndex };
 
             // Bonds for instanced meshes
             positions = geometryBonds.getAttribute('position') as THREE.BufferAttribute;
@@ -912,6 +973,10 @@ export default function MoleculeViewer({
           }
           isSceneReadyRef.current = true;
           forceRender();
+          if (!firstFrameFiredRef.current) {
+            firstFrameFiredRef.current = true;
+            onFirstFrameCbRef.current?.();
+          }
         }
       );
     };
@@ -1094,6 +1159,10 @@ export default function MoleculeViewer({
       if (showAnnotationsRef.current && labelRenderer) {
         labelRenderer.render(scene, camera);
       }
+      if (!firstFrameFiredRef.current) {
+        firstFrameFiredRef.current = true;
+        onFirstFrameRendered?.();
+      }
     };
 
     (async () => {
@@ -1221,81 +1290,162 @@ export default function MoleculeViewer({
   const debugSphereRef = useRef<THREE.Mesh | null>(null);
   const debugWireframeRef = useRef<THREE.Mesh | null>(null);
 
-  // Precise molecule hover detection using raycasting
-  const handleMouseMove = (event: React.MouseEvent<HTMLDivElement>) => {
-    if (!enableHoverPause || !containerRef.current || !cameraRef.current || !rootRef.current)
-      return;
+  // Picking & highlights
+  const raycasterRef = useRef<THREE.Raycaster>(new THREE.Raycaster());
+  const mouseNdcRef = useRef<THREE.Vector2>(new THREE.Vector2());
+  const hoveredRef = useRef<{
+    kind: 'instanced' | 'sdf-mesh';
+    mesh?: THREE.Mesh | THREE.InstancedMesh;
+    instanceId?: number;
+  } | null>(null);
+  const pdbInstancedRef = useRef<{ mesh: THREE.InstancedMesh | null; instanceToAtomIndex?: Uint32Array }>({ mesh: null });
+  const sdfMappingsRef = useRef<{
+    instanced?: { mesh: THREE.InstancedMesh; instanceToAtomIndex: Uint32Array } | null;
+    meshUuidToAtomIndex?: Map<string, number>;
+    atoms?: Array<{ index: number; element?: string; x?: number; y?: number; z?: number }>;
+  } | null>(null);
+  const groupDetectionRef = useRef<GroupDetectionResult | null>(null);
+  const [tooltip, setTooltip] = useState<{ visible: boolean; x: number; y: number; text: string; badges?: string[] }>({ visible: false, x: 0, y: 0, text: '' });
 
-    // Safety check: don't run hover detection during loading or if scene isn't ready
+  useEffect(() => {
+    onFirstFrameCbRef.current = onFirstFrameRendered;
+  }, [onFirstFrameRendered]);
+
+  // Helpers for picking/highlighting
+  const highlightColor = new THREE.Color(0xffd166);
+  const clearHoverHighlight = () => {
+    const cur = hoveredRef.current;
+    if (!cur) return;
+    if (cur.kind === 'instanced' && cur.instanceId != null && cur.mesh && (cur.mesh as any).isInstancedMesh) {
+      restoreInstancedAtomColor(cur.mesh as THREE.InstancedMesh, cur.instanceId);
+    } else if (cur.kind === 'sdf-mesh' && cur.mesh && (cur.mesh as any).material) {
+      const mat = (cur.mesh as THREE.Mesh).material as THREE.MeshStandardMaterial;
+      if ((mat as any).emissive) (mat as any).emissive.setRGB(0, 0, 0);
+    }
+    hoveredRef.current = null;
+  };
+  const applyHoverHighlight = (hit: { kind: 'instanced' | 'sdf-mesh'; mesh: any; instanceId?: number }) => {
+    if (hit.kind === 'instanced' && hit.mesh && hit.instanceId != null) {
+      setInstancedAtomColor(hit.mesh as THREE.InstancedMesh, hit.instanceId, highlightColor);
+    } else if (hit.kind === 'sdf-mesh' && hit.mesh) {
+      const mat = (hit.mesh as THREE.Mesh).material as THREE.MeshStandardMaterial;
+      if ((mat as any).emissive) (mat as any).emissive.set(highlightColor);
+    }
+    hoveredRef.current = hit as any;
+  };
+  const resolveAtomIndexFromIntersection = (ix: THREE.Intersection) => {
+    if ((ix.object as any).isInstancedMesh && ix.instanceId != null) {
+      const map: Uint32Array | undefined =
+        (ix.object.userData && (ix.object.userData as any).instanceToAtomIndex) ||
+        pdbInstancedRef.current.instanceToAtomIndex ||
+        sdfMappingsRef.current?.instanced?.instanceToAtomIndex;
+      if (map) return map[ix.instanceId!];
+    }
+    const role = (ix.object.userData && (ix.object.userData as any).role) as string | undefined;
+    if (role === 'atom') {
+      const atom: any = (ix.object.userData as any).atom;
+      if (atom && typeof atom.index === 'number') return atom.index;
+      const fallback = sdfMappingsRef.current?.meshUuidToAtomIndex?.get(ix.object.uuid);
+      if (typeof fallback === 'number') return fallback;
+    }
+    return undefined;
+  };
+  const getAtomElement = (atomIndex: number | undefined) => {
+    if (atomIndex == null) return undefined;
+    const atomsMeta = sdfMappingsRef.current?.atoms;
+    if (atomsMeta && atomsMeta[atomIndex]) return atomsMeta[atomIndex].element;
+    return undefined;
+  };
+  const getGroupBadges = (atomIndex: number | undefined) => {
+    if (atomIndex == null) return [] as string[];
+    const map = groupDetectionRef.current?.atomToGroupIds;
+    const ids = map?.get(atomIndex) || [];
+    if (!groupDetectionRef.current?.groups?.length) return [];
+    const byId = new Map(groupDetectionRef.current.groups.map(g => [g.id, g.name]));
+    return ids.map(id => (byId.get(id) as string) || id);
+  };
+
+  const handlePointerMove = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (!enableInteraction) return;
+    if (!containerRef.current || !cameraRef.current || !rootRef.current) return;
     if (isLoading || !rendererRef.current || rootRef.current.children.length === 0) return;
 
     const rect = containerRef.current.getBoundingClientRect();
-    const mouse = new THREE.Vector2(
-      ((event.clientX - rect.left) / rect.width) * 2 - 1,
-      -((event.clientY - rect.top) / rect.height) * 2 + 1
-    );
+    const x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    const y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+    mouseNdcRef.current.set(x, y);
+    raycasterRef.current.setFromCamera(mouseNdcRef.current, cameraRef.current);
 
-    const raycaster = new THREE.Raycaster();
-    raycaster.setFromCamera(mouse, cameraRef.current);
+    const intersects = raycasterRef.current.intersectObjects(rootRef.current.children, true);
+    if (!intersects.length) {
+      clearHoverHighlight();
+      setIsHovered(false);
+      setTooltip(t => ({ ...t, visible: false }));
+      return;
+    }
 
-    const sphere = new THREE.Sphere();
+    let picked: THREE.Intersection | undefined;
+    for (const ix of intersects) {
+      const o: any = ix.object;
+      if (o?.isInstancedMesh || (o?.userData?.role === 'atom')) {
+        picked = ix;
+        break;
+      }
+    }
+    if (!picked) {
+      clearHoverHighlight();
+      setIsHovered(false);
+      setTooltip(t => ({ ...t, visible: false }));
+      return;
+    }
 
-    if (optimizedBounds) {
-      // Create a sphere from the pre-calculated, object-local bounds
-      sphere.center.set(...optimizedBounds.c);
-      sphere.radius = optimizedBounds.r;
-
-      // Ensure the world matrix is up to date before applying transformation
-      // This is critical because we directly modify root.rotation.y in the animation loop
-      rootRef.current.updateMatrixWorld(true);
-
-      // Apply the molecule's current world transformation to the sphere
-      // This ensures the bounding sphere rotates with the molecule
-      sphere.applyMatrix4(rootRef.current.matrixWorld);
+    clearHoverHighlight();
+    if ((picked.object as any).isInstancedMesh && picked.instanceId != null) {
+      applyHoverHighlight({ kind: 'instanced', mesh: picked.object, instanceId: picked.instanceId });
     } else {
-      // Fallback for safety, though it shouldn't be needed
-      new THREE.Box3().setFromObject(rootRef.current).getBoundingSphere(sphere);
+      applyHoverHighlight({ kind: 'sdf-mesh', mesh: picked.object });
     }
 
-    // Debug: log sphere info and optionally visualize
-    if (showHoverDebug && sceneRef.current) {
-      // Add debug sphere visualization if enabled
-      if (debugSphereRef.current) {
-        sceneRef.current.remove(debugSphereRef.current);
-        debugSphereRef.current.geometry.dispose();
-        (debugSphereRef.current.material as THREE.Material).dispose();
+    const atomIndex = resolveAtomIndexFromIntersection(picked);
+    const element = getAtomElement(atomIndex);
+    const badges = getGroupBadges(atomIndex);
+
+    setIsHovered(true);
+    setTooltip({
+      visible: true,
+      x: event.clientX - rect.left + 12,
+      y: event.clientY - rect.top + 12,
+      text: element ? `${element} · #${atomIndex ?? '-'}` : `Atom #${atomIndex ?? '-'}`,
+      badges,
+    });
+  };
+
+  const handlePointerLeave = () => {
+    if (!enableInteraction) return;
+    clearHoverHighlight();
+    setIsHovered(false);
+    setTooltip(t => ({ ...t, visible: false }));
+  };
+
+  const handleClick = () => {
+    if (!enableInteraction) return;
+    const cur = hoveredRef.current;
+    if (!cur) return;
+    if (cur.kind === 'instanced' && cur.instanceId != null) {
+      const map: Uint32Array | undefined =
+        ((cur.mesh as any)?.userData && (cur.mesh as any).userData.instanceToAtomIndex) ||
+        pdbInstancedRef.current.instanceToAtomIndex ||
+        sdfMappingsRef.current?.instanced?.instanceToAtomIndex;
+      const atomIndex = map ? map[cur.instanceId] : undefined;
+      if (typeof atomIndex === 'number') {
+        onSelectAtom?.([atomIndex]);
       }
-
-      // Create new debug sphere that shows the rotated bounding sphere
-      const debugGeometry = new THREE.SphereGeometry(sphere.radius, 32, 32);
-      const debugMaterial = new THREE.MeshBasicMaterial({
-        color: 0xff0000,
-        wireframe: true,
-        transparent: true,
-        opacity: 0.3,
-      });
-      debugSphereRef.current = new THREE.Mesh(debugGeometry, debugMaterial);
-      debugSphereRef.current.position.copy(sphere.center);
-      sceneRef.current.add(debugSphereRef.current);
-
-      // Log debug info about the rotated bounds
-      if (process.env.NODE_ENV !== 'production') {
-        console.log('=== HOVER DEBUG INFO ===');
-        console.log('Rotation (Y):', rootRef.current.rotation.y.toFixed(3));
-        console.log(
-          'Sphere center:',
-          sphere.center.toArray().map(v => v.toFixed(2))
-        );
-        console.log('Sphere radius:', sphere.radius.toFixed(2));
-        console.log('========================');
+    } else if (cur.kind === 'sdf-mesh' && (cur.mesh as any).userData?.atom?.index != null) {
+      const idx = (cur.mesh as any).userData.atom.index as number;
+      if (typeof idx === 'number') {
+        onSelectAtom?.([idx]);
       }
     }
-
-    // Check if ray intersects with the bounding sphere
-    const ray = raycaster.ray;
-    const isHoveringMolecule = ray.intersectsSphere(sphere);
-
-    setIsHovered(isHoveringMolecule);
   };
 
   useEffect(() => {
@@ -1319,10 +1469,7 @@ export default function MoleculeViewer({
     }
   }, [isHovered, enableHoverGlow]);
 
-  const handleMouseLeave = () => {
-    if (!enableHoverPause) return;
-    setIsHovered(false);
-  };
+  // legacy onMouseLeave handler removed; using handlePointerLeave instead
 
   useEffect(() => {
     const handleFullscreenChange = () => {
@@ -1334,7 +1481,7 @@ export default function MoleculeViewer({
     return () => {
       document.removeEventListener('fullscreenchange', handleFullscreenChange);
     };
-  }, []);
+  }, [onFirstFrameRendered]);
 
   // Add spacebar pause/unpause functionality
   useEffect(() => {
@@ -1403,8 +1550,9 @@ export default function MoleculeViewer({
     <div
       ref={wrapperRef}
       className="relative w-full h-full rounded-xl overflow-hidden bg-[#050505] flex flex-col"
-      onMouseMove={handleMouseMove}
-      onMouseLeave={handleMouseLeave}
+      onMouseMove={handlePointerMove}
+      onMouseLeave={handlePointerLeave}
+      onClick={handleClick}
     >
       {/* Loading Facts overlay */}
       <LoadingFacts isVisible={isLoading} showFacts={true} />
@@ -1416,6 +1564,24 @@ export default function MoleculeViewer({
           <div ref={containerRef} className="absolute inset-0" />
           {/* Label renderer container */}
           <div ref={labelContainerRef} className="absolute inset-0 pointer-events-none" />
+          {/* Hover tooltip */}
+          {tooltip.visible && (
+            <div
+              className="absolute z-30 text-xs px-2 py-1 rounded-md bg-black/75 text-white border border-white/10 pointer-events-none"
+              style={{ left: tooltip.x, top: tooltip.y }}
+            >
+              <div className="font-medium">{tooltip.text}</div>
+              {tooltip.badges && tooltip.badges.length > 0 && (
+                <div className="mt-1 flex flex-wrap gap-1">
+                  {tooltip.badges.map((b, i) => (
+                    <span key={i} className="px-1.5 py-0.5 rounded bg-white/10">
+                      {b}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
           {/* Control buttons */}
           <div className="absolute top-4 right-4 z-20 flex space-x-2">
             {/* Pause/Play button */}

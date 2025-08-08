@@ -293,19 +293,24 @@ export const buildInstancedAtoms = (
   enableLabels: boolean,
   labelsGroup: THREE.Group,
   root: THREE.Group
-) => {
+): { mesh: THREE.InstancedMesh; instanceToAtomIndex: Uint32Array; baseColors: Float32Array } => {
+  const count = positions.count;
   const material = new THREE.MeshStandardMaterial({
     vertexColors: true,
     metalness: 0.3,
     roughness: 0.25,
     envMapIntensity: 1.0,
   });
-  const mesh = new THREE.InstancedMesh(sphereGeometry, material, positions.count);
+  const mesh = new THREE.InstancedMesh(sphereGeometry, material, count);
+  (mesh.userData as any).role = 'atomsInstanced';
 
   const dummy = new THREE.Object3D();
   const color = new THREE.Color();
 
-  for (let i = 0; i < positions.count; i++) {
+  const instanceToAtomIndex = new Uint32Array(count);
+  const baseColors = new Float32Array(count * 3);
+
+  for (let i = 0; i < count; i++) {
     dummy.position.set(positions.getX(i), positions.getY(i), positions.getZ(i)).multiplyScalar(120);
     dummy.scale.setScalar(40);
     dummy.updateMatrix();
@@ -313,6 +318,11 @@ export const buildInstancedAtoms = (
 
     color.setRGB(colors.getX(i), colors.getY(i), colors.getZ(i));
     mesh.setColorAt(i, color);
+    baseColors[i * 3 + 0] = color.r;
+    baseColors[i * 3 + 1] = color.g;
+    baseColors[i * 3 + 2] = color.b;
+
+    instanceToAtomIndex[i] = i;
 
     if (enableLabels && json.atoms[i]) {
       const atomSymbol = json.atoms[i][4];
@@ -336,8 +346,33 @@ export const buildInstancedAtoms = (
 
   mesh.instanceMatrix.needsUpdate = true;
   if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+
+  (mesh.userData as any).instanceToAtomIndex = instanceToAtomIndex;
+  (mesh.userData as any).baseColors = baseColors;
+
   root.add(mesh);
+  return { mesh, instanceToAtomIndex, baseColors };
 };
+
+export function setInstancedAtomColor(
+  mesh: THREE.InstancedMesh,
+  instanceId: number,
+  color: THREE.Color
+) {
+  mesh.setColorAt(instanceId, color);
+  if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+}
+
+export function restoreInstancedAtomColor(mesh: THREE.InstancedMesh, instanceId: number) {
+  const baseColors: Float32Array | undefined = (mesh.userData as any)?.baseColors;
+  if (!baseColors) return;
+  const r = baseColors[instanceId * 3 + 0];
+  const g = baseColors[instanceId * 3 + 1];
+  const b = baseColors[instanceId * 3 + 2];
+  const c = new THREE.Color(r, g, b);
+  mesh.setColorAt(instanceId, c);
+  if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+}
 
 /**
  * Build point cloud representation for atoms

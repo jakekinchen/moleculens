@@ -6,3 +6,8 @@
 //   const content: any;
 //   export default content;
 // } 
+
+declare module 'openchemlib' {
+  const OCL: any;
+  export = OCL;
+}

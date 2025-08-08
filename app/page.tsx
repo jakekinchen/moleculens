@@ -284,6 +284,8 @@ export default function HomePage() {
                     enableHoverGlow={false}
                     showHoverDebug={false}
                     showDebugWireframe={false}
+                    onFirstFrameRendered={() => setShowLoadingOverlay(false)}
+                    enableInteraction={isInteractive}
                   />
                 ))}
             </div>

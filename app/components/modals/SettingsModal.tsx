@@ -8,6 +8,8 @@ interface SettingsModalProps {
   onClose: () => void;
   alwaysFindMolecule: boolean;
   setAlwaysFindMolecule: (value: boolean) => void;
+  isInteractive?: boolean;
+  setIsInteractive?: (value: boolean) => void;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -15,6 +17,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onClose,
   alwaysFindMolecule,
   setAlwaysFindMolecule,
+  isInteractive = false,
+  setIsInteractive,
 }) => {
   return (
     <Dialog open={isOpen} onOpenChange={open => !open && onClose()}>
@@ -28,6 +32,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-6">
+          <div className="flex items-center justify-between gap-6 p-4 rounded-xl bg-white/[0.06] border border-white/10">
+            <div className="min-w-0">
+              <Label className="block text-white">Molecule interaction</Label>
+              <p className="text-sm text-white/60 mt-1">
+                Enable atom hover highlighting and tooltips in the 3D viewer.
+              </p>
+            </div>
+            <Switch checked={isInteractive} onCheckedChange={val => setIsInteractive?.(!!val)} />
+          </div>
+
           <div className="flex items-center justify-between gap-6 p-4 rounded-xl bg-white/[0.06] border border-white/10">
             <div className="min-w-0">
               <Label className="block text-white">Always find a molecule for any request</Label>
