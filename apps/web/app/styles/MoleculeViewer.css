@@ -1,0 +1,124 @@
+/* CSS custom properties for easy theming and adjustments */
+:root {
+  --header-height: 60px;
+  --footer-height: 60px;
+  --padding: 1rem;
+  --border-radius: 0.5rem;
+  --bg-color: #111827; /* bg-gray-900 */
+  --panel-gap: 1rem;
+}
+
+/* Base styles */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+  background-color: var(--bg-color);
+  color: white;
+}
+
+/* Main app container - use CSS Grid for the overall layout */
+.app-container {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  min-height: 100vh;
+  width: 100%;
+  overflow: hidden;
+}
+
+/* Main content area */
+.main-content {
+  padding: var(--padding);
+  overflow: visible;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* When using layout constraints, adjust main-content padding */
+.main-content > div {
+  margin: 0 auto;
+  width: 100%;
+  height: 100%;
+}
+
+/* Panel container - uses CSS Grid for responsive layout */
+.panels-container {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--panel-gap);
+  height: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* Input panel */
+.input-panel-container {
+  overflow-y: auto;
+  min-height: 150px;
+}
+
+/* Molecule viewer container */
+.molecule-viewer-container {
+  position: relative;
+  border-radius: var(--border-radius);
+  background-color: rgba(255, 255, 255, 0.03);
+  min-height: 250px;
+  height: 100%;
+  overflow: hidden;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Footer */
+.footer-container {
+  background-color: var(--bg-color);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  z-index: 10;
+}
+
+/* Button group */
+.input-panel-container .button-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.input-panel-container .button-group button {
+  flex: 1 1 calc(50% - 0.25rem);
+}
+
+/* Desktop layout - Wide screens (≥1024px) */
+@media (min-width: 1024px) {
+  .panels-container {
+    grid-template-columns: 1fr 3fr;
+  }
+  
+  .input-panel-container {
+    height: 100%;
+  }
+}
+
+/* Tablet layout */
+@media (max-width: 1023px) and (min-width: 768px) {
+  .panels-container {
+    grid-template-rows: auto 1fr;
+  }
+}
+
+/* Mobile layout */
+@media (max-width: 767px) {
+  .panels-container {
+    grid-template-rows: auto 1fr;
+  }
+} 

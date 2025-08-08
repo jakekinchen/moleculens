@@ -1,0 +1,16 @@
+{
+  "id": "nature-2025",
+  "font": {"family": "Inter", "size_pt": 8},
+  "stroke": {"bond": 2.0, "double_gap": 0.28, "outline": 0},
+  "colors": {
+    "bg": "transparent",
+    "atom": {"C":"#2b2b2b","O":"#d62728","N":"#1f77b4","S":"#bcbd22","H":"#999"},
+    "bond":"#2b2b2b",
+    "highlight":"#ff7f0e",
+    "legend_text":"#000"
+  },
+  "labels": {"font_size_pt": 7, "weight":"600", "kerning": 0.5},
+  "3d": {"cartoon_color":"#808080","licorice_radius":0.22,"ambient":0.4,"key":0.7,"fill":0.25}
+}
+
+

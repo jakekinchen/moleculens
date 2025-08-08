@@ -1,0 +1,16 @@
+[
+  { "id": "hydroxyl", "name": "Hydroxyl", "smarts": "[OX2H]", "smiles": "[OH]", "description": "Alcohol/phenol OH" },
+  { "id": "carbonyl", "name": "Carbonyl", "smarts": "[CX3]=[OX1]", "smiles": "C=O", "description": "C=O (ketone/aldehyde)" },
+  { "id": "carboxylic_acid", "name": "Carboxylic acid", "smarts": "C(=O)O[H]", "smiles": "OC=O", "description": "COOH" },
+  { "id": "amide", "name": "Amide", "smarts": "C(=O)N", "smiles": "NC=O", "description": "Amide linkage" },
+  { "id": "tertiary_amine", "name": "Tertiary amine", "smarts": "[NX3;H0;!$(NC=O)]", "smiles": "N(C)C", "description": "R3N" },
+  { "id": "nitro", "name": "Nitro", "smarts": "[$([NX3](=O)=O)]", "smiles": "[N+](=O)[O-]", "description": "NO2" },
+  { "id": "benzene_aromatic", "name": "Aromatic ring", "smarts": "a1aaaaa1", "smiles": "c1ccccc1", "description": "Benzene-like ring" },
+  { "id": "benzene_kekule", "name": "Aromatic ring (backup)", "smarts": "C1=CC=CC=C1", "smiles": "C1=CC=CC=C1", "description": "Kekulé benzene ring" },
+  { "id": "imidazole_like", "name": "Imidazole-like ring", "smarts": "n1c[nH]c1", "smiles": "n1c[nH]c1", "description": "Five-membered heteroaromatic" },
+  { "id": "purine_like", "name": "Purine/Xanthine-like core", "smarts": "n1c2ncnc2n1", "smiles": "n1c2ncnc2n1", "description": "Fused bicyclic heteroaromatic" },
+  { "id": "imide_like", "name": "Imide-like (dicarbonyl N)", "smarts": "N(C=O)C=O", "smiles": "N(C=O)C=O", "description": "Two carbonyls on nitrogen" }
+]
+
+
+

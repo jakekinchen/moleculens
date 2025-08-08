@@ -1,0 +1,37 @@
+.container {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  position: relative;
+}
+
+.span {
+  display: inline-block;
+  white-space: nowrap;
+  will-change: transform;
+}
+
+.animate {
+  animation-name: marquee-scroll;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  animation-delay: 2s;
+  padding-right: 2em;
+}
+
+/* Duplicate span for seamless looping */
+.duplicate {
+  position: absolute;
+  left: 100%;
+  top: 0;
+}
+
+@keyframes marquee-scroll {
+  0% {
+    transform: translateX(0%);
+  }
+  100% {
+    transform: translateX(-100%);
+  }
+} 

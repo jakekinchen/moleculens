@@ -1,0 +1,10 @@
+{
+  "name": "@moleculens/chem",
+  "version": "0.0.1",
+  "type": "module",
+  "main": "src/index.ts",
+  "license": "MIT",
+  "devDependencies": { "zod": "^3.23.8" }
+}
+
+
