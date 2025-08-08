@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
           error:
             'Non-molecular prompt: Your prompt should be related to molecular structures. Click on the "Suggest Molecule" button to get started.',
         },
-        { status: 400 }
+        { status: 200 }
       );
     }
 
@@ -42,6 +42,8 @@ export async function POST(req: NextRequest) {
       cid: data.cid,
       formula: data.formula,
       info: data.info,
+      moleculeType,
+      pdb_id: (data as any).pdb_id,
       // Include SMILES data from the info object for 2D rendering
       smiles: data.info?.canonical_smiles || data.info?.isomeric_smiles,
     });

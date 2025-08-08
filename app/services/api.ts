@@ -75,6 +75,7 @@ export const fetchMoleculeData = async (
   formula: string;
   info: any;
   moleculeType?: 'small molecule' | 'macromolecule';
+  pdb_id?: string;
 }> => {
   const endpoint = `${API_BASE_URL}/prompt/fetch-molecule-data/`;
 

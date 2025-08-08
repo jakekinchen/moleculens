@@ -20,6 +20,11 @@ export function saveHistoryToSession(history: HistoryEntry[]): void {
       timestamp: entry.timestamp,
       title: entry.title,
       apiParams: entry.apiParams,
+      moleculeType: entry.moleculeType,
+      name: entry.name,
+      cid: entry.cid,
+      pdbId: entry.pdbId,
+      info: entry.info,
       // Store only metadata from visualization, not the actual molecular data
       visualization: entry.visualization
         ? {
@@ -81,34 +86,66 @@ export function clearHistoryFromSession(): void {
 export async function recreateVisualizationFromHistory(
   entry: HistoryEntry
 ): Promise<HistoryEntry | null> {
-  if (!entry.apiParams) {
-    return null;
-  }
-
   try {
-    const response = await fetch(entry.apiParams.endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        query: entry.apiParams.query,
-        model: entry.apiParams.model,
-        interactive: entry.apiParams.interactive,
-        pubchem: entry.apiParams.pubchem,
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`API call failed: ${response.statusText}`);
+    // Prefer refetch by stable identifiers if available
+    if (entry.cid) {
+      // Call internal CID endpoint to get fresh data
+      const r = await fetch('/api/pubchem/search/cid', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cid: entry.cid }),
+      });
+      if (r.ok) {
+        const data = await r.json();
+        const visualization = {
+          pdb_data: data.pdb_data || '',
+          sdf: data.sdf_data || data.sdf || '',
+          html: '',
+          title: entry.name || data.name,
+        } as any;
+        return { ...entry, visualization };
+      }
     }
 
-    const visualization = await response.json();
+    if (entry.pdbId) {
+      // Fetch PDB text directly from RCSB
+      const url = `https://files.rcsb.org/download/${entry.pdbId}.pdb`;
+      const r = await fetch(url);
+      if (r.ok) {
+        const pdbText = await r.text();
+        const visualization = {
+          pdb_data: pdbText,
+          html: '',
+          title: entry.name || entry.title,
+        } as any;
+        return { ...entry, visualization };
+      }
+    }
 
-    return {
-      ...entry,
-      visualization,
-    };
+    // Fallback: replay the original endpoint if present
+    if (entry.apiParams) {
+      const response = await fetch(entry.apiParams.endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          query: entry.apiParams.query,
+          model: entry.apiParams.model,
+          interactive: entry.apiParams.interactive,
+          pubchem: entry.apiParams.pubchem,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`API call failed: ${response.statusText}`);
+      }
+
+      const visualization = await response.json();
+      return { ...entry, visualization };
+    }
+
+    return null;
   } catch (error) {
     console.error('Error recreating visualization from history:', error);
     return null;

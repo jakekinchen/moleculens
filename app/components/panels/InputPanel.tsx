@@ -622,15 +622,26 @@ export const InputPanel: React.FC<InputPanelProps> = ({
         setCurrentMoleculeData(response);
         setCurrentScript(moleculeDataString);
         setTitle(name);
-        // Pass both formats and molecule type to allow smart format selection
-        onVisualizationUpdate(pdbData || '', undefined, name ?? undefined, sdfData, 'small molecule');
+        // Pass both formats and the molecule type from the API to allow smart format selection
+        onVisualizationUpdate(
+          pdbData || '',
+          undefined,
+          name ?? undefined,
+          sdfData,
+          (response.moleculeType as 'small molecule' | 'macromolecule') || 'small molecule'
+        );
         if (onInfoUpdate) onInfoUpdate(info);
 
-        // Create visualization output with API parameters for history
+        // Create visualization output with API parameters for history (include identifiers and info)
         const visualizationOutput: VisualizationOutput = {
           pdb_data: moleculeDataString,
           html: '',
           title: name,
+          moleculeType: (response.moleculeType as 'small molecule' | 'macromolecule') || 'small molecule',
+          cid: response.cid,
+          name,
+          info: info as MoleculeInfo,
+          ...(response.pdb_id ? { pdb_id: response.pdb_id as string } : {}),
         };
 
         if (sdfData) {

@@ -398,7 +398,7 @@ export default function MoleculeViewer({
         el.addEventListener('pointerdown', handlers.pointerdown);
         el.addEventListener('pointermove', handlers.pointermove);
         el.addEventListener('wheel', handlers.wheel);
-        el.__ml_evt_handlers__ = handlers;
+       // el.__ml_evt_handlers__ = handlers;
       }
 
       // Guard against overlays intercepting first frames of interaction

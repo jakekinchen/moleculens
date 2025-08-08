@@ -70,6 +70,7 @@ export interface MoleculeData {
   cid: number;
   formula: string;
   info: MoleculeInfo;
+  pdb_id?: string;
 }
 
 // API roots ---------------------------------------------------
@@ -878,8 +879,8 @@ export async function fetchMoleculeDataEnhanced(
 ): Promise<MoleculeData> {
   if (type === 'macromolecule') {
     // Use existing RCSB functionality for proteins
-    const { pdb_data, title, info } = await generateFromRCSB({ prompt: query });
-    return { pdb_data, name: title ?? query, cid: 0, formula: '', info, sdf: '' };
+    const { pdb_data, title, info, pdb_id } = await generateFromRCSB({ prompt: query });
+    return { pdb_data, name: title ?? query, cid: 0, formula: '', info, sdf: '', pdb_id };
   }
 
   // For small molecules, use our new client-side service

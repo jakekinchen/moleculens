@@ -12,6 +12,12 @@ export interface VisualizationOutput {
   title?: string;
   timecode_markers?: string[];
   total_elements?: number;
+  // Enriched metadata for reliable history restores
+  moleculeType?: 'small molecule' | 'macromolecule';
+  cid?: number;
+  pdb_id?: string;
+  name?: string;
+  info?: MoleculeInfo;
 }
 
 export interface VisualizationData {
@@ -41,6 +47,12 @@ export interface HistoryEntry {
     cid?: number;
     moleculeName?: string;
   };
+  // Stable identifiers and metadata for deterministic restore
+  moleculeType?: 'small molecule' | 'macromolecule';
+  name?: string;
+  cid?: number;
+  pdbId?: string;
+  info?: MoleculeInfo;
 }
 
 export interface QuizQuestion {
