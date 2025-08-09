@@ -1,4 +1,4 @@
-import type { FunctionalGroup, GroupDetectionResult } from '@/types';
+import type { FunctionalGroup, GroupDetectionResult } from '../types';
 
 // Lazy import to avoid SSR/Next build issues and keep initial bundle small
 let OCLPromise: Promise<any> | null = null;

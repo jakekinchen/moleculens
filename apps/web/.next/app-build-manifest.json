@@ -7,6 +7,13 @@
       "static/chunks/main-app-7077942d8bf44a8e.js",
       "static/chunks/app/_not-found/page-bc8c74c8147db8cd.js"
     ],
+    "/api/prompt/fetch-molecule-data/route": [
+      "static/chunks/webpack-84733d105a344297.js",
+      "static/chunks/fb521855-360f788827d72256.js",
+      "static/chunks/274-afa05ab8e0973f79.js",
+      "static/chunks/main-app-7077942d8bf44a8e.js",
+      "static/chunks/app/api/prompt/fetch-molecule-data/route-1fa24d070cb2c394.js"
+    ],
     "/layout": [
       "static/chunks/webpack-84733d105a344297.js",
       "static/chunks/fb521855-360f788827d72256.js",
@@ -15,19 +22,26 @@
       "static/css/54d82563122e8672.css",
       "static/chunks/app/layout-873b40d9fe254ba8.js"
     ],
+    "/api/figure/[spec_id]/route": [
+      "static/chunks/webpack-84733d105a344297.js",
+      "static/chunks/fb521855-360f788827d72256.js",
+      "static/chunks/274-afa05ab8e0973f79.js",
+      "static/chunks/main-app-7077942d8bf44a8e.js",
+      "static/chunks/app/api/figure/[spec_id]/route-1fa24d070cb2c394.js"
+    ],
+    "/api/prompt/generate-molecule-diagram/route": [
+      "static/chunks/webpack-84733d105a344297.js",
+      "static/chunks/fb521855-360f788827d72256.js",
+      "static/chunks/274-afa05ab8e0973f79.js",
+      "static/chunks/main-app-7077942d8bf44a8e.js",
+      "static/chunks/app/api/prompt/generate-molecule-diagram/route-1fa24d070cb2c394.js"
+    ],
     "/api/figure/route": [
       "static/chunks/webpack-84733d105a344297.js",
       "static/chunks/fb521855-360f788827d72256.js",
       "static/chunks/274-afa05ab8e0973f79.js",
       "static/chunks/main-app-7077942d8bf44a8e.js",
       "static/chunks/app/api/figure/route-1fa24d070cb2c394.js"
-    ],
-    "/api/prompt/generate-molecule-html/route": [
-      "static/chunks/webpack-84733d105a344297.js",
-      "static/chunks/fb521855-360f788827d72256.js",
-      "static/chunks/274-afa05ab8e0973f79.js",
-      "static/chunks/main-app-7077942d8bf44a8e.js",
-      "static/chunks/app/api/prompt/generate-molecule-html/route-1fa24d070cb2c394.js"
     ],
     "/api/prompt/generate-presentation-script/route": [
       "static/chunks/webpack-84733d105a344297.js",
@@ -36,6 +50,13 @@
       "static/chunks/main-app-7077942d8bf44a8e.js",
       "static/chunks/app/api/prompt/generate-presentation-script/route-1fa24d070cb2c394.js"
     ],
+    "/api/prompt/process/[jobId]/route": [
+      "static/chunks/webpack-84733d105a344297.js",
+      "static/chunks/fb521855-360f788827d72256.js",
+      "static/chunks/274-afa05ab8e0973f79.js",
+      "static/chunks/main-app-7077942d8bf44a8e.js",
+      "static/chunks/app/api/prompt/process/[jobId]/route-1fa24d070cb2c394.js"
+    ],
     "/api/prompt/models/route": [
       "static/chunks/webpack-84733d105a344297.js",
       "static/chunks/fb521855-360f788827d72256.js",
@@ -43,33 +64,12 @@
       "static/chunks/main-app-7077942d8bf44a8e.js",
       "static/chunks/app/api/prompt/models/route-1fa24d070cb2c394.js"
     ],
-    "/api/prompt/fetch-molecule-data/route": [
+    "/api/prompt/generate-molecule-html/route": [
       "static/chunks/webpack-84733d105a344297.js",
       "static/chunks/fb521855-360f788827d72256.js",
       "static/chunks/274-afa05ab8e0973f79.js",
       "static/chunks/main-app-7077942d8bf44a8e.js",
-      "static/chunks/app/api/prompt/fetch-molecule-data/route-1fa24d070cb2c394.js"
-    ],
-    "/api/pubchem/search/cid/route": [
-      "static/chunks/webpack-84733d105a344297.js",
-      "static/chunks/fb521855-360f788827d72256.js",
-      "static/chunks/274-afa05ab8e0973f79.js",
-      "static/chunks/main-app-7077942d8bf44a8e.js",
-      "static/chunks/app/api/pubchem/search/cid/route-1fa24d070cb2c394.js"
-    ],
-    "/api/figure/[spec_id]/route": [
-      "static/chunks/webpack-84733d105a344297.js",
-      "static/chunks/fb521855-360f788827d72256.js",
-      "static/chunks/274-afa05ab8e0973f79.js",
-      "static/chunks/main-app-7077942d8bf44a8e.js",
-      "static/chunks/app/api/figure/[spec_id]/route-1fa24d070cb2c394.js"
-    ],
-    "/api/prompt/process/[jobId]/route": [
-      "static/chunks/webpack-84733d105a344297.js",
-      "static/chunks/fb521855-360f788827d72256.js",
-      "static/chunks/274-afa05ab8e0973f79.js",
-      "static/chunks/main-app-7077942d8bf44a8e.js",
-      "static/chunks/app/api/prompt/process/[jobId]/route-1fa24d070cb2c394.js"
+      "static/chunks/app/api/prompt/generate-molecule-html/route-1fa24d070cb2c394.js"
     ],
     "/api/pubchem/search/route": [
       "static/chunks/webpack-84733d105a344297.js",
@@ -85,19 +85,19 @@
       "static/chunks/main-app-7077942d8bf44a8e.js",
       "static/chunks/app/api/test/functional-groups/route-1fa24d070cb2c394.js"
     ],
+    "/api/pubchem/search/cid/route": [
+      "static/chunks/webpack-84733d105a344297.js",
+      "static/chunks/fb521855-360f788827d72256.js",
+      "static/chunks/274-afa05ab8e0973f79.js",
+      "static/chunks/main-app-7077942d8bf44a8e.js",
+      "static/chunks/app/api/pubchem/search/cid/route-1fa24d070cb2c394.js"
+    ],
     "/api/transcribe/route": [
       "static/chunks/webpack-84733d105a344297.js",
       "static/chunks/fb521855-360f788827d72256.js",
       "static/chunks/274-afa05ab8e0973f79.js",
       "static/chunks/main-app-7077942d8bf44a8e.js",
       "static/chunks/app/api/transcribe/route-1fa24d070cb2c394.js"
-    ],
-    "/api/prompt/generate-molecule-diagram/route": [
-      "static/chunks/webpack-84733d105a344297.js",
-      "static/chunks/fb521855-360f788827d72256.js",
-      "static/chunks/274-afa05ab8e0973f79.js",
-      "static/chunks/main-app-7077942d8bf44a8e.js",
-      "static/chunks/app/api/prompt/generate-molecule-diagram/route-1fa24d070cb2c394.js"
     ],
     "/api/test/functional-groups-rdkit/route": [
       "static/chunks/webpack-84733d105a344297.js",
@@ -113,17 +113,14 @@
       "static/chunks/main-app-7077942d8bf44a8e.js",
       "static/chunks/app/f/[spec_id]/page-1fa24d070cb2c394.js"
     ],
-    "/page": [
+    "/research/page": [
       "static/chunks/webpack-84733d105a344297.js",
       "static/chunks/fb521855-360f788827d72256.js",
       "static/chunks/274-afa05ab8e0973f79.js",
       "static/chunks/main-app-7077942d8bf44a8e.js",
-      "static/chunks/34214453-51961ec6e2f1893e.js",
-      "static/chunks/407-a039faeea910fc44.js",
-      "static/chunks/565-fae1ac334d424e7b.js",
-      "static/chunks/205-705b411a4cb95c69.js",
-      "static/chunks/578-ec2a6f18e4897122.js",
-      "static/chunks/app/page-c0f3c7a2e06613b8.js"
+      "static/chunks/87e41b7f-7d9a85927258964e.js",
+      "static/chunks/89-00dd6b81486c9a64.js",
+      "static/chunks/app/research/page-5a1e846537491d6f.js"
     ],
     "/molecular-demo/page": [
       "static/chunks/webpack-84733d105a344297.js",
@@ -135,14 +132,17 @@
       "static/chunks/578-ec2a6f18e4897122.js",
       "static/chunks/app/molecular-demo/page-15fcc4eaad48443c.js"
     ],
-    "/research/page": [
+    "/page": [
       "static/chunks/webpack-84733d105a344297.js",
       "static/chunks/fb521855-360f788827d72256.js",
       "static/chunks/274-afa05ab8e0973f79.js",
       "static/chunks/main-app-7077942d8bf44a8e.js",
-      "static/chunks/87e41b7f-7d9a85927258964e.js",
-      "static/chunks/89-00dd6b81486c9a64.js",
-      "static/chunks/app/research/page-5a1e846537491d6f.js"
+      "static/chunks/34214453-51961ec6e2f1893e.js",
+      "static/chunks/407-a039faeea910fc44.js",
+      "static/chunks/565-fae1ac334d424e7b.js",
+      "static/chunks/205-705b411a4cb95c69.js",
+      "static/chunks/578-ec2a6f18e4897122.js",
+      "static/chunks/app/page-c0f3c7a2e06613b8.js"
     ],
     "/landing/page": [
       "static/chunks/webpack-84733d105a344297.js",
