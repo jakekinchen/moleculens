@@ -6,7 +6,138 @@ settings:
 
 importers:
 
-  .: {}
+  .:
+    dependencies:
+      '@headlessui/react':
+        specifier: ^2.2.0
+        version: 2.2.7(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      '@heroicons/react':
+        specifier: ^2.2.0
+        version: 2.2.0(react@19.1.0)
+      '@hookform/resolvers':
+        specifier: ^4.1.2
+        version: 4.1.3(react-hook-form@7.62.0(react@19.1.0))
+      '@radix-ui/react-dialog':
+        specifier: ^1.1.6
+        version: 1.1.14(@types/react-dom@19.1.7(@types/react@19.1.9))(@types/react@19.1.9)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      '@radix-ui/react-label':
+        specifier: ^2.1.2
+        version: 2.1.7(@types/react-dom@19.1.7(@types/react@19.1.9))(@types/react@19.1.9)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      '@radix-ui/react-select':
+        specifier: ^2.1.6
+        version: 2.2.5(@types/react-dom@19.1.7(@types/react@19.1.9))(@types/react@19.1.9)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      '@radix-ui/react-slot':
+        specifier: ^1.1.2
+        version: 1.2.3(@types/react@19.1.9)(react@19.1.0)
+      '@radix-ui/react-switch':
+        specifier: ^1.1.3
+        version: 1.2.5(@types/react-dom@19.1.7(@types/react@19.1.9))(@types/react@19.1.9)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      '@rdkit/rdkit':
+        specifier: ^2025.3.4-1.0.0
+        version: 2025.3.4-1.0.0
+      '@react-three/drei':
+        specifier: 10.0.8
+        version: 10.0.8(@react-three/fiber@9.1.2(@types/react@19.1.9)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)(three@0.160.0))(@types/react@19.1.9)(@types/three@0.161.2)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)(three@0.160.0)
+      '@react-three/fiber':
+        specifier: 9.1.2
+        version: 9.1.2(@types/react@19.1.9)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)(three@0.160.0)
+      class-variance-authority:
+        specifier: ^0.7.1
+        version: 0.7.1
+      clsx:
+        specifier: ^2.1.1
+        version: 2.1.1
+      lucide-react:
+        specifier: ^0.477.0
+        version: 0.477.0(react@19.1.0)
+      next:
+        specifier: ^15.4.4
+        version: 15.4.6(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      openai:
+        specifier: ^4.86.2
+        version: 4.104.0(ws@8.18.3)(zod@3.25.76)
+      openchemlib:
+        specifier: ^9.6.0
+        version: 9.6.0
+      react:
+        specifier: 19.1.0
+        version: 19.1.0
+      react-dom:
+        specifier: 19.1.0
+        version: 19.1.0(react@19.1.0)
+      react-hook-form:
+        specifier: ^7.54.2
+        version: 7.62.0(react@19.1.0)
+      sdf-parser:
+        specifier: ^7.0.4
+        version: 7.0.4
+      tailwind-merge:
+        specifier: ^3.0.2
+        version: 3.3.1
+      tailwindcss-animate:
+        specifier: ^1.0.7
+        version: 1.0.7(tailwindcss@3.4.17)
+      three:
+        specifier: 0.160.0
+        version: 0.160.0
+      three-sdf-loader:
+        specifier: ^0.3.5
+        version: 0.3.9(sdf-parser@7.0.4)(three@0.160.0)
+      zod:
+        specifier: ^3.24.2
+        version: 3.25.76
+    devDependencies:
+      '@agentdeskai/browser-tools-mcp':
+        specifier: ^1.2.1
+        version: 1.2.1
+      '@agentdeskai/browser-tools-server':
+        specifier: ^1.2.1
+        version: 1.2.1
+      '@tailwindcss/typography':
+        specifier: ^0.5.10
+        version: 0.5.16(tailwindcss@3.4.17)
+      '@types/node':
+        specifier: ^20.17.23
+        version: 20.19.10
+      '@types/react':
+        specifier: ^19
+        version: 19.1.9
+      '@types/react-dom':
+        specifier: ^19
+        version: 19.1.7(@types/react@19.1.9)
+      '@types/three':
+        specifier: ^0.161.2
+        version: 0.161.2
+      '@typescript-eslint/eslint-plugin':
+        specifier: ^6.19.1
+        version: 6.21.0(@typescript-eslint/parser@6.21.0(eslint@8.57.1)(typescript@5.9.2))(eslint@8.57.1)(typescript@5.9.2)
+      '@typescript-eslint/parser':
+        specifier: ^6.19.1
+        version: 6.21.0(eslint@8.57.1)(typescript@5.9.2)
+      autoprefixer:
+        specifier: ^10.4.17
+        version: 10.4.21(postcss@8.5.6)
+      eslint:
+        specifier: ^8.56.0
+        version: 8.57.1
+      eslint-config-next:
+        specifier: 15.4.4
+        version: 15.4.4(eslint@8.57.1)(typescript@5.9.2)
+      eslint-config-prettier:
+        specifier: ^9.1.0
+        version: 9.1.2(eslint@8.57.1)
+      postcss:
+        specifier: ^8.4.33
+        version: 8.5.6
+      prettier:
+        specifier: ^3.2.4
+        version: 3.6.2
+      tailwindcss:
+        specifier: ^3.4.1
+        version: 3.4.17
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.2
 
   apps/web:
     dependencies:
@@ -3332,6 +3463,13 @@ packages:
     peerDependencies:
       three: '>= 0.159.0'
 
+  three-sdf-loader@0.3.9:
+    resolution: {integrity: sha512-8bqI13OkgxZbBCsH7xBiJo7o5vcU9NteI5Jx0s91Y6juPlnqg3f/Gkwu22ffz0a5ibJn7inVBm/lLV92QxiwcA==}
+    engines: {node: '>=20'}
+    peerDependencies:
+      sdf-parser: '>=7'
+      three: '>=0.156.0'
+
   three-sdf-loader@0.4.0:
     resolution: {integrity: sha512-mb6A8dcuY3E1H/EjWMLlLQL+3/sKGpjcGevuSBal01lK2fy+Z9Df4bMLGxwcRk5AHdRs1Pni4+HJtIk8ZMJPFQ==}
     engines: {node: '>=20'}
@@ -5424,7 +5562,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  eslint-module-utils@2.12.1(@typescript-eslint/parser@6.21.0(eslint@8.57.1)(typescript@5.9.2))(eslint-import-resolver-node@0.3.9)(eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0)(eslint@8.57.1))(eslint@8.57.1):
+  eslint-module-utils@2.12.1(@typescript-eslint/parser@6.21.0(eslint@8.57.1)(typescript@5.9.2))(eslint-import-resolver-node@0.3.9)(eslint-import-resolver-typescript@3.10.1)(eslint@8.57.1):
     dependencies:
       debug: 3.2.7
     optionalDependencies:
@@ -5446,7 +5584,7 @@ snapshots:
       doctrine: 2.1.0
       eslint: 8.57.1
       eslint-import-resolver-node: 0.3.9
-      eslint-module-utils: 2.12.1(@typescript-eslint/parser@6.21.0(eslint@8.57.1)(typescript@5.9.2))(eslint-import-resolver-node@0.3.9)(eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0)(eslint@8.57.1))(eslint@8.57.1)
+      eslint-module-utils: 2.12.1(@typescript-eslint/parser@6.21.0(eslint@8.57.1)(typescript@5.9.2))(eslint-import-resolver-node@0.3.9)(eslint-import-resolver-typescript@3.10.1)(eslint@8.57.1)
       hasown: 2.0.2
       is-core-module: 2.16.1
       is-glob: 4.0.3
@@ -7258,6 +7396,11 @@ snapshots:
 
   three-mesh-bvh@0.8.3(three@0.160.0):
     dependencies:
+      three: 0.160.0
+
+  three-sdf-loader@0.3.9(sdf-parser@7.0.4)(three@0.160.0):
+    dependencies:
+      sdf-parser: 7.0.4
       three: 0.160.0
 
   three-sdf-loader@0.4.0(sdf-parser@7.0.4)(three@0.160.0):
