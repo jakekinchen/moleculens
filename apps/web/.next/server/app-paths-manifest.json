@@ -1,0 +1,21 @@
+{
+  "/_not-found/page": "app/_not-found/page.js",
+  "/api/figure/route": "app/api/figure/route.js",
+  "/api/prompt/generate-molecule-html/route": "app/api/prompt/generate-molecule-html/route.js",
+  "/api/prompt/generate-presentation-script/route": "app/api/prompt/generate-presentation-script/route.js",
+  "/api/prompt/models/route": "app/api/prompt/models/route.js",
+  "/api/prompt/fetch-molecule-data/route": "app/api/prompt/fetch-molecule-data/route.js",
+  "/api/pubchem/search/cid/route": "app/api/pubchem/search/cid/route.js",
+  "/api/figure/[spec_id]/route": "app/api/figure/[spec_id]/route.js",
+  "/api/prompt/process/[jobId]/route": "app/api/prompt/process/[jobId]/route.js",
+  "/api/pubchem/search/route": "app/api/pubchem/search/route.js",
+  "/api/test/functional-groups/route": "app/api/test/functional-groups/route.js",
+  "/api/transcribe/route": "app/api/transcribe/route.js",
+  "/api/prompt/generate-molecule-diagram/route": "app/api/prompt/generate-molecule-diagram/route.js",
+  "/api/test/functional-groups-rdkit/route": "app/api/test/functional-groups-rdkit/route.js",
+  "/f/[spec_id]/page": "app/f/[spec_id]/page.js",
+  "/page": "app/page.js",
+  "/molecular-demo/page": "app/molecular-demo/page.js",
+  "/research/page": "app/research/page.js",
+  "/landing/page": "app/landing/page.js"
+}

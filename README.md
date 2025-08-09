@@ -1,52 +1,33 @@
 Welcome to MolecuLens!
 
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+## Research (Deterministic FigureSpec)
 
-## Getting Started
+- New page: `/research` lets you submit a FigureSpec v1 to generate deterministic, content-addressed figures.
+- After submit, you are redirected to `/f/[spec_id]` to view status and assets.
 
-First, run the development server:
+### FigureSpec v1 shape
+- Required keys: `version`, `input`, `render`, `style_preset`, `annotations`, `"3d"`.
+- `spec_id` is computed deterministically (sha256 over canonical JSON).
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+### API
+- The web app proxies to your backend at `https://api.moleculens.com` via:
+  - `POST /api/figure` → `POST https://api.moleculens.com/v1/figure`
+  - `GET  /api/figure/{spec_id}` → `GET https://api.moleculens.com/v1/figure/{spec_id}`
+- Set environment variable `PYMOL_SERVER_BASE_URL=https://api.moleculens.com`.
+
+### Quick start
+1. Install deps: `pnpm install`
+2. Run dev: `pnpm dev:web`
+3. Open `http://localhost:3000/research` and submit a molecule.
+
+### Sample spec
 ```
-
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
-
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Macromolecule Support
-
-MolecuLens can now visualize not only small molecules from **PubChem** but also
-proteins and other macromolecules from the **RCSB PDB**. When you submit a query,
-the application uses an LLM-based classifier to determine whether the target is
-a small molecule or a macromolecule and automatically searches the appropriate
-database.
-
-## Local API Routes
-
-Several endpoints under `/api` are implemented using Next.js Route Handlers.
-Classification happens locally at `/api/classify`, which decides whether the
-query should be sent to **PubChem** or **RCSB**.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+{
+  "version": 1,
+  "input": { "kind": "smiles", "value": "CC(=O)Oc1ccccc1C(=O)O", "protonation_pH": 7.4, "conformer_method": "none" },
+  "render": { "modes": ["2d","3d"], "outputs": ["svg","png"], "width": 1024, "height": 768, "transparent": true, "dpi": 300 },
+  "style_preset": "nature-2025",
+  "annotations": { "functional_groups": true, "charge_labels": "minimal", "atom_numbering": false, "scale_bar": true, "legend": "auto" },
+  "3d": { "representation": "cartoon+licorice", "bg": "transparent", "camera": { "target": "auto", "distance": "auto", "azimuth": 30, "elevation": 15 }, "lighting": "three_point_soft", "quality": "raytrace_high" }
+}
+```

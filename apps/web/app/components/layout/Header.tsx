@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
+import Link from 'next/link';
 import { BeakerIcon } from '@heroicons/react/24/solid';
-import { QuestionMarkCircleIcon, Cog6ToothIcon, ClockIcon } from '@heroicons/react/24/outline';
+import { QuestionMarkCircleIcon, Cog6ToothIcon, ClockIcon, BeakerIcon as BeakerOutlineIcon } from '@heroicons/react/24/outline';
 import { HelpModal } from '../modals/HelpModal';
 import { SettingsModal } from '../modals/SettingsModal';
 import { LayoutWrapper } from './LayoutWrapper';
@@ -54,6 +55,14 @@ export const Header: React.FC<HeaderProps> = ({ onOpenTimeMachine, onSettingsCha
           </div>
 
           <div className="flex items-center gap-1 sm:gap-2">
+            <Link
+              href="/research"
+              className="hidden sm:inline-flex items-center gap-2 px-3 py-1.5 rounded-md bg-white/10 hover:bg-white/20 text-white transition-colors"
+              aria-label="Research"
+            >
+              <BeakerOutlineIcon className="w-5 h-5" />
+              <span className="text-sm font-medium">Research</span>
+            </Link>
             <button
               onClick={() => setIsHelpOpen(true)}
               className="p-1.5 sm:p-2 text-gray-200 hover:text-white transition-colors rounded-full hover:bg-white/10"

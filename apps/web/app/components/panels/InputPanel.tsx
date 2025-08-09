@@ -465,11 +465,11 @@ export const InputPanel: React.FC<InputPanelProps> = ({
               body: JSON.stringify(requestData),
             });
 
+            // Avoid Headers.entries typing issue in some environments
             if (process.env.NODE_ENV !== 'production') {
               console.log('Received response:', {
                 status: response.status,
                 statusText: response.statusText,
-                headers: Object.fromEntries(response.headers.entries()),
               });
             }
 
