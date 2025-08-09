@@ -59,8 +59,13 @@ export function loadHistoryFromSession(): HistoryEntry[] {
   try {
     const serializedHistory = sessionStorage.getItem(STORAGE_KEYS.HISTORY);
     if (!serializedHistory) return [];
-
-    return JSON.parse(serializedHistory, (key, value) => {
+    const trimmed = serializedHistory.trim();
+    // Defensive: if corrupted JSON is stored, clear and recover silently
+    if (!trimmed.startsWith('[') || !trimmed.endsWith(']')) {
+      sessionStorage.removeItem(STORAGE_KEYS.HISTORY);
+      return [];
+    }
+    return JSON.parse(trimmed, (key, value) => {
       // Handle Date deserialization
       if (value && typeof value === 'object' && value.__type === 'Date') {
         return new Date(value.value);
@@ -69,6 +74,11 @@ export function loadHistoryFromSession(): HistoryEntry[] {
     });
   } catch (error) {
     console.error('Error loading history from session storage:', error);
+    try {
+      sessionStorage.removeItem(STORAGE_KEYS.HISTORY);
+    } catch (cleanupErr) {
+      // ignore cleanup failure
+    }
     return [];
   }
 }

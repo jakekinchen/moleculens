@@ -5,12 +5,27 @@ const BASE = process.env.PYMOL_SERVER_BASE_URL || 'http://localhost:8000';
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
+    // Debug logging of outbound spec to backend
+    try {
+      console.log('[api/figure] Outbound spec to server /v1/figure:', JSON.stringify(body, null, 2));
+    } catch (e) {
+      console.log('[api/figure] Outbound spec logging failed');
+    }
     const r = await fetch(`${BASE}/v1/figure`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
     const text = await r.text();
+    try {
+      console.log('[api/figure] Upstream response', {
+        status: r.status,
+        contentType: r.headers.get('content-type'),
+        body: text,
+      });
+    } catch (e) {
+      console.log('[api/figure] Upstream response logging failed');
+    }
     return new NextResponse(text, {
       status: r.status,
       headers: { 'content-type': r.headers.get('content-type') || 'application/json' },
