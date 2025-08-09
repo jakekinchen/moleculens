@@ -43,19 +43,31 @@ export default function ResearchPage() {
 
       const spec: any = {
         version: 1,
-        input: { kind: inputKind, value: effectiveValue, conformer_method: 'etkdg' },
+        input: {
+          kind: inputKind,
+          value: effectiveValue,
+          conformer_method: 'etkdg',
+          protonation_pH: 7.4,
+        },
         render: { modes, outputs, width, height, dpi: 300, transparent: true },
         style_preset: 'default',
         annotations: {},
-        "3d": {},
+        "3d": {
+          representation: 'cartoon+licorice',
+          bg: 'transparent',
+          camera: { target: 'auto', distance: 'auto', azimuth: 30, elevation: 15 },
+          lighting: 'three_point_soft',
+          quality: 'raytrace_high',
+        },
       };
       const r = await fetch('/api/figure', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(spec),
       });
-      if (!r.ok) throw new Error(`submit failed: ${r.status}`);
-      const { spec_id } = await r.json();
+      const text = await r.text();
+      if (!r.ok) throw new Error(text || `submit failed: ${r.status}`);
+      const { spec_id } = JSON.parse(text);
       router.push(`/f/${spec_id}`);
     } catch (err: any) {
       setError(err?.message || 'Something went wrong');

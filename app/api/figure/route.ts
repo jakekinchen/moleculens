@@ -17,20 +17,24 @@ export async function POST(req: NextRequest) {
       body: JSON.stringify(body),
     });
     const text = await r.text();
-    try {
-      console.log('[api/figure] Upstream response', {
-        status: r.status,
-        contentType: r.headers.get('content-type'),
-        body: text,
-      });
-    } catch (e) {
-      console.log('[api/figure] Upstream response logging failed');
+    if (!r.ok) {
+      console.error('[api/figure] Upstream error', r.status, text);
+    } else {
+      try {
+        console.log('[api/figure] Upstream response', {
+          status: r.status,
+          contentType: r.headers.get('content-type'),
+        });
+      } catch {
+        // ignore
+      }
     }
     return new NextResponse(text, {
       status: r.status,
       headers: { 'content-type': r.headers.get('content-type') || 'application/json' },
     });
   } catch (e) {
+    console.error('[api/figure] Proxy failure', e);
     const message = e instanceof Error ? e.message : 'bad_request'
     return NextResponse.json({ error: message }, { status: 400 });
   }
