@@ -1,8 +1,0 @@
-{
-  "mcpServers": {
-    "browser-tools": {
-      "command": "npm",
-      "args": ["run", "mcp"]
-    }
-  }
-} 
