@@ -1,7 +1,8 @@
-import fetch from 'node-fetch';
-import fs from 'fs';
-import path from 'path';
+// In the app router, global fetch is available on both server and client.
+// Remove node-only imports that break client-side bundling.
+// import fetch from 'node-fetch';
 import { MoleculeInfo } from '@/types';
+import { sanitizeName } from './sanitize';
 import {
   searchMoleculeByName,
   getMoleculeDataByCID,
@@ -159,14 +160,7 @@ async function nist3dSdf(cas: string): Promise<string | null> {
  * Normalize chemical names to ASCII for consistent external service queries.
  * Handles soft-hyphens, fancy dashes, accents, and other Unicode artifacts.
  */
-export function sanitizeName(name: string): string {
-  return name
-    .normalize('NFKD') // decompose accents, NB-spaces, etc.
-    .replace(/[\u00AD\u2010-\u2015\u202F]/g, '-') // soft-hyphens & fancy dashes → -
-    .replace(/[^\u0020-\u007F]/g, '') // strip non-ASCII leftovers (space through DEL)
-    .replace(/\s+/g, ' ') // collapse whitespace
-    .trim();
-}
+// sanitizeName moved to './sanitize' for shared client/server usage
 
 /**
  * Break a free‑form user prompt into several candidate strings that might
@@ -631,8 +625,17 @@ export async function fetchMoleculeData(
 
 export async function moleculeHTML(moleculeData: MoleculeData): Promise<string> {
   try {
-    const templatePath = path.join(process.cwd(), 'output.html');
-    let html = fs.readFileSync(templatePath, 'utf8');
+    // In the app environment, avoid fs/path; load template via fetch from public or inline fallback
+    let html = '';
+    try {
+      const res = await fetch('/output.html');
+      if (res.ok) html = await res.text();
+    } catch {
+      // ignore, will fallback below
+    }
+    if (!html) {
+      html = `<html><head><title>${moleculeData.name}</title></head><body><div class="molecule" data-cid="${moleculeData.cid}"></div></body></html>`;
+    }
 
     // Escape backticks in molecule data so it can reside inside template literal
     const escapeBackticks = (str: string) => str.replace(/`/g, '\\`');

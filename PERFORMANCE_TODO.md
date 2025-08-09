@@ -1,83 +1,77 @@
-# MoleculeLens Performance & Cleanup TODO
+# Mode: PLAN
 
-## Priority 1: Critical Performance Issues (Do First) ✅ COMPLETED
+Here’s a tight audit report of what’s off and what to fix, plus a concrete, prioritized plan. I won’t make edits until you approve.
 
-- [x] **Fix MoleculeViewer.tsx main useEffect dependencies**
-  - [x] Convert `isPaused` to useRef to prevent scene rebuilds on pause/play
-  - [x] Convert `showAnnotations` to useRef to prevent scene rebuilds on label toggle
-  - [x] Remove `isPaused` and `showAnnotations` from useEffect dependency array
-  - [x] Update `togglePause()` to use ref pattern
-  - [x] Update annotation toggle logic to use ref pattern
+### Critical functional issues found
 
-## Priority 2: GPU Instancing Implementation (Core Performance Goal)
+- Research flow
+  - In `app/research/page.tsx` we expect `{ id }` from the API, but `app/api/figure/route.ts` returns the server response (likely `{ spec_id, ... }`) or `{ status: 'queued' }` → route will not navigate. Needs consistent response shape and a viewer route.
+  - Missing viewer page `app/f/[spec_id]/page.tsx` to show queued/ready figures; the Research submit currently has nowhere to go.
 
-- [x] **Create GPU instancing helper functions**
-  - [x] Implement `buildInstancedAtoms()` for 5k-20k atoms using THREE.InstancedMesh
-  - [x] Implement `buildPointsCloud()` for >20k atoms using THREE.Points
-  - [x] Add proper cleanup for instanced geometries
-- [ ] **Complete automatic path selection logic** ⏳
-  - [ ] Finish implementing atom count detection branching in loadMolecule()
-  - [ ] Test performance thresholds with real large molecule datasets
-- [ ] **Modify rendering pipeline**
-  - [ ] Update bond generation to skip for point cloud mode
-  - [ ] Ensure camera controls work with all rendering modes
+- Global layout
+  - Header fix applied as Client Component; functions removed from server layout. Good, but page-level “Time Machine” open logic is severed. Either:
+    - Keep global header “dumb” (current), or
+    - Add a client-side event bridge (custom event listener) in pages that need time-machine.
 
-## Priority 3: Memory Leaks & Resource Management
+- First-load SDF rendering bug (caffeine)
+  - Despite our scaling/world-space/deferred-fit changes, you still see:
+    - Tiny atoms/labels, no bonds, controls feel disabled on the inaugural render only.
+  - Likely causes remaining:
+    - Bonds are Line/LineSegments (pixel-width) and never get a “thick” representation; scaling doesn’t affect stroke width.
+    - The initial SDF hierarchy differs from subsequent loads (geometries and userData), so our “what-to-scale” logic misses key objects.
+    - Overlay intercepting pointer events on first frame; RAF defer not late enough; OrbitControls min/max derived from wrong bounds.
+  - Required fix direction:
+    - Replace line bonds with cylinder meshes for SDF molecules (ensures visible, scalable bonds).
+    - Use userData-based atom/bond detection (don’t rely solely on geometry type).
+    - Double-defer fit (two nested requestAnimationFrame) after traversal/scaling and ensure overlay pointer-events is disabled as soon as possible.
+    - Explicitly set OrbitControls limits after fit and call controls.update().
 
-- [x] **Fix environment map disposal in MoleculeViewer.tsx**
-  - [x] Add `scene.environment?.dispose()` in cleanup block
-  - [x] Set `scene.environment = null` after disposal
-- [ ] **Implement progressive asset loading**
-  - [ ] Cache HDRI via THREE.CubeTextureLoader
-  - [ ] Reuse cached assets across viewer instances
-  - [ ] Prevent redundant network requests for environment maps
+### Design/UI/UX issues
 
-## Priority 4: Code Cleanup & Type Safety
+- Research page UI
+  - Look matches dark theme; good. But it lacks “advanced options” (render modes/outputs, dpi, transparency, presets, annotations, 3D representation, lighting/camera).
+  - No quick examples chips; no recent submissions; no status/queued viewer.
 
-- [x] **Remove unused code in MoleculeViewer.tsx**
-  - [x] Delete unused locals: `jobId`, `isRecording`, `audioAnalyser`, `paddingBottom`
-- [ ] **Remove unused code in InputPanel.tsx** ⏳
-  - [ ] Remove `pollForUpdates` and `pollJobStatus` import (dead code)
-  - [ ] Remove `audioAnalyser` state and `prevAudioValuesRef`
-  - [ ] Replace magic number `8` with `const VIS_BARS = 8`
-- [ ] **Fix file download safety** ❌
-  - [ ] Sanitize `title` in `handleDownload()` for filesystem safety
-  - [ ] Handle special characters that break on Windows/macOS
-- [ ] **Fix prop-driven label toggle** ⚠️
-  - [ ] Add lightweight effect to react to showAnnotations prop changes
-  - [ ] Toggle labelsGroup.visible and CSS2DRenderer DOM element
-  - [ ] Avoid full scene remount when parent toggles annotations
+- Consistency
+  - Header still contains settings state that isn’t wired to anything globally; we can hide or wire it into a shared store later.
+  - Minor lint warnings: unused handlers/setters.
 
-## Priority 5: Production Polish
+### Proposed fix plan (prioritized)
 
-- [ ] **Remove debug logging** ⏳
-  - [ ] Guard `console.log` statements behind `process.env.NODE_ENV !== 'production'`
-  - [ ] Clean up SDF branch and recorder debug output
-  - [ ] Implement proper error logging for production
-- [ ] **Accessibility improvements** ⏳
-  - [ ] Add `aria-live="polite"` to error containers
-  - [ ] Add `aria-live="polite"` to "Converting speech to text..." status
-  - [ ] Ensure screen readers announce state changes
-- [ ] **Effect optimization** ⏳
-  - [x] Split heavy Three.js scene setup from lightweight UI concerns
-  - [x] Keep scene effect keyed only on `pdbData`, `sdfData`, `enableRibbonOverlay`
-  - [ ] Move UI-only concerns (`isPaused`, `isFullscreen`) to separate effects/refs (optional)
-- [ ] **Magic number cleanup** ⏳
-  - [ ] Replace hardcoded `8` in audio visualization with `const VIS_BARS = 8`
-  - [ ] Centralize other magic numbers for maintainability
+1) Research end-to-end
+- Unify API schema:
+  - `app/api/figure/route.ts`: always return `{ spec_id }` (and pass through other fields as needed).
+  - `app/research/page.tsx`: use `{ spec_id }` and route to `/f/${spec_id}`.
+- Add viewer route:
+  - `app/f/[spec_id]/page.tsx`: poll `PYMOL_SERVER_BASE_URL/v1/figure/[spec_id]` until ready; show queued state; render assets (links/images).
+  - Provide “Back to Research” and copy/share link.
 
-## Expected Performance Impact
+2) First-load SDF render robustness
+- In `MoleculeViewer` SDF branch:
+  - Traverse the SDF object:
+    - For meshes with `userData.atom`: set atom radius (ATOM_SCALE) and position multiply (POSITION_SCALE).
+    - For bonds:
+      - If they are line segments/lines, replace each with cylinders (two-ended bonds; split for double/triple if possible) with scalable radius (similar to PDB path).
+      - If already cylinder meshes, scale uniformly with POSITION_SCALE.
+  - After traversal:
+    - `object.updateMatrixWorld(true)`; then double `requestAnimationFrame` before fit.
+    - Recompute bounds with world positions; set OrbitControls min/max and call `controls.update()`.
+  - Overlay safety:
+    - Ensure initial overlay has `pointer-events: none` or is removed before user interaction (first deferred fit).
 
-- **Draw calls**: Reduce from ~70k to 1 (GPU instancing)
-- **Memory**: Significant reduction through geometry reuse
-- **CPU**: Faster build times, no thousands of `new Mesh()` calls
-- **UI responsiveness**: Eliminate scene rebuilds on pause/play/annotation toggle
-- **Resource leaks**: Zero residual WebGL allocations
+3) Research page enhancements
+- Add advanced options group:
+  - Render modes, outputs, DPI, transparent background, style preset, annotations (functional groups, charge labels, atom numbers), 3D representation, lighting, camera hints.
+- Add “Examples” chips (Caffeine, Aspirin, Glucose) to prefill values.
+- Add “Recent submissions” (session storage) to quickly navigate to past `spec_id`s.
 
-## Success Criteria
+4) Global layout polish
+- Keep global header simple (nav + modals). For pages that need “Time Machine”, we’ll render their own page-local trigger or add a client bridge that listens for a custom event.
+- Remove unused handlers or wire them into a central store if you want global settings to influence pages.
 
-- [ ] No TypeScript/ESLint warnings
-- [ ] Smooth 60fps for molecules up to 20k atoms
-- [ ] No memory leaks during molecule switching
-- [ ] Predictable camera reset behavior
-- [ ] Production-ready error handling and logging
+5) Code hygiene
+- Clear lint warnings in touched files.
+- Ensure tree-shaken imports; remove remnants from the monorepo structure (already removed).
+- Quick build to verify no server/client directive leaks.
+
+If you approve, I’ll implement items 1–2 first (functional fixes), then 3 (UX upgrades), and close with 4–5.

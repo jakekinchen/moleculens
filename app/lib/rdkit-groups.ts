@@ -87,8 +87,8 @@ export async function detectFunctionalGroupsFromSdfRDKit(sdf: string): Promise<G
         id: rule.id,
         name: rule.name,
         atoms: atomIdx,
-        smarts: rule.smarts,
-        description: rule.description,
+        ...(rule.smarts ? { smarts: rule.smarts } : {}),
+        ...(rule.description ? { description: rule.description } : {}),
       };
       groups.push(fg);
       for (const a of atomIdx) {

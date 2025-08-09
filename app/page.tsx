@@ -1,8 +1,6 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Header } from './components/layout/Header';
-import { Footer } from './components/layout/Footer';
 import { InputPanel } from './components/panels/InputPanel';
 import MoleculeViewer from './components/panels/MoleculeViewer';
 
@@ -12,7 +10,7 @@ const MacromoleculeViewer3DMol = dynamic(
   { ssr: false }
 );
 import { VisualizationOutput, HistoryEntry, MoleculeInfo } from './types';
-import { LayoutWrapper } from './components/layout/LayoutWrapper';
+// import { LayoutWrapper } from './components/layout/LayoutWrapper';
 import { TimeMachinePanel } from './components/panels/TimeMachinePanel';
 import { loadSampleMolecules, getDefaultMolecule, getMoleculeByKey } from './lib/sampleMolecules';
 import { fetchMoleculeData } from './services/api';
@@ -238,17 +236,7 @@ export default function HomePage() {
 
   return (
     <div className="app-container">
-      <Header
-        onOpenTimeMachine={() => setIsTimeMachineOpen(true)}
-        onSettingsChange={({ model: m, isInteractive: i, alwaysFindMolecule: af }) => {
-          setModel(m);
-          setIsInteractive(i);
-          setAlwaysFindMolecule(af);
-        }}
-        useConstraints={true}
-      />
       <main className="main-content">
-        <LayoutWrapper useConstraints={true}>
           <div className="panels-container">
             <div className="input-panel-container">
               <InputPanel
@@ -300,9 +288,8 @@ export default function HomePage() {
                 ))}
             </div>
           </div>
-        </LayoutWrapper>
+        
       </main>
-      <Footer />
       <TimeMachinePanel
         isOpen={isTimeMachineOpen}
         onClose={() => setIsTimeMachineOpen(false)}
